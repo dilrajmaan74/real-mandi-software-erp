@@ -549,6 +549,8 @@ export default function App() {
     }
   }, [sheetConfig]);
 
+  const [isUnauthorizedDomainModalOpen, setIsUnauthorizedDomainModalOpen] = useState(false);
+
   const handleLogin = async () => {
     setIsLoggingIn(true);
     try {
@@ -559,8 +561,18 @@ export default function App() {
         showToast('success', `${result.user.displayName || result.user.email} ਨਾਲ ਸਾਈਨ-ਇਨ ਸਫਲ! ਕਲਾਊਡ ਸਿੰਕ ਐਕਟਿਵ ਹੋ ਗਿਆ।`);
       }
     } catch (err: any) {
-      console.error(err);
-      showToast('error', err.message || 'Google Sign-in failed.');
+      console.error('Google Sign In error:', err);
+      const isUnauthorizedDomain = 
+        err?.code === 'auth/unauthorized-domain' || 
+        err?.message?.includes('unauthorized-domain') ||
+        err?.message?.includes('auth/unauthorized-domain');
+
+      if (isUnauthorizedDomain) {
+        setIsUnauthorizedDomainModalOpen(true);
+        showToast('error', 'ਗੂਗਲ ਲੌਗਇਨ: ਇਹ ਡੋਮੇਨ Firebase ਵਿੱਚ ਅਧਿਕਾਰਤ (Authorized) ਨਹੀਂ ਹੈ। ਹੱਲ ਲਈ ਸਕ੍ਰੀਨ ਤੇ ਆਏ ਬਾਕਸ ਦੇ ਕਦਮ ਦੇਖੋ।');
+      } else {
+        showToast('error', err.message || 'Google Sign-in failed.');
+      }
     } finally {
       setIsLoggingIn(false);
     }
@@ -1343,6 +1355,13 @@ export default function App() {
         currentConfig={sheetConfig}
         onSaveConfig={handleSaveSheetConfig}
         currentMandi={currentMandi}
+      />
+
+      {/* Firebase Unauthorized Domain Guidance Modal */}
+      <UnauthorizedDomainModal
+        isOpen={isUnauthorizedDomainModalOpen}
+        onClose={() => setIsUnauthorizedDomainModalOpen(false)}
+        onRetryLogin={handleLogin}
       />
 
     </div>
