@@ -1,0 +1,58 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net: Default deny all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // User profile and Master Google Sheet config
+    match /users/{userId} {
+      allow read, write: if isOwner(userId) && isValidId(userId);
+
+      // Farmers Master subcollection
+      match /farmers/{farmerId} {
+        allow read, write: if isOwner(userId) && isValidId(userId) && isValidId(farmerId);
+        allow list: if isOwner(userId) && isValidId(userId);
+      }
+
+      // Crop Arrivals subcollection
+      match /crop_arrivals/{arrivalId} {
+        allow read, write: if isOwner(userId) && isValidId(userId) && isValidId(arrivalId);
+        allow list: if isOwner(userId) && isValidId(userId);
+      }
+
+      // Bardana Stock subcollection
+      match /bardana_entries/{bardanaId} {
+        allow read, write: if isOwner(userId) && isValidId(userId) && isValidId(bardanaId);
+        allow list: if isOwner(userId) && isValidId(userId);
+      }
+
+      // Agency Purchases / Auctions subcollection
+      match /agency_purchases/{purchaseId} {
+        allow read, write: if isOwner(userId) && isValidId(userId) && isValidId(purchaseId);
+        allow list: if isOwner(userId) && isValidId(userId);
+      }
+
+      // Lifting & Dispatches subcollection
+      match /lifting_dispatches/{dispatchId} {
+        allow read, write: if isOwner(userId) && isValidId(userId) && isValidId(dispatchId);
+        allow list: if isOwner(userId) && isValidId(userId);
+      }
+    }
+  }
+}

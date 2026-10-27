@@ -1,0 +1,6 @@
+{
+  "name": "KisanMitra ERP - Mandi Management",
+  "description": "Digital Mandi and Commission Agency (ਆੜ੍ਹਤ) management for Punjab grain markets with multi-lingual voice/text processing and automated cloud spreadsheet syncing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

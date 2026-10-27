@@ -1,0 +1,182 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "User preferences and master Google Sheet configuration",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "sheetConfig": {
+          "type": "object",
+          "properties": {
+            "spreadsheetId": { "type": "string" },
+            "spreadsheetTitle": { "type": "string" },
+            "spreadsheetUrl": { "type": "string" },
+            "connectedAt": { "type": "string" }
+          }
+        },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "FarmerMaster": {
+      "title": "Farmer Master",
+      "description": "Registered farmer details with bank account and linked members",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name_en": { "type": "string" },
+        "name_pa": { "type": "string" },
+        "father_husband_name_en": { "type": "string" },
+        "father_husband_name_pa": { "type": "string" },
+        "village_en": { "type": "string" },
+        "village_pa": { "type": "string" },
+        "mobile_number": { "type": "string" },
+        "aadhaar_number": { "type": "string" },
+        "bank_account": { "type": "string" },
+        "ifsc_code": { "type": "string" },
+        "bank_name": { "type": "string" },
+        "created_at": { "type": "string" },
+        "linked_farmers": { "type": "array" }
+      },
+      "required": ["id", "name_en", "name_pa", "village_en", "village_pa", "mobile_number"]
+    },
+    "CropArrivalEntry": {
+      "title": "Crop Arrival Entry",
+      "description": "Inward paddy entry at the mandi gate",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "mandi_name": { "type": "string" },
+        "farmer_id": { "type": "string" },
+        "farmer_name": { "type": "string" },
+        "farmer_name_pa": { "type": "string" },
+        "village": { "type": "string" },
+        "village_pa": { "type": "string" },
+        "mobile": { "type": "string" },
+        "crop_type": { "type": "string" },
+        "crop_variety": { "type": "string" },
+        "vehicle_trolley_no": { "type": "string" },
+        "bag_packing_kg": { "type": "number" },
+        "total_bags_arrived": { "type": "number" },
+        "weight_quintals": { "type": "number" },
+        "moisture_percentage": { "type": "number" },
+        "gate_pass_no": { "type": "string" },
+        "synced_to_sheets": { "type": "boolean" }
+      },
+      "required": ["id", "date", "farmer_name", "total_bags_arrived", "weight_quintals"]
+    },
+    "BardanaEntry": {
+      "title": "Bardana Entry",
+      "description": "Stock of gunny bags and packaging received or issued",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "mandi_name": { "type": "string" },
+        "transaction_type": { "type": "string" },
+        "agency_name": { "type": "string" },
+        "seller_sheller_name": { "type": "string" },
+        "bardana_type": { "type": "string" },
+        "new_jute_bags": { "type": "number" },
+        "old_jute_bags": { "type": "number" },
+        "quantity_bags": { "type": "number" },
+        "balance_after_transaction": { "type": "number" },
+        "remarks": { "type": "string" },
+        "synced_to_sheets": { "type": "boolean" }
+      },
+      "required": ["id", "date", "transaction_type", "quantity_bags"]
+    },
+    "AgencyPurchaseEntry": {
+      "title": "Agency Purchase Entry",
+      "description": "Boli / Auction sale and J-Form calculation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "firm_id": { "type": "string" },
+        "firm_name": { "type": "string" },
+        "mandi_name": { "type": "string" },
+        "farmer_id": { "type": "string" },
+        "farmer_name": { "type": "string" },
+        "father_husband_name": { "type": "string" },
+        "billed_to_name": { "type": "string" },
+        "relation_with_main": { "type": "string" },
+        "address_village": { "type": "string" },
+        "village": { "type": "string" },
+        "mobile": { "type": "string" },
+        "crop_type": { "type": "string" },
+        "crop_variety": { "type": "string" },
+        "bag_packing_kg": { "type": "number" },
+        "new_jute_bags": { "type": "number" },
+        "old_jute_bags": { "type": "number" },
+        "total_bags": { "type": "number" },
+        "weight_quintals": { "type": "number" },
+        "rate_per_quintal": { "type": "number" },
+        "total_amount": { "type": "number" },
+        "purchasing_agency": { "type": "string" },
+        "j_form_labor_rate": { "type": "number" },
+        "j_form_labor_total": { "type": "number" },
+        "sukhi_kiti_rate": { "type": "number" },
+        "sukhi_kiti_total": { "type": "number" },
+        "double_pakha_rate": { "type": "number" },
+        "double_pakha_total": { "type": "number" },
+        "previous_khata": { "type": "number" },
+        "advance_paid": { "type": "number" },
+        "net_payable": { "type": "number" },
+        "synced_to_sheets": { "type": "boolean" }
+      },
+      "required": ["id", "date", "farmer_name", "total_bags", "weight_quintals", "rate_per_quintal", "purchasing_agency"]
+    },
+    "LiftingDispatchEntry": {
+      "title": "Lifting Dispatch Entry",
+      "description": "Truck dispatch from mandi yard to rice sheller / godown",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date_time": { "type": "string" },
+        "firm_name": { "type": "string" },
+        "mandi_name": { "type": "string" },
+        "purchasing_agency": { "type": "string" },
+        "seller_sheller_name": { "type": "string" },
+        "crop_type": { "type": "string" },
+        "truck_number": { "type": "string" },
+        "driver_mobile": { "type": "string" },
+        "destination_godown": { "type": "string" },
+        "bags_lifted": { "type": "number" },
+        "pending_yard_bags": { "type": "number" },
+        "challan_no": { "type": "string" },
+        "lifting_status": { "type": "string" },
+        "synced_to_sheets": { "type": "boolean" }
+      },
+      "required": ["id", "date_time", "truck_number", "bags_lifted", "challan_no"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User configuration, linked Google Sheet, and profile details"
+    },
+    "/users/{userId}/farmers/{farmerId}": {
+      "schema": "FarmerMaster",
+      "description": "Farmers registered by this user account"
+    },
+    "/users/{userId}/crop_arrivals/{arrivalId}": {
+      "schema": "CropArrivalEntry",
+      "description": "Crop arrivals registered by this user account"
+    },
+    "/users/{userId}/bardana_entries/{bardanaId}": {
+      "schema": "BardanaEntry",
+      "description": "Bardana stock records registered by this user account"
+    },
+    "/users/{userId}/agency_purchases/{purchaseId}": {
+      "schema": "AgencyPurchaseEntry",
+      "description": "Agency purchase / auction records registered by this user account"
+    },
+    "/users/{userId}/lifting_dispatches/{dispatchId}": {
+      "schema": "LiftingDispatchEntry",
+      "description": "Lifting and truck dispatch records registered by this user account"
+    }
+  }
+}
