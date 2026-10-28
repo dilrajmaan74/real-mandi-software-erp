@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   CropArrivalEntry, 
   FarmerMaster, 
@@ -27,9 +27,11 @@ import {
   AlertCircle,
   Users,
   Check,
-  ListPlus
+  ListPlus,
+  MapPin
 } from 'lucide-react';
 import { appendCropArrivalToSheets } from '../lib/sheets';
+import { getSavedVillages, registerVillage, VillageItem } from '../lib/villages';
 
 interface CropArrivalModuleProps {
   entries: CropArrivalEntry[];
@@ -128,6 +130,17 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
   // Comparison Tab Search & Filter
   const [compSearch, setCompSearch] = useState('');
   const [compStatusFilter, setCompStatusFilter] = useState<'All' | 'Pending' | 'Completed'>('All');
+
+  // Dynamic Village Master List
+  const [savedVillages, setSavedVillages] = useState<VillageItem[]>(() => getSavedVillages());
+
+  useEffect(() => {
+    const handleVillageUpdate = () => {
+      setSavedVillages(getSavedVillages());
+    };
+    window.addEventListener('kisanmitra_villages_updated', handleVillageUpdate);
+    return () => window.removeEventListener('kisanmitra_villages_updated', handleVillageUpdate);
+  }, []);
 
   // Auto calculate weight when bags, loose kg, or packing changes:
   const recalculateWeight = (newJ: number, oldJ: number, packing: number, looseKg: number) => {
@@ -248,6 +261,10 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
       synced_to_sheets: false,
     };
 
+    if (village.trim()) {
+      registerVillage(village.trim(), villagePa.trim());
+    }
+
     onAddEntry(newEntry);
     setIsModalOpen(false);
     resetSingleForm();
@@ -311,6 +328,10 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
       total_labor_deductions: bTotalDeductions,
       synced_to_sheets: false,
     };
+
+    if (batchVillage.trim()) {
+      registerVillage(batchVillage.trim(), batchVillagePa.trim());
+    }
 
     setStagedEntries((prev) => [...prev, stagedItem]);
 
@@ -403,6 +424,10 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
       double_pakha_total: dTotal,
       total_labor_deductions: totDeductions,
     };
+
+    if (updated.village) {
+      registerVillage(updated.village, updated.village_pa);
+    }
 
     onUpdateEntry(updated);
     setEditingEntry(null);
@@ -1098,15 +1123,70 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
               </div>
 
               <div>
-                <label className="block text-gray-700 font-bold mb-1">ਪਿੰਡ (Village):</label>
+                <label className="block text-gray-700 font-bold mb-1 flex items-center justify-between">
+                  <span>ਪਿੰਡ (Village):</span>
+                  <span className="text-[10px] text-emerald-700 font-semibold">ਸੁਝਾਅ ਲਿਸਟ</span>
+                </label>
                 <input
                   type="text"
                   value={batchVillage}
-                  onChange={(e) => setBatchVillage(e.target.value)}
-                  placeholder="e.g. Bhadaur"
-                  className="w-full p-2 bg-white border border-gray-300 rounded-lg text-gray-900 font-medium shadow-sm"
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setBatchVillage(val);
+                    const matched = savedVillages.find(
+                      (v) => v.name_en.toLowerCase() === val.trim().toLowerCase() || v.name_pa === val.trim()
+                    );
+                    if (matched) {
+                      setBatchVillagePa(matched.name_pa);
+                    }
+                  }}
+                  list="batch-villages-datalist"
+                  placeholder="e.g. Bhadaur / ਭਦੌੜ"
+                  className="w-full p-2 bg-white border border-emerald-300 rounded-lg text-gray-900 font-bold shadow-sm"
                   required
                 />
+                <datalist id="batch-villages-datalist">
+                  {savedVillages.map((v) => (
+                    <option key={`batch-v-${v.name_en}`} value={v.name_en}>
+                      {v.name_pa} ({v.name_en})
+                    </option>
+                  ))}
+                </datalist>
+              </div>
+            </div>
+
+            {/* Quick Village Chips for Batch Entry */}
+            <div className="bg-emerald-50/60 p-2.5 rounded-xl border border-emerald-200 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-emerald-950 flex items-center gap-1">
+                  <MapPin className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>ਪਿੰਡ ਦੀ ਤੇਜ਼ੀ ਨਾਲ ਚੋਣ (Quick Select Pind - ਕਲਿੱਕ ਕਰਦੇ ਹੀ ਭਰ ਜਾਵੇਗਾ):</span>
+                </span>
+                <span className="text-[10px] text-emerald-700 font-medium">ਨਵਾਂ ਪਿੰਡ ਆਪੇ ਸੇਵ ਹੋ ਜਾਵੇਗਾ</span>
+              </div>
+              <div className="flex flex-wrap gap-1 max-h-16 overflow-y-auto pt-0.5">
+                {savedVillages.slice(0, 16).map((v) => {
+                  const isSelected =
+                    (batchVillage && batchVillage.toLowerCase() === v.name_en.toLowerCase()) ||
+                    (batchVillagePa && batchVillagePa === v.name_pa);
+                  return (
+                    <button
+                      key={`batch-chip-${v.name_en}`}
+                      type="button"
+                      onClick={() => {
+                        setBatchVillage(v.name_en);
+                        setBatchVillagePa(v.name_pa);
+                      }}
+                      className={`text-[11px] px-2.5 py-0.5 rounded-md font-semibold border transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-emerald-800 text-white border-emerald-900 shadow-xs'
+                          : 'bg-white hover:bg-emerald-100 text-gray-800 border-gray-300 hover:border-emerald-400'
+                      }`}
+                    >
+                      {v.name_pa ? `${v.name_pa} (${v.name_en})` : v.name_en}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -1814,15 +1894,70 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-gray-600 font-semibold mb-1">ਪਿੰਡ (Village):</label>
+                  <label className="block text-gray-600 font-semibold mb-1 flex items-center justify-between">
+                    <span>ਪਿੰਡ (Village):</span>
+                    <span className="text-[10px] text-emerald-700">ਸੁਝਾਅ ਲਿਸਟ</span>
+                  </label>
                   <input
                     type="text"
                     value={village}
-                    onChange={(e) => setVillage(e.target.value)}
-                    placeholder="Bhadaur / Barnala"
-                    className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-xl text-gray-900"
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setVillage(val);
+                      const matched = savedVillages.find(
+                        (v) => v.name_en.toLowerCase() === val.trim().toLowerCase() || v.name_pa === val.trim()
+                      );
+                      if (matched) {
+                        setVillagePa(matched.name_pa);
+                      }
+                    }}
+                    list="single-arrival-villages-datalist"
+                    placeholder="Bhadaur / Barnala / ਭਦੌੜ"
+                    className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-xl text-gray-900 font-bold"
                     required
                   />
+                  <datalist id="single-arrival-villages-datalist">
+                    {savedVillages.map((v) => (
+                      <option key={`single-v-${v.name_en}`} value={v.name_en}>
+                        {v.name_pa} ({v.name_en})
+                      </option>
+                    ))}
+                  </datalist>
+                </div>
+              </div>
+
+              {/* Quick Select Village Chips for Single Entry Modal */}
+              <div className="bg-emerald-50/50 p-2.5 rounded-xl border border-emerald-200 space-y-1">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="font-bold text-emerald-950 flex items-center gap-1">
+                    <MapPin className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>ਪਿੰਡ ਚੁਣੋ (Select Village):</span>
+                  </span>
+                  <span className="text-[10px] text-emerald-700">ਕੋਈ ਵੀ ਨਵਾਂ ਪਿੰਡ ਆਪੇ ਸੇਵ ਹੋਵੇਗਾ</span>
+                </div>
+                <div className="flex flex-wrap gap-1 max-h-16 overflow-y-auto pt-0.5">
+                  {savedVillages.slice(0, 14).map((v) => {
+                    const isSelected =
+                      (village && village.toLowerCase() === v.name_en.toLowerCase()) ||
+                      (villagePa && villagePa === v.name_pa);
+                    return (
+                      <button
+                        key={`single-chip-${v.name_en}`}
+                        type="button"
+                        onClick={() => {
+                          setVillage(v.name_en);
+                          setVillagePa(v.name_pa);
+                        }}
+                        className={`text-[11px] px-2.5 py-0.5 rounded-md font-semibold border transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-emerald-800 text-white border-emerald-900 shadow-xs'
+                            : 'bg-white hover:bg-emerald-100 text-gray-800 border-gray-300 hover:border-emerald-400'
+                        }`}
+                      >
+                        {v.name_pa ? `${v.name_pa} (${v.name_en})` : v.name_en}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -2163,12 +2298,16 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-gray-600 font-semibold mb-1">ਪਿੰਡ (Village):</label>
+                  <label className="block text-gray-600 font-semibold mb-1 flex items-center justify-between">
+                    <span>ਪਿੰਡ (Village):</span>
+                    <span className="text-[10px] text-emerald-700">ਸੁਝਾਅ ਲਿਸਟ</span>
+                  </label>
                   <input
                     type="text"
                     value={editingEntry.village}
                     onChange={(e) => setEditingEntry({ ...editingEntry, village: e.target.value })}
-                    className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-xl text-gray-900"
+                    list="single-arrival-villages-datalist"
+                    className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-xl text-gray-900 font-bold"
                     required
                   />
                 </div>

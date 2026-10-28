@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FarmerMaster, LinkedFarmer } from '../types/mandi';
 import { transliterateToPunjabi } from '../lib/transliterate';
+import { getSavedVillages, registerVillage, VillageItem } from '../lib/villages';
 import { 
   UserPlus, 
   Users, 
@@ -9,12 +10,13 @@ import {
   ShieldAlert, 
   CheckCircle2, 
   X, 
-  Sparkles,
-  Lock,
-  Camera,
-  Upload,
-  RotateCcw,
-  User as UserIcon
+  Sparkles, 
+  Lock, 
+  Camera, 
+  Upload, 
+  RotateCcw, 
+  User as UserIcon,
+  MapPin
 } from 'lucide-react';
 
 interface FarmerRegisterModalProps {
@@ -32,6 +34,7 @@ export const FarmerRegisterModal: React.FC<FarmerRegisterModalProps> = ({
   existingFarmers,
   editingFarmer,
 }) => {
+  const [savedVillages, setSavedVillages] = useState<VillageItem[]>(() => getSavedVillages());
   const [nameEn, setNameEn] = useState('');
   const [namePa, setNamePa] = useState('');
   const [fatherEn, setFatherEn] = useState('');
@@ -136,6 +139,20 @@ export const FarmerRegisterModal: React.FC<FarmerRegisterModalProps> = ({
       stopCamera();
     };
   }, [stopCamera]);
+
+  // Listen for village updates across the software
+  useEffect(() => {
+    const handleVillageUpdate = () => {
+      setSavedVillages(getSavedVillages());
+    };
+    window.addEventListener('kisanmitra_villages_updated', handleVillageUpdate);
+    return () => window.removeEventListener('kisanmitra_villages_updated', handleVillageUpdate);
+  }, []);
+
+  const handleSelectVillageChip = (v: VillageItem) => {
+    setVillageEn(v.name_en);
+    setVillagePa(v.name_pa || v.name_en);
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -368,6 +385,16 @@ export const FarmerRegisterModal: React.FC<FarmerRegisterModalProps> = ({
       created_at: editingFarmer ? editingFarmer.created_at : new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
+
+    // Save village to dynamic village master so user never has to retype it
+    if (villageEn.trim() || villagePa.trim()) {
+      registerVillage(villageEn.trim(), villagePa.trim());
+    }
+    linkedFarmers.forEach((lf) => {
+      if (lf.village_en || lf.village_pa) {
+        registerVillage(lf.village_en || '', lf.village_pa || '');
+      }
+    });
 
     onSaveFarmer(farmerToSave);
     stopCamera();
@@ -615,32 +642,84 @@ export const FarmerRegisterModal: React.FC<FarmerRegisterModalProps> = ({
                 />
               </div>
 
+              {/* Quick Select Village Chips */}
+              <div className="col-span-1 sm:col-span-2 lg:col-span-3 bg-emerald-50/60 p-3 rounded-xl border border-emerald-200 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                    <MapPin className="w-4 h-4 text-emerald-700" />
+                    <span>ਪਿੰਡ ਦੀ ਤੇਜ਼ੀ ਨਾਲ ਚੋਣ (Quick Select Pind - ਕਲਿੱਕ ਕਰਦੇ ਹੀ ਦੋਵੇਂ ਭਾਸ਼ਾਵਾਂ ਵਿੱਚ ਭਰੇਗਾ):</span>
+                  </span>
+                  <span className="text-[10px] text-emerald-800 bg-white px-2 py-0.5 rounded font-semibold border border-emerald-200">
+                    ਨਵਾਂ ਪਿੰਡ ਲਿਖਣ 'ਤੇ ਆਪੇ ਲਿਸਟ ਵਿੱਚ ਜੁੜ ਜਾਵੇਗਾ
+                  </span>
+                </div>
+                
+                <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pt-1">
+                  {savedVillages.slice(0, 16).map((v) => {
+                    const isSelected =
+                      (villageEn && villageEn.toLowerCase() === v.name_en.toLowerCase()) ||
+                      (villagePa && villagePa === v.name_pa);
+                    return (
+                      <button
+                        key={v.name_en}
+                        type="button"
+                        onClick={() => handleSelectVillageChip(v)}
+                        className={`text-xs px-2.5 py-1 rounded-lg font-semibold border transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-emerald-800 text-white border-emerald-900 shadow-sm'
+                            : 'bg-white hover:bg-emerald-100 text-gray-800 border-gray-300 hover:border-emerald-400'
+                        }`}
+                      >
+                        {v.name_pa ? `${v.name_pa} (${v.name_en})` : v.name_en}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div>
-                <label className="block text-gray-700 font-semibold mb-1">
-                  Village / Pind in English *
+                <label className="block text-gray-700 font-semibold mb-1 flex items-center justify-between">
+                  <span>Village / Pind in English *</span>
+                  <span className="text-[10px] text-emerald-600 font-normal">ਸੁਝਾਅ ਲਿਸਟ ਐਕਟਿਵ</span>
                 </label>
                 <input
                   type="text"
                   value={villageEn}
                   onChange={(e) => handleVillageEnChange(e.target.value)}
+                  list="farmer-villages-en-list"
                   placeholder="e.g. Bhadaur"
                   required
                   className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 font-medium focus:border-emerald-600 focus:outline-none"
                 />
+                <datalist id="farmer-villages-en-list">
+                  {savedVillages.map((v) => (
+                    <option key={`en-${v.name_en}`} value={v.name_en}>
+                      {v.name_pa} ({v.name_en})
+                    </option>
+                  ))}
+                </datalist>
               </div>
 
               <div>
                 <label className="block text-emerald-900 font-semibold mb-1 flex items-center justify-between">
                   <span>ਪਿੰਡ (ਪੰਜਾਬੀ)</span>
-                  <span className="text-[10px] text-emerald-600 font-normal">ਆਪੇ ਬਣੇਗਾ</span>
+                  <span className="text-[10px] text-emerald-600 font-normal">ਆਪੇ ਬਣੇਗਾ / ਸਿਲੈਕਟ ਕਰੋ</span>
                 </label>
                 <input
                   type="text"
                   value={villagePa}
                   onChange={(e) => setVillagePa(e.target.value)}
+                  list="farmer-villages-pa-list"
                   placeholder="ਉਦਾਹਰਨ: ਭਦੌੜ"
                   className="w-full bg-emerald-50/60 border border-emerald-300 rounded-lg px-3 py-2 text-emerald-950 font-bold focus:border-emerald-600 focus:outline-none font-sans"
                 />
+                <datalist id="farmer-villages-pa-list">
+                  {savedVillages.map((v) => (
+                    <option key={`pa-${v.name_pa}`} value={v.name_pa}>
+                      {v.name_en}
+                    </option>
+                  ))}
+                </datalist>
               </div>
 
               <div>

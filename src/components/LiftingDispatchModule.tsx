@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   LiftingDispatchEntry, 
   GoogleSheetConfig, 
   ShellerMaster, 
   ARHTIA_FIRMS, 
-  MANDI_LOCATIONS 
+  MANDI_LOCATIONS,
+  TruckMaster
 } from '../types/mandi';
 import { 
   Truck, 
@@ -14,21 +15,29 @@ import {
   CheckCircle2, 
   Trash2, 
   FileText, 
-  X,
-  Phone,
-  Building,
-  Clock,
-  Warehouse,
-  Edit3,
-  Factory,
-  Camera,
-  Image as ImageIcon,
-  Check,
-  AlertTriangle,
-  User,
-  Scale
+  X, 
+  Phone, 
+  Building, 
+  Clock, 
+  Warehouse, 
+  Edit3, 
+  Factory, 
+  Camera, 
+  Image as ImageIcon, 
+  Check, 
+  AlertTriangle, 
+  User, 
+  Scale,
+  Sparkles,
+  Hash
 } from 'lucide-react';
 import { appendLiftingDispatchToSheets } from '../lib/sheets';
+import { 
+  getSavedTrucks, 
+  saveTruck, 
+  findTruckBy4DigitsOrNumber,
+  searchTrucks
+} from '../lib/trucks';
 
 interface LiftingDispatchModuleProps {
   entries: LiftingDispatchEntry[];
@@ -75,6 +84,60 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
   const [driverMobile, setDriverMobile] = useState('');
   const [truckPhoto, setTruckPhoto] = useState<string | undefined>(undefined);
   const [godown, setGodown] = useState('Miller Sheller Plant');
+
+  // Saved Trucks Master & Auto-match State
+  const [savedTrucks, setSavedTrucks] = useState<TruckMaster[]>(() => getSavedTrucks());
+  const [matchedTruckBadge, setMatchedTruckBadge] = useState<TruckMaster | null>(null);
+
+  useEffect(() => {
+    const handleTrucksUpdate = () => {
+      setSavedTrucks(getSavedTrucks());
+    };
+    window.addEventListener('kisanmitra_trucks_updated', handleTrucksUpdate);
+    return () => window.removeEventListener('kisanmitra_trucks_updated', handleTrucksUpdate);
+  }, []);
+
+  const handleTruckInputChange = (val: string) => {
+    const raw = val.toUpperCase();
+    setTruckNo(raw);
+    const match = findTruckBy4DigitsOrNumber(raw);
+    if (match) {
+      setTruckNo(match.truck_number);
+      if (match.driver_name) setDriverName(match.driver_name);
+      if (match.driver_mobile) setDriverMobile(match.driver_mobile);
+      if (match.default_destination) setGodown(match.default_destination);
+      setMatchedTruckBadge(match);
+    } else {
+      setMatchedTruckBadge(null);
+    }
+  };
+
+  const handleSelectTruckChip = (t: TruckMaster) => {
+    setTruckNo(t.truck_number);
+    if (t.driver_name) setDriverName(t.driver_name);
+    if (t.driver_mobile) setDriverMobile(t.driver_mobile);
+    if (t.default_destination) setGodown(t.default_destination);
+    setMatchedTruckBadge(t);
+  };
+
+  const handleEditTruckChange = (val: string) => {
+    if (!editingEntry) return;
+    const raw = val.toUpperCase();
+    const match = findTruckBy4DigitsOrNumber(raw);
+    if (match) {
+      setEditingEntry({
+        ...editingEntry,
+        truck_number: match.truck_number,
+        driver_name: match.driver_name || editingEntry.driver_name,
+        driver_mobile: match.driver_mobile || editingEntry.driver_mobile,
+      });
+    } else {
+      setEditingEntry({
+        ...editingEntry,
+        truck_number: raw,
+      });
+    }
+  };
 
   // Bag Categories & Breakdown (Old Bags, New Bags, Both)
   const [bagCategory, setBagCategory] = useState<'both' | 'old' | 'new'>('both');
@@ -167,10 +230,19 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
     onAddEntry(newEntry);
     setIsModalOpen(false);
 
+    // Auto-save truck to master list
+    saveTruck(
+      truckNo.trim().toUpperCase(),
+      driverName.trim() || undefined,
+      driverMobile.trim() || undefined,
+      godown.trim() || selectedSheller
+    );
+
     // Reset Form
     setTruckNo('');
     setDriverName('');
     setDriverMobile('');
+    setMatchedTruckBadge(null);
     setTruckPhoto(undefined);
     setNewBags(200);
     setOldBags(200);
@@ -215,6 +287,15 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
       ...editingEntry,
       weight_quintals: calculatedWeight,
     };
+
+    if (editingEntry.truck_number) {
+      saveTruck(
+        editingEntry.truck_number.trim().toUpperCase(),
+        editingEntry.driver_name?.trim(),
+        editingEntry.driver_mobile?.trim(),
+        editingEntry.destination_godown || editingEntry.seller_sheller_name
+      );
+    }
 
     onUpdateEntry(updated);
     setEditingEntry(null);
@@ -707,39 +788,106 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
                 </select>
               </div>
 
-              {/* Truck Details, Driver Name & Driver Mobile */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-gray-600 font-semibold mb-1">ਟਰੱਕ ਨੰਬਰ (Truck No):</label>
-                  <input
-                    type="text"
-                    value={truckNo}
-                    onChange={(e) => setTruckNo(e.target.value)}
-                    placeholder="PB-03-AF-9876"
-                    className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-xl font-mono uppercase font-bold text-gray-900"
-                    required
-                  />
+              {/* Truck Details, Driver Name & Driver Mobile with 4-Digit Auto-Match */}
+              <div className="space-y-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-gray-700 font-bold">ਟਰੱਕ ਨੰਬਰ (Truck No):</label>
+                      <span className="text-[10px] text-purple-700 font-semibold bg-purple-100 px-1.5 py-0.2 rounded">4 ਅੰਕ ਜਾਂ ਨੰਬਰ</span>
+                    </div>
+                    <input
+                      type="text"
+                      list="lifting-truck-options"
+                      value={truckNo}
+                      onChange={(e) => handleTruckInputChange(e.target.value)}
+                      placeholder="e.g. 2041 ਜਾਂ PB-19-M-2041"
+                      className="w-full p-2.5 bg-gray-50 border border-gray-300 focus:border-purple-600 focus:ring-1 focus:ring-purple-600 rounded-xl font-mono uppercase font-bold text-gray-900 transition-colors"
+                      required
+                      autoComplete="off"
+                    />
+                    <datalist id="lifting-truck-options">
+                      {savedTrucks.map((t) => (
+                        <option key={t.id} value={t.truck_number}>
+                          {t.driver_name ? `${t.driver_name} - ${t.driver_mobile || ''}` : t.truck_number}
+                        </option>
+                      ))}
+                    </datalist>
+                  </div>
+                  <div>
+                    <label className="block text-gray-600 font-semibold mb-1">ਡਰਾਈਵਰ ਦਾ ਨਾਮ (Driver Name):</label>
+                    <input
+                      type="text"
+                      value={driverName}
+                      onChange={(e) => setDriverName(e.target.value)}
+                      placeholder="e.g. Kuldeep Singh"
+                      className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-xl text-gray-900 font-semibold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-600 font-semibold mb-1">ਡਰਾਈਵਰ ਮੋਬਾਈਲ (Mobile):</label>
+                    <input
+                      type="tel"
+                      value={driverMobile}
+                      onChange={(e) => setDriverMobile(e.target.value)}
+                      placeholder="98765-11223"
+                      className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-xl font-mono text-gray-900"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-gray-600 font-semibold mb-1">ਡਰਾਈਵਰ ਦਾ ਨਾਮ (Driver Name):</label>
-                  <input
-                    type="text"
-                    value={driverName}
-                    onChange={(e) => setDriverName(e.target.value)}
-                    placeholder="e.g. Kuldeep Singh"
-                    className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-xl text-gray-900 font-semibold"
-                  />
-                </div>
-                <div>
-                  <label className="block text-gray-600 font-semibold mb-1">ਡਰਾਈਵਰ ਮੋਬਾਈਲ (Mobile):</label>
-                  <input
-                    type="tel"
-                    value={driverMobile}
-                    onChange={(e) => setDriverMobile(e.target.value)}
-                    placeholder="98765-11223"
-                    className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-xl font-mono text-gray-900"
-                  />
-                </div>
+
+                {/* Auto-Match Indicator */}
+                {matchedTruckBadge && (
+                  <div className="text-[11px] font-bold text-emerald-900 bg-emerald-50 border border-emerald-300 px-3 py-1.5 rounded-xl flex items-center justify-between animate-in fade-in">
+                    <div className="flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-emerald-600" />
+                      <span>
+                        ✓ ਟਰੱਕ ਰਿਕਾਰਡ ਮਿਲ ਗਿਆ: <strong className="font-mono text-emerald-800">{matchedTruckBadge.truck_number}</strong>
+                        {matchedTruckBadge.driver_name ? ` • ਡਰਾਈਵਰ: ${matchedTruckBadge.driver_name}` : ''}
+                        {matchedTruckBadge.driver_mobile ? ` (${matchedTruckBadge.driver_mobile})` : ''} - ਡਾਟਾ ਆਪੇ ਭਰਿਆ ਗਿਆ!
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setMatchedTruckBadge(null)}
+                      className="text-emerald-700 hover:text-emerald-900 text-xs font-bold px-1.5 py-0.5 rounded cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+
+                {/* Quick Select Saved Truck Chips */}
+                {savedTrucks.length > 0 && (
+                  <div className="bg-purple-50/70 p-2.5 rounded-xl border border-purple-200/80 space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="font-bold text-purple-950 flex items-center gap-1">
+                        <Truck className="w-3.5 h-3.5 text-purple-700" />
+                        <span>ਸੇਵ ਕੀਤੇ ਟਰੱਕ ({savedTrucks.length}) - ਕਲਿੱਕ ਕਰਕੇ 1 ਸਕਿੰਟ 'ਚ ਭਰੋ:</span>
+                      </span>
+                      <span className="text-[10px] text-purple-700 font-semibold">4 ਅੰਕ ਲਿਖਣ 'ਤੇ ਵੀ ਆਪੇ ਆਵੇਗਾ</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 max-h-20 overflow-y-auto pt-0.5">
+                      {savedTrucks.map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => handleSelectTruckChip(t)}
+                          className={`text-[11px] px-2.5 py-1 rounded-lg font-semibold border transition-all cursor-pointer flex items-center gap-1 ${
+                            truckNo === t.truck_number
+                              ? 'bg-purple-800 text-white border-purple-900 shadow-xs'
+                              : 'bg-white hover:bg-purple-100 text-purple-950 border-gray-300 hover:border-purple-400'
+                          }`}
+                        >
+                          <span className="font-mono font-bold">🚛 {t.truck_number}</span>
+                          {t.driver_name && (
+                            <span className="text-[10px] opacity-80">({t.driver_name.split(' ')[0]})</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Truck Photo Capture / Upload */}
@@ -1073,11 +1221,16 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-gray-600 font-semibold mb-1">ਟਰੱਕ ਨੰਬਰ (Truck No):</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-gray-600 font-semibold">ਟਰੱਕ ਨੰਬਰ (Truck No):</label>
+                    <span className="text-[9px] text-purple-700 font-semibold bg-purple-100 px-1 py-0.2 rounded">4 ਅੰਕ ਲਿਖੋ</span>
+                  </div>
                   <input
                     type="text"
+                    list="lifting-truck-options"
                     value={editingEntry.truck_number}
-                    onChange={(e) => setEditingEntry({ ...editingEntry, truck_number: e.target.value.toUpperCase() })}
+                    onChange={(e) => handleEditTruckChange(e.target.value)}
+                    placeholder="PB-03-AF-9876 ਜਾਂ 4 ਅੰਕ"
                     className="w-full p-2 bg-gray-50 border border-gray-300 rounded-xl font-mono uppercase font-bold text-gray-900"
                   />
                 </div>

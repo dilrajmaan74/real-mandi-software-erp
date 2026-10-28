@@ -53,6 +53,8 @@ import {
   syncLocalDataToCloud, 
   subscribeToUserCloudData 
 } from './lib/firestore';
+import { harvestVillagesFromRecords, registerVillage } from './lib/villages';
+import { harvestTrucksFromLifting, saveTruck } from './lib/trucks';
 import { 
   Users, 
   Wheat, 
@@ -67,7 +69,8 @@ import {
   CloudUpload,
   RefreshCw,
   Smartphone,
-  Laptop
+  Laptop,
+  Trash2
 } from 'lucide-react';
 
 // Demo Initial Data
@@ -550,6 +553,20 @@ export default function App() {
     }
   }, [sheetConfig]);
 
+  // Harvest and keep Village Master up to date whenever farmers or arrivals change
+  useEffect(() => {
+    harvestVillagesFromRecords([
+      ...farmers.map((f) => ({ village_en: f.village_en, village_pa: f.village_pa })),
+      ...farmers.flatMap((f) => (f.linked_farmers || []).map((lf) => ({ village_en: lf.village_en, village_pa: lf.village_pa }))),
+      ...cropArrivals.map((a) => ({ village: a.village, village_pa: a.village_pa })),
+    ]);
+  }, [farmers, cropArrivals]);
+
+  // Harvest and keep Truck Master up to date whenever lifting dispatches change
+  useEffect(() => {
+    harvestTrucksFromLifting(liftingDispatches);
+  }, [liftingDispatches]);
+
   const [isUnauthorizedDomainModalOpen, setIsUnauthorizedDomainModalOpen] = useState(false);
   const [lastAuthError, setLastAuthError] = useState<{ code?: string; message?: string } | null>(null);
 
@@ -664,6 +681,12 @@ export default function App() {
       showToast('success', `ਨਵਾਂ ਕਿਸਾਨ ਰਜਿਸਟਰ: ${farmer.name_en} (${farmer.name_pa})`);
     }
 
+    // Register village into master list
+    registerVillage(farmer.village_en, farmer.village_pa);
+    (farmer.linked_farmers || []).forEach((lf) => {
+      if (lf.village_en || lf.village_pa) registerVillage(lf.village_en || '', lf.village_pa || '');
+    });
+
     // Real-time Cloud Save
     if (user) {
       saveFarmerToCloud(user.uid, farmer).catch((e) => console.error('Cloud save farmer error:', e));
@@ -695,6 +718,9 @@ export default function App() {
     setCropArrivals((prev) => [entry, ...prev]);
     showToast('success', `ਨਵੀਂ ਆਵਕ ਦਰਜ: ${entry.farmer_name} (${entry.total_bags_arrived} ਗੱਟੇ)`);
 
+    // Register village
+    if (entry.village) registerVillage(entry.village, entry.village_pa);
+
     // Real-time Cloud Save
     if (user) {
       saveCropArrivalToCloud(user.uid, entry).catch((e) => console.error('Cloud save arrival error:', e));
@@ -718,6 +744,11 @@ export default function App() {
     setCropArrivals((prev) => [...newBatch, ...prev]);
     showToast('success', `${newBatch.length} ਨਵੀਆਂ ਫਸਲ ਆਵਕ ਐਂਟਰੀਆਂ ਸਫਲਤਾਪੂਰਵਕ ਸੇਵ ਹੋ ਗਈਆਂ!`);
 
+    // Register villages in batch
+    newBatch.forEach((entry) => {
+      if (entry.village) registerVillage(entry.village, entry.village_pa);
+    });
+
     if (user) {
       newBatch.forEach((entry) => {
         saveCropArrivalToCloud(user.uid, entry).catch(console.error);
@@ -740,6 +771,7 @@ export default function App() {
 
   const handleUpdateArrival = (updated: CropArrivalEntry) => {
     setCropArrivals((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
+    if (updated.village) registerVillage(updated.village, updated.village_pa);
     if (user) {
       saveCropArrivalToCloud(user.uid, updated).catch((e) => console.error('Cloud update arrival error:', e));
     }
@@ -840,6 +872,11 @@ export default function App() {
     setLiftingDispatches((prev) => [entry, ...prev]);
     showToast('success', `ਲਿਫਟਿੰਗ ਚਲਾਨ ਦਰਜ: ਟਰੱਕ ${entry.truck_number} (${entry.bags_lifted} ਗੱਟੇ)`);
 
+    // Save truck and driver to directory
+    if (entry.truck_number) {
+      saveTruck(entry.truck_number, entry.driver_name, entry.driver_mobile, entry.destination_godown || entry.seller_sheller_name);
+    }
+
     if (user) {
       saveLiftingDispatchToCloud(user.uid, entry).catch((e) => console.error('Cloud save lifting error:', e));
     }
@@ -859,10 +896,40 @@ export default function App() {
 
   const handleUpdateLifting = (updated: LiftingDispatchEntry) => {
     setLiftingDispatches((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
+    if (updated.truck_number) {
+      saveTruck(updated.truck_number, updated.driver_name, updated.driver_mobile, updated.destination_godown || updated.seller_sheller_name);
+    }
     if (user) {
       saveLiftingDispatchToCloud(user.uid, updated).catch((e) => console.error('Cloud update lifting error:', e));
     }
     showToast('success', `ਲਿਫਟਿੰਗ ਚਲਾਨ ${updated.challan_no} ਅੱਪਡੇਟ ਹੋਇਆ`);
+  };
+
+  // Software Demo Data Cleanup Management
+  const DEMO_IDS = new Set([
+    'FR-1001', 'FR-1002',
+    'ARR-101', 'ARR-102',
+    'BAR-201', 'BAR-202',
+    'AUC-401', 'AUC-402',
+    'LFT-501', 'LFT-502',
+  ]);
+
+  const hasDemoData = 
+    farmers.some((f) => DEMO_IDS.has(f.id)) ||
+    cropArrivals.some((a) => DEMO_IDS.has(a.id)) ||
+    bardanaEntries.some((b) => DEMO_IDS.has(b.id)) ||
+    agencyPurchases.some((p) => DEMO_IDS.has(p.id)) ||
+    liftingDispatches.some((l) => DEMO_IDS.has(l.id));
+
+  const handleRemoveDemoData = () => {
+    if (window.confirm('ਕੀ ਤੁਸੀਂ ਸਾਫਟਵੇਅਰ ਦਾ ਸੈਂਪਲ/ਡੈਮੋ ਡਾਟਾ ਹਟਾਉਣਾ ਚਾਹੁੰਦੇ ਹੋ? ਤੁਹਾਡਾ ਆਪਣਾ ਅਸਲ ਡਾਟਾ ਬਿਲਕੁਲ ਸੁਰੱਖਿਅਤ ਰਹੇਗਾ।')) {
+      setFarmers((prev) => prev.filter((f) => !DEMO_IDS.has(f.id)));
+      setCropArrivals((prev) => prev.filter((a) => !DEMO_IDS.has(a.id)));
+      setBardanaEntries((prev) => prev.filter((b) => !DEMO_IDS.has(b.id)));
+      setAgencyPurchases((prev) => prev.filter((p) => !DEMO_IDS.has(p.id)));
+      setLiftingDispatches((prev) => prev.filter((l) => !DEMO_IDS.has(l.id)));
+      showToast('success', 'ਸਾਫਟਵੇਅਰ ਦਾ ਡੈਮੋ ਡਾਟਾ ਹਟਾ ਦਿੱਤਾ ਗਿਆ ਹੈ! ਹੁਣ ਸਿਰਫ਼ ਤੁਹਾਡਾ ਆਪਣਾ ਅਸਲ ਡਾਟਾ ਹੀ ਰਹੇਗਾ।');
+    }
   };
 
   // Process Voice / Text
@@ -1257,6 +1324,31 @@ export default function App() {
                 hasGoogleToken={Boolean(token)}
               />
             )}
+          </div>
+        )}
+
+        {/* Software Sample Demo Data Management Banner */}
+        {hasDemoData && (
+          <div className="print:hidden bg-amber-50/90 border border-amber-300 rounded-2xl p-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-amber-200/70 flex items-center justify-center text-amber-900 flex-shrink-0">
+                <Info className="w-4 h-4" />
+              </div>
+              <div className="text-xs text-amber-950">
+                <p className="font-bold">ਸਾਫਟਵੇਅਰ ਦਾ ਸੈਂਪਲ / ਡੈਮੋ ਡਾਟਾ (Demo Sample Records)</p>
+                <p className="text-amber-800 text-[11px] mt-0.5">
+                  ਸਾਫਟਵੇਅਰ ਵਿੱਚ ਡੈਮੋ ਕਿਸਾਨ (Malkit Singh, Baldev Singh) ਤੇ ਸੈਂਪਲ ਐਂਟਰੀਆਂ ਸ਼ਾਮਲ ਹਨ। ਤੁਸੀਂ ਜਦੋਂ ਚਾਹੋ ਸਿਰਫ਼ ਡੈਮੋ ਡਾਟਾ ਹਟਾ ਸਕਦੇ ਹੋ — ਤੁਹਾਡਾ ਆਪਣਾ ਅਸਲ ਡਾਟਾ ਬਿਲਕੁਲ ਸੁਰੱਖਿਅਤ ਰਹੇਗਾ।
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleRemoveDemoData}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs transition-all shadow-xs cursor-pointer flex-shrink-0"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>ਸਿਰਫ਼ ਡੈਮੋ ਡਾਟਾ ਸਾਫ਼ ਕਰੋ (Clear Demo Data)</span>
+            </button>
           </div>
         )}
 

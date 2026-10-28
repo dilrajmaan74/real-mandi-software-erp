@@ -50,6 +50,17 @@ export const DEFAULT_SHELLERS: ShellerMaster[] = [
   { id: 'SH-03', name: 'Kang Khurd Solvex & Rice Mill', location: 'Kang Khurd', mobile: '98881-22334' },
 ];
 
+export interface TruckMaster {
+  id: string;
+  truck_number: string;
+  driver_name: string;
+  driver_mobile: string;
+  transporter_name?: string;
+  default_destination?: string;
+  last_used?: string;
+  count?: number;
+}
+
 export interface LinkedFarmer {
   id: string;
   name_en: string;
