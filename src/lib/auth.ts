@@ -1,5 +1,13 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User } from 'firebase/auth';
+import { 
+  getAuth, 
+  signInWithPopup, 
+  signInWithRedirect, 
+  getRedirectResult, 
+  GoogleAuthProvider, 
+  onAuthStateChanged, 
+  User 
+} from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 // Initialize Firebase (safeguarded against duplicate init)
@@ -16,25 +24,53 @@ provider.setCustomParameters({
   prompt: 'consent',
 });
 
-// Flag to indicate if we are in the middle of a sign-in flow.
-let isSigningIn = false;
-// Cache the access token in memory (never in localStorage/sessionStorage).
+// Cache the access token in memory and sessionStorage
 let cachedAccessToken: string | null = null;
+try {
+  cachedAccessToken = sessionStorage.getItem('kisanmitra_oauth_token');
+} catch (e) {
+  // ignore
+}
 
 export const initAuth = (
-  onAuthSuccess?: (user: User, token: string) => void,
+  onAuthSuccess?: (user: User, token: string | null) => void,
   onAuthFailure?: () => void
 ) => {
+  // Check redirect result first (in case returning from signInWithRedirect)
+  getRedirectResult(auth)
+    .then((result) => {
+      if (result) {
+        const credential = GoogleAuthProvider.credentialFromResult(result);
+        if (credential?.accessToken) {
+          cachedAccessToken = credential.accessToken;
+          try {
+            sessionStorage.setItem('kisanmitra_oauth_token', credential.accessToken);
+          } catch (e) {}
+        }
+        if (onAuthSuccess) {
+          onAuthSuccess(result.user, cachedAccessToken);
+        }
+      }
+    })
+    .catch((err) => {
+      console.warn('Redirect sign-in result check:', err);
+    });
+
   return onAuthStateChanged(auth, async (user: User | null) => {
     if (user) {
-      if (cachedAccessToken) {
-        if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
-      } else if (!isSigningIn) {
-        cachedAccessToken = null;
-        if (onAuthFailure) onAuthFailure();
+      if (!cachedAccessToken) {
+        try {
+          cachedAccessToken = sessionStorage.getItem('kisanmitra_oauth_token');
+        } catch (e) {}
+      }
+      if (onAuthSuccess) {
+        onAuthSuccess(user, cachedAccessToken);
       }
     } else {
       cachedAccessToken = null;
+      try {
+        sessionStorage.removeItem('kisanmitra_oauth_token');
+      } catch (e) {}
       if (onAuthFailure) onAuthFailure();
     }
   });
@@ -42,20 +78,26 @@ export const initAuth = (
 
 export const googleSignIn = async (): Promise<{ user: User; accessToken: string } | null> => {
   try {
-    isSigningIn = true;
     const result = await signInWithPopup(auth, provider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
-    if (!credential?.accessToken) {
-      throw new Error('Failed to retrieve access token from Google sign-in.');
-    }
-
-    cachedAccessToken = credential.accessToken;
-    return { user: result.user, accessToken: cachedAccessToken };
+    const token = credential?.accessToken || '';
+    cachedAccessToken = token;
+    try {
+      if (token) sessionStorage.setItem('kisanmitra_oauth_token', token);
+    } catch (e) {}
+    return { user: result.user, accessToken: token };
   } catch (error: any) {
     console.error('Google Sign In error:', error);
     throw error;
-  } finally {
-    isSigningIn = false;
+  }
+};
+
+export const googleSignInRedirect = async (): Promise<void> => {
+  try {
+    await signInWithRedirect(auth, provider);
+  } catch (error: any) {
+    console.error('Google Sign In redirect error:', error);
+    throw error;
   }
 };
 
@@ -66,6 +108,9 @@ export const getAccessToken = async (): Promise<string | null> => {
 export const logout = async () => {
   await auth.signOut();
   cachedAccessToken = null;
+  try {
+    sessionStorage.removeItem('kisanmitra_oauth_token');
+  } catch (e) {}
 };
 
 export { auth };

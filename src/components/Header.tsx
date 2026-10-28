@@ -11,7 +11,8 @@ import {
   CloudUpload,
   RefreshCw,
   Lock,
-  FileText
+  FileText,
+  HelpCircle
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -28,6 +29,7 @@ interface HeaderProps {
   onSyncLaptopData?: () => void;
   hasLocalDataToUpload?: boolean;
   onOpenLetterPad?: () => void;
+  onOpenAuthTroubleshoot?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -44,6 +46,7 @@ export const Header: React.FC<HeaderProps> = ({
   onSyncLaptopData,
   hasLocalDataToUpload = false,
   onOpenLetterPad,
+  onOpenAuthTroubleshoot,
 }) => {
   const mandiOptions = [
     'Khanna Grain Market (Asia’s Largest)',
@@ -218,12 +221,24 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               </div>
             ) : (
-              <GoogleSignInButton
-                onClick={onLogin}
-                isLoading={isLoggingIn}
-                text="ਗੂਗਲ ਸਾਈਨ-ਇਨ (ਸਿੰਕ ਲਈ)"
-                className="py-1.5 px-3 text-xs"
-              />
+              <div className="flex items-center gap-1.5">
+                <GoogleSignInButton
+                  onClick={onLogin}
+                  isLoading={isLoggingIn}
+                  text="ਗੂਗਲ ਸਾਈਨ-ਇਨ (ਸਿੰਕ ਲਈ)"
+                  className="py-1.5 px-3 text-xs"
+                />
+                {onOpenAuthTroubleshoot && (
+                  <button
+                    type="button"
+                    onClick={onOpenAuthTroubleshoot}
+                    className="p-1.5 rounded-lg bg-emerald-900/80 hover:bg-emerald-800 text-amber-300 hover:text-amber-200 border border-emerald-700/60 transition-colors cursor-pointer"
+                    title="Vercel ਡੋਮੇਨ ਸੈਟਿੰਗਜ਼ ਜਾਂ ਲੌਗਇਨ ਮਦਦ (Domain & Login Troubleshooting)"
+                  >
+                    <HelpCircle className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </div>

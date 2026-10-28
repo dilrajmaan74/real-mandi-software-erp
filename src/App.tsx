@@ -32,7 +32,7 @@ import {
   ARHTIA_FIRMS,
   MANDI_LOCATIONS
 } from './types/mandi';
-import { initAuth, googleSignIn, logout } from './lib/auth';
+import { initAuth, googleSignIn, googleSignInRedirect, logout } from './lib/auth';
 import { 
   appendFarmerToSheets, 
   appendCropArrivalToSheets, 
@@ -551,6 +551,7 @@ export default function App() {
   }, [sheetConfig]);
 
   const [isUnauthorizedDomainModalOpen, setIsUnauthorizedDomainModalOpen] = useState(false);
+  const [lastAuthError, setLastAuthError] = useState<{ code?: string; message?: string } | null>(null);
 
   const handleLogin = async () => {
     setIsLoggingIn(true);
@@ -559,21 +560,36 @@ export default function App() {
       if (result) {
         setUser(result.user);
         setToken(result.accessToken);
+        setLastAuthError(null);
         showToast('success', `${result.user.displayName || result.user.email} ਨਾਲ ਸਾਈਨ-ਇਨ ਸਫਲ! ਕਲਾਊਡ ਸਿੰਕ ਐਕਟਿਵ ਹੋ ਗਿਆ।`);
       }
     } catch (err: any) {
       console.error('Google Sign In error:', err);
-      const isUnauthorizedDomain = 
-        err?.code === 'auth/unauthorized-domain' || 
-        err?.message?.includes('unauthorized-domain') ||
-        err?.message?.includes('auth/unauthorized-domain');
+      const errInfo = {
+        code: err?.code || 'AUTH_ERROR',
+        message: err?.message || String(err),
+      };
+      setLastAuthError(errInfo);
+      setIsUnauthorizedDomainModalOpen(true);
+      showToast('error', `ਗੂਗਲ ਲੌਗਇਨ ਅਸਫਲ (${errInfo.code})। ਹੱਲ ਲਈ ਸਕ੍ਰੀਨ ਤੇ ਆਇਆ ਬਾਕਸ ਦੇਖੋ।`);
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
 
-      if (isUnauthorizedDomain) {
-        setIsUnauthorizedDomainModalOpen(true);
-        showToast('error', 'ਗੂਗਲ ਲੌਗਇਨ: ਇਹ ਡੋਮੇਨ Firebase ਵਿੱਚ ਅਧਿਕਾਰਤ (Authorized) ਨਹੀਂ ਹੈ। ਹੱਲ ਲਈ ਸਕ੍ਰੀਨ ਤੇ ਆਏ ਬਾਕਸ ਦੇ ਕਦਮ ਦੇਖੋ।');
-      } else {
-        showToast('error', err.message || 'Google Sign-in failed.');
-      }
+  const handleLoginRedirect = async () => {
+    setIsLoggingIn(true);
+    try {
+      await googleSignInRedirect();
+    } catch (err: any) {
+      console.error('Google Sign In redirect error:', err);
+      const errInfo = {
+        code: err?.code || 'REDIRECT_AUTH_ERROR',
+        message: err?.message || String(err),
+      };
+      setLastAuthError(errInfo);
+      setIsUnauthorizedDomainModalOpen(true);
+      showToast('error', err?.message || 'Redirect Sign-In error');
     } finally {
       setIsLoggingIn(false);
     }
@@ -901,6 +917,7 @@ export default function App() {
         onSyncLaptopData={handleSyncLaptopData}
         hasLocalDataToUpload={hasLocalDataToUpload}
         onOpenLetterPad={() => setActiveModule('letterpad')}
+        onOpenAuthTroubleshoot={() => setIsUnauthorizedDomainModalOpen(true)}
       />
 
       {/* Main Container */}
@@ -1358,11 +1375,13 @@ export default function App() {
         currentMandi={currentMandi}
       />
 
-      {/* Firebase Unauthorized Domain Guidance Modal */}
+      {/* Firebase & Google OAuth Troubleshooter Modal */}
       <UnauthorizedDomainModal
         isOpen={isUnauthorizedDomainModalOpen}
         onClose={() => setIsUnauthorizedDomainModalOpen(false)}
         onRetryLogin={handleLogin}
+        onRetryRedirectLogin={handleLoginRedirect}
+        lastError={lastAuthError}
       />
 
     </div>
