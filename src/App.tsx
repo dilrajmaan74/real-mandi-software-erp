@@ -18,6 +18,7 @@ import { TransactionEditor } from './components/TransactionEditor';
 import { JFormModal } from './components/JFormModal';
 import { JsonViewerModal } from './components/JsonViewerModal';
 import { GoogleSheetsModal } from './components/GoogleSheetsModal';
+import { UnauthorizedDomainModal } from './components/UnauthorizedDomainModal';
 import { 
   FarmerMaster, 
   CropArrivalEntry, 
