@@ -331,6 +331,15 @@ const INITIAL_DEMO_LIFTING: LiftingDispatchEntry[] = [
   },
 ];
 
+// Software Demo Data IDs to filter out when user logs in with their real account
+export const DEMO_IDS = new Set([
+  'FR-1001', 'FR-1002',
+  'ARR-101', 'ARR-102', 'ARR-201', 'ARR-202',
+  'BAR-201', 'BAR-202', 'BAR-301', 'BAR-302',
+  'AUC-401', 'AUC-402',
+  'LFT-501', 'LFT-502',
+]);
+
 export default function App() {
   // Active Module Navigation Tab
   const [activeModule, setActiveModule] = useState<
@@ -354,7 +363,11 @@ export default function App() {
   const [farmers, setFarmers] = useState<FarmerMaster[]>(() => {
     try {
       const saved = localStorage.getItem('kisanmitra_farmers_master');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved) as FarmerMaster[];
+        const real = parsed.filter((f) => !DEMO_IDS.has(f.id));
+        if (real.length > 0) return real;
+      }
     } catch (e) {
       console.warn(e);
     }
@@ -365,7 +378,11 @@ export default function App() {
   const [cropArrivals, setCropArrivals] = useState<CropArrivalEntry[]>(() => {
     try {
       const saved = localStorage.getItem('kisanmitra_crop_arrivals');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved) as CropArrivalEntry[];
+        const real = parsed.filter((a) => !DEMO_IDS.has(a.id));
+        if (real.length > 0) return real;
+      }
     } catch (e) {
       console.warn(e);
     }
@@ -376,7 +393,11 @@ export default function App() {
   const [bardanaEntries, setBardanaEntries] = useState<BardanaEntry[]>(() => {
     try {
       const saved = localStorage.getItem('kisanmitra_bardana_entries');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved) as BardanaEntry[];
+        const real = parsed.filter((b) => !DEMO_IDS.has(b.id));
+        if (real.length > 0) return real;
+      }
     } catch (e) {
       console.warn(e);
     }
@@ -387,7 +408,11 @@ export default function App() {
   const [agencyPurchases, setAgencyPurchases] = useState<AgencyPurchaseEntry[]>(() => {
     try {
       const saved = localStorage.getItem('kisanmitra_agency_purchases');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved) as AgencyPurchaseEntry[];
+        const real = parsed.filter((p) => !DEMO_IDS.has(p.id));
+        if (real.length > 0) return real;
+      }
     } catch (e) {
       console.warn(e);
     }
@@ -398,7 +423,11 @@ export default function App() {
   const [liftingDispatches, setLiftingDispatches] = useState<LiftingDispatchEntry[]>(() => {
     try {
       const saved = localStorage.getItem('kisanmitra_lifting_dispatches');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved) as LiftingDispatchEntry[];
+        const real = parsed.filter((l) => !DEMO_IDS.has(l.id));
+        if (real.length > 0) return real;
+      }
     } catch (e) {
       console.warn(e);
     }
@@ -449,7 +478,15 @@ export default function App() {
     const unsubscribe = initAuth(
       (authUser, userToken) => {
         setUser(authUser);
-        setToken(userToken);
+        if (userToken) setToken(userToken);
+        if (authUser) {
+          // When logged in, instantly purge any demo data from memory
+          setFarmers((prev) => prev.filter((f) => !DEMO_IDS.has(f.id)));
+          setCropArrivals((prev) => prev.filter((a) => !DEMO_IDS.has(a.id)));
+          setBardanaEntries((prev) => prev.filter((b) => !DEMO_IDS.has(b.id)));
+          setAgencyPurchases((prev) => prev.filter((p) => !DEMO_IDS.has(p.id)));
+          setLiftingDispatches((prev) => prev.filter((l) => !DEMO_IDS.has(l.id)));
+        }
       },
       () => {
         setUser(null);
@@ -470,6 +507,47 @@ export default function App() {
 
     testConnection().catch(console.warn);
 
+    // Auto-rescue any real local user data previously saved on this machine
+    const autoMigrateRealLocalData = async () => {
+      try {
+        const rawFarmers = JSON.parse(localStorage.getItem('kisanmitra_farmers_master') || '[]') as FarmerMaster[];
+        const realFarmers = rawFarmers.filter((f) => !DEMO_IDS.has(f.id));
+
+        const rawArrivals = JSON.parse(localStorage.getItem('kisanmitra_crop_arrivals') || '[]') as CropArrivalEntry[];
+        const realArrivals = rawArrivals.filter((a) => !DEMO_IDS.has(a.id));
+
+        const rawBardana = JSON.parse(localStorage.getItem('kisanmitra_bardana_entries') || '[]') as BardanaEntry[];
+        const realBardana = rawBardana.filter((b) => !DEMO_IDS.has(b.id));
+
+        const rawPurchases = JSON.parse(localStorage.getItem('kisanmitra_agency_purchases') || '[]') as AgencyPurchaseEntry[];
+        const realPurchases = rawPurchases.filter((p) => !DEMO_IDS.has(p.id));
+
+        const rawLifting = JSON.parse(localStorage.getItem('kisanmitra_lifting_dispatches') || '[]') as LiftingDispatchEntry[];
+        const realLifting = rawLifting.filter((l) => !DEMO_IDS.has(l.id));
+
+        if (
+          realFarmers.length > 0 ||
+          realArrivals.length > 0 ||
+          realBardana.length > 0 ||
+          realPurchases.length > 0 ||
+          realLifting.length > 0
+        ) {
+          await syncLocalDataToCloud(user.uid, {
+            farmers: realFarmers,
+            cropArrivals: realArrivals,
+            bardanaEntries: realBardana,
+            agencyPurchases: realPurchases,
+            liftingDispatches: realLifting,
+            sheetConfig,
+          });
+        }
+      } catch (err) {
+        console.warn('Auto rescue local data error:', err);
+      }
+    };
+
+    autoMigrateRealLocalData();
+
     // Subscribe to user cloud data (farmers, crop arrivals, master sheet config, etc.)
     const unsubscribe = subscribeToUserCloudData(user.uid, {
       onSheetConfig: (cloudSheet) => {
@@ -479,33 +557,26 @@ export default function App() {
         }
       },
       onFarmers: (cloudFarmers) => {
-        if (cloudFarmers && cloudFarmers.length > 0) {
-          setFarmers(cloudFarmers);
-          setHasLocalDataToUpload(false);
-        } else if (farmers.length > 0) {
-          // Cloud has no farmers yet, local device has farmers -> flag for migration
-          setHasLocalDataToUpload(true);
-        }
+        // ALWAYS update farmers from cloud, filtering out any demo data
+        const realFarmers = (cloudFarmers || []).filter((f) => !DEMO_IDS.has(f.id));
+        setFarmers(realFarmers);
+        setHasLocalDataToUpload(false);
       },
       onCropArrivals: (cloudArrivals) => {
-        if (cloudArrivals && cloudArrivals.length > 0) {
-          setCropArrivals(cloudArrivals);
-        }
+        const realArrivals = (cloudArrivals || []).filter((a) => !DEMO_IDS.has(a.id));
+        setCropArrivals(realArrivals);
       },
       onBardana: (cloudBardana) => {
-        if (cloudBardana && cloudBardana.length > 0) {
-          setBardanaEntries(cloudBardana);
-        }
+        const realBardana = (cloudBardana || []).filter((b) => !DEMO_IDS.has(b.id));
+        setBardanaEntries(realBardana);
       },
       onPurchases: (cloudPurchases) => {
-        if (cloudPurchases && cloudPurchases.length > 0) {
-          setAgencyPurchases(cloudPurchases);
-        }
+        const realPurchases = (cloudPurchases || []).filter((p) => !DEMO_IDS.has(p.id));
+        setAgencyPurchases(realPurchases);
       },
       onLifting: (cloudLifting) => {
-        if (cloudLifting && cloudLifting.length > 0) {
-          setLiftingDispatches(cloudLifting);
-        }
+        const realLifting = (cloudLifting || []).filter((l) => !DEMO_IDS.has(l.id));
+        setLiftingDispatches(realLifting);
       },
     });
 
@@ -577,6 +648,12 @@ export default function App() {
       if (result) {
         setUser(result.user);
         setToken(result.accessToken);
+        // Instantly purge all demo data upon login
+        setFarmers((prev) => prev.filter((f) => !DEMO_IDS.has(f.id)));
+        setCropArrivals((prev) => prev.filter((a) => !DEMO_IDS.has(a.id)));
+        setBardanaEntries((prev) => prev.filter((b) => !DEMO_IDS.has(b.id)));
+        setAgencyPurchases((prev) => prev.filter((p) => !DEMO_IDS.has(p.id)));
+        setLiftingDispatches((prev) => prev.filter((l) => !DEMO_IDS.has(l.id)));
         setLastAuthError(null);
         showToast('success', `${result.user.displayName || result.user.email} ਨਾਲ ਸਾਈਨ-ਇਨ ਸਫਲ! ਕਲਾਊਡ ਸਿੰਕ ਐਕਟਿਵ ਹੋ ਗਿਆ।`);
       }
@@ -905,21 +982,15 @@ export default function App() {
     showToast('success', `ਲਿਫਟਿੰਗ ਚਲਾਨ ${updated.challan_no} ਅੱਪਡੇਟ ਹੋਇਆ`);
   };
 
-  // Software Demo Data Cleanup Management
-  const DEMO_IDS = new Set([
-    'FR-1001', 'FR-1002',
-    'ARR-101', 'ARR-102',
-    'BAR-201', 'BAR-202',
-    'AUC-401', 'AUC-402',
-    'LFT-501', 'LFT-502',
-  ]);
-
+  // Software Demo Data Cleanup Management (Only relevant when not logged in)
   const hasDemoData = 
-    farmers.some((f) => DEMO_IDS.has(f.id)) ||
-    cropArrivals.some((a) => DEMO_IDS.has(a.id)) ||
-    bardanaEntries.some((b) => DEMO_IDS.has(b.id)) ||
-    agencyPurchases.some((p) => DEMO_IDS.has(p.id)) ||
-    liftingDispatches.some((l) => DEMO_IDS.has(l.id));
+    !user && (
+      farmers.some((f) => DEMO_IDS.has(f.id)) ||
+      cropArrivals.some((a) => DEMO_IDS.has(a.id)) ||
+      bardanaEntries.some((b) => DEMO_IDS.has(b.id)) ||
+      agencyPurchases.some((p) => DEMO_IDS.has(p.id)) ||
+      liftingDispatches.some((l) => DEMO_IDS.has(l.id))
+    );
 
   const handleRemoveDemoData = () => {
     if (window.confirm('ਕੀ ਤੁਸੀਂ ਸਾਫਟਵੇਅਰ ਦਾ ਸੈਂਪਲ/ਡੈਮੋ ਡਾਟਾ ਹਟਾਉਣਾ ਚਾਹੁੰਦੇ ਹੋ? ਤੁਹਾਡਾ ਆਪਣਾ ਅਸਲ ਡਾਟਾ ਬਿਲਕੁਲ ਸੁਰੱਖਿਅਤ ਰਹੇਗਾ।')) {

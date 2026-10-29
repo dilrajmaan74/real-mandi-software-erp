@@ -90,6 +90,26 @@ export function sanitizeDocId(rawId: string): string {
   return rawId.replace(/[^a-zA-Z0-9_-]/g, '_');
 }
 
+// Sanitize payload recursively so undefined values never trigger Firestore serialization errors
+export function cleanForFirestore<T>(data: T): T {
+  if (data === null || data === undefined) {
+    return null as any;
+  }
+  if (Array.isArray(data)) {
+    return data.map((item) => cleanForFirestore(item)) as any;
+  }
+  if (typeof data === 'object' && !(data instanceof Date)) {
+    const cleaned: Record<string, any> = {};
+    for (const [key, value] of Object.entries(data as Record<string, any>)) {
+      if (value !== undefined) {
+        cleaned[key] = cleanForFirestore(value);
+      }
+    }
+    return cleaned as T;
+  }
+  return data;
+}
+
 // User master sheet config
 export async function saveMasterSheetConfigToCloud(userId: string, config: GoogleSheetConfig): Promise<void> {
   const path = `users/${userId}`;
@@ -97,12 +117,12 @@ export async function saveMasterSheetConfigToCloud(userId: string, config: Googl
     const userDocRef = doc(db, 'users', userId);
     await setDoc(
       userDocRef,
-      {
+      cleanForFirestore({
         email: auth.currentUser?.email || '',
         displayName: auth.currentUser?.displayName || '',
         sheetConfig: config,
         updatedAt: new Date().toISOString(),
-      },
+      }),
       { merge: true }
     );
   } catch (err) {
@@ -130,7 +150,8 @@ export async function saveFarmerToCloud(userId: string, farmer: FarmerMaster): P
   const docId = sanitizeDocId(farmer.id);
   const path = `users/${userId}/farmers/${docId}`;
   try {
-    await setDoc(doc(db, 'users', userId, 'farmers', docId), farmer);
+    const cleaned = cleanForFirestore(farmer);
+    await setDoc(doc(db, 'users', userId, 'farmers', docId), cleaned);
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
   }
@@ -150,7 +171,8 @@ export async function saveCropArrivalToCloud(userId: string, arrival: CropArriva
   const docId = sanitizeDocId(arrival.id);
   const path = `users/${userId}/crop_arrivals/${docId}`;
   try {
-    await setDoc(doc(db, 'users', userId, 'crop_arrivals', docId), arrival);
+    const cleaned = cleanForFirestore(arrival);
+    await setDoc(doc(db, 'users', userId, 'crop_arrivals', docId), cleaned);
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
   }
@@ -160,7 +182,8 @@ export async function saveBardanaToCloud(userId: string, entry: BardanaEntry): P
   const docId = sanitizeDocId(entry.id);
   const path = `users/${userId}/bardana_entries/${docId}`;
   try {
-    await setDoc(doc(db, 'users', userId, 'bardana_entries', docId), entry);
+    const cleaned = cleanForFirestore(entry);
+    await setDoc(doc(db, 'users', userId, 'bardana_entries', docId), cleaned);
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
   }
@@ -170,7 +193,8 @@ export async function saveAgencyPurchaseToCloud(userId: string, purchase: Agency
   const docId = sanitizeDocId(purchase.id);
   const path = `users/${userId}/agency_purchases/${docId}`;
   try {
-    await setDoc(doc(db, 'users', userId, 'agency_purchases', docId), purchase);
+    const cleaned = cleanForFirestore(purchase);
+    await setDoc(doc(db, 'users', userId, 'agency_purchases', docId), cleaned);
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
   }
@@ -180,13 +204,14 @@ export async function saveLiftingDispatchToCloud(userId: string, dispatch: Lifti
   const docId = sanitizeDocId(dispatch.id);
   const path = `users/${userId}/lifting_dispatches/${docId}`;
   try {
-    await setDoc(doc(db, 'users', userId, 'lifting_dispatches', docId), dispatch);
+    const cleaned = cleanForFirestore(dispatch);
+    await setDoc(doc(db, 'users', userId, 'lifting_dispatches', docId), cleaned);
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
   }
 }
 
-// Bulk sync from Local Storage to Cloud (Used when logging in on laptop so existing data is uploaded to Cloud)
+// Bulk sync from Local Storage to Cloud (Used when logging in so real user data is uploaded)
 export async function syncLocalDataToCloud(
   userId: string,
   data: {
@@ -207,12 +232,12 @@ export async function syncLocalDataToCloud(
       const userDocRef = doc(db, 'users', userId);
       batch.set(
         userDocRef,
-        {
+        cleanForFirestore({
           email: auth.currentUser?.email || '',
           displayName: auth.currentUser?.displayName || '',
           sheetConfig: data.sheetConfig,
           updatedAt: new Date().toISOString(),
-        },
+        }),
         { merge: true }
       );
       count++;
@@ -221,7 +246,7 @@ export async function syncLocalDataToCloud(
     if (data.farmers) {
       for (const f of data.farmers) {
         const ref = doc(db, 'users', userId, 'farmers', sanitizeDocId(f.id));
-        batch.set(ref, f);
+        batch.set(ref, cleanForFirestore(f));
         count++;
       }
     }
@@ -229,7 +254,7 @@ export async function syncLocalDataToCloud(
     if (data.cropArrivals) {
       for (const a of data.cropArrivals) {
         const ref = doc(db, 'users', userId, 'crop_arrivals', sanitizeDocId(a.id));
-        batch.set(ref, a);
+        batch.set(ref, cleanForFirestore(a));
         count++;
       }
     }
@@ -237,7 +262,7 @@ export async function syncLocalDataToCloud(
     if (data.bardanaEntries) {
       for (const b of data.bardanaEntries) {
         const ref = doc(db, 'users', userId, 'bardana_entries', sanitizeDocId(b.id));
-        batch.set(ref, b);
+        batch.set(ref, cleanForFirestore(b));
         count++;
       }
     }
@@ -245,7 +270,7 @@ export async function syncLocalDataToCloud(
     if (data.agencyPurchases) {
       for (const p of data.agencyPurchases) {
         const ref = doc(db, 'users', userId, 'agency_purchases', sanitizeDocId(p.id));
-        batch.set(ref, p);
+        batch.set(ref, cleanForFirestore(p));
         count++;
       }
     }
@@ -253,7 +278,7 @@ export async function syncLocalDataToCloud(
     if (data.liftingDispatches) {
       for (const l of data.liftingDispatches) {
         const ref = doc(db, 'users', userId, 'lifting_dispatches', sanitizeDocId(l.id));
-        batch.set(ref, l);
+        batch.set(ref, cleanForFirestore(l));
         count++;
       }
     }

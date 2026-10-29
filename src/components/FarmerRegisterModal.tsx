@@ -377,7 +377,7 @@ export const FarmerRegisterModal: React.FC<FarmerRegisterModalProps> = ({
       village_pa: villagePa.trim() || villageEn.trim(),
       mobile_number: mobile.trim(),
       aadhaar_number: aadhaar.trim(),
-      photo_url: photoUrl || undefined,
+      photo_url: photoUrl ? photoUrl : '',
       bank_account: bankAccount.trim(),
       ifsc_code: ifscCode.trim(),
       bank_name: bankName.trim(),

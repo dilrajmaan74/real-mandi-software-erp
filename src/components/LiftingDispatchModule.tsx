@@ -224,9 +224,9 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
       crop_type: cropType,
       crop_variety: cropVariety,
       truck_number: truckNo.trim().toUpperCase(),
-      driver_name: driverName.trim() || undefined,
-      driver_mobile: driverMobile.trim() || undefined,
-      truck_photo: truckPhoto,
+      driver_name: driverName.trim() || '',
+      driver_mobile: driverMobile.trim() || '',
+      truck_photo: truckPhoto || '',
       destination_godown: godown.trim() || selectedSheller,
       bag_category: bagCategory,
       new_bags: bagCategory === 'old' ? 0 : Number(newBags || 0),
@@ -282,7 +282,7 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
       shortage_quintals: Number(shortageQuintals || 0),
       rejected_bags: Number(rejectedBags || 0),
       delivered_date_time: new Date().toISOString().slice(0, 16),
-      delivery_notes: deliveryNotes.trim() || undefined,
+      delivery_notes: deliveryNotes.trim() || '',
     };
 
     onUpdateEntry(updated);
