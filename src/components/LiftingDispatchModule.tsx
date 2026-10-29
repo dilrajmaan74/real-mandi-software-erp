@@ -5,7 +5,8 @@ import {
   ShellerMaster, 
   ARHTIA_FIRMS, 
   MANDI_LOCATIONS,
-  TruckMaster
+  TruckMaster,
+  PADDY_VARIETIES
 } from '../types/mandi';
 import { 
   Truck, 
@@ -29,7 +30,12 @@ import {
   User, 
   Scale,
   Sparkles,
-  Hash
+  Hash,
+  Printer,
+  Filter,
+  RotateCcw,
+  Wheat,
+  Download
 } from 'lucide-react';
 import { appendLiftingDispatchToSheets } from '../lib/sheets';
 import { 
@@ -70,6 +76,11 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
   const [search, setSearch] = useState('');
   const [firmTab, setFirmTab] = useState<'All' | 'JAMMU TRADING CO.' | 'NEW JAMMU TRADING CO.'>('All');
   const [statusFilter, setStatusFilter] = useState<'All' | 'Dispatched' | 'Delivered'>('All');
+  const [shellerFilter, setShellerFilter] = useState<string>('All');
+  const [agencyFilter, setAgencyFilter] = useState<string>('All');
+  const [varietyFilter, setVarietyFilter] = useState<string>('All');
+  const [bagTypeFilter, setBagTypeFilter] = useState<'All' | 'A-Class' | 'B-Class' | 'both'>('All');
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState<string | null>(null);
 
   // New Lifting Form states
@@ -79,6 +90,7 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
   const [agency, setAgency] = useState('Pungrain (ਪਨਗਰੇਨ)');
   const [selectedSheller, setSelectedSheller] = useState(shellers[0]?.name || 'Guru Nanak Rice Mill');
   const [cropType, setCropType] = useState('Paddy Grade A');
+  const [cropVariety, setCropVariety] = useState<string>(PADDY_VARIETIES[0]);
   const [truckNo, setTruckNo] = useState('');
   const [driverName, setDriverName] = useState('');
   const [driverMobile, setDriverMobile] = useState('');
@@ -210,6 +222,7 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
       purchasing_agency: agency,
       seller_sheller_name: selectedSheller,
       crop_type: cropType,
+      crop_variety: cropVariety,
       truck_number: truckNo.trim().toUpperCase(),
       driver_name: driverName.trim() || undefined,
       driver_mobile: driverMobile.trim() || undefined,
@@ -223,7 +236,7 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
       pending_yard_bags: Number(pendingYardBags) || 0,
       challan_no: challanNo,
       lifting_status: Number(pendingYardBags) === 0 ? 'Fully Lifted' : 'Partially Lifted',
-      delivery_status: 'Dispatched', // Stage 1: Mandi Gate Pass Cut / Dispatched
+      delivery_status: 'Dispatched', // Stage 1: Mandi Gate Pass Cut / Dispatched (ਅਣ-ਤਸਦੀਕ)
       synced_to_sheets: false,
     };
 
@@ -320,23 +333,50 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
     }
   };
 
-  // Filtered entries by Search, Firm Tabs, and Delivery Status
-  const filteredEntries = entries.filter((e) => {
-    const q = search.toLowerCase();
-    const matchSearch =
-      e.truck_number.toLowerCase().includes(q) ||
-      (e.driver_name && e.driver_name.toLowerCase().includes(q)) ||
-      (e.driver_mobile && e.driver_mobile.includes(q)) ||
-      e.purchasing_agency.toLowerCase().includes(q) ||
-      e.challan_no.toLowerCase().includes(q) ||
-      (e.seller_sheller_name && e.seller_sheller_name.toLowerCase().includes(q)) ||
-      (e.mandi_name && e.mandi_name.toLowerCase().includes(q));
+  // Filtered entries by Search, Firm Tabs, Sheller, Agency, Variety, Bag Type, and Delivery Status
+  const filteredEntries = useMemo(() => {
+    return entries.filter((e) => {
+      const q = search.toLowerCase();
+      const matchSearch =
+        !search ||
+        e.truck_number.toLowerCase().includes(q) ||
+        (e.driver_name && e.driver_name.toLowerCase().includes(q)) ||
+        (e.driver_mobile && e.driver_mobile.includes(q)) ||
+        e.purchasing_agency.toLowerCase().includes(q) ||
+        e.challan_no.toLowerCase().includes(q) ||
+        (e.crop_variety && e.crop_variety.toLowerCase().includes(q)) ||
+        (e.seller_sheller_name && e.seller_sheller_name.toLowerCase().includes(q)) ||
+        (e.destination_godown && e.destination_godown.toLowerCase().includes(q)) ||
+        (e.mandi_name && e.mandi_name.toLowerCase().includes(q));
 
-    const matchFirm = firmTab === 'All' || e.firm_name === firmTab;
-    const matchStatus = statusFilter === 'All' || (e.delivery_status || 'Dispatched') === statusFilter;
+      const matchFirm = firmTab === 'All' || e.firm_name === firmTab;
+      
+      const isDelivered = e.delivery_status === 'Delivered';
+      const matchStatus = 
+        statusFilter === 'All' ? true :
+        statusFilter === 'Delivered' ? isDelivered : !isDelivered;
 
-    return matchSearch && matchFirm && matchStatus;
-  });
+      const matchSheller = 
+        shellerFilter === 'All' ? true :
+        e.seller_sheller_name === shellerFilter || e.destination_godown === shellerFilter;
+
+      const matchAgency = 
+        agencyFilter === 'All' ? true :
+        e.purchasing_agency.toLowerCase().includes(agencyFilter.toLowerCase());
+
+      const matchVariety = 
+        varietyFilter === 'All' ? true :
+        Boolean(e.crop_variety && e.crop_variety.toLowerCase().includes(varietyFilter.toLowerCase()));
+
+      const matchBagType = 
+        bagTypeFilter === 'All' ? true :
+        bagTypeFilter === 'A-Class' ? ((e.new_bags || 0) > 0 && (!e.old_bags || e.old_bags === 0)) :
+        bagTypeFilter === 'B-Class' ? ((e.old_bags || 0) > 0 && (!e.new_bags || e.new_bags === 0)) :
+        bagTypeFilter === 'both' ? ((e.new_bags || 0) > 0 && (e.old_bags || 0) > 0) : true;
+
+      return matchSearch && matchFirm && matchStatus && matchSheller && matchAgency && matchVariety && matchBagType;
+    });
+  }, [entries, search, firmTab, statusFilter, shellerFilter, agencyFilter, varietyFilter, bagTypeFilter]);
 
   // KPI Calculations
   const allTrucksCount = entries.length;
@@ -344,9 +384,22 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
   const newJammuTradingCount = entries.filter((e) => e.firm_name === 'NEW JAMMU TRADING CO.').length;
 
   const totalBagsAll = filteredEntries.reduce((acc, curr) => acc + (curr.bags_lifted || 0), 0);
+  const totalAClassBagsAll = filteredEntries.reduce((acc, curr) => acc + (curr.new_bags || 0), 0);
+  const totalBClassBagsAll = filteredEntries.reduce((acc, curr) => acc + (curr.old_bags || 0), 0);
   const totalWeightAll = filteredEntries.reduce((acc, curr) => acc + (curr.weight_quintals || (curr.bags_lifted * 0.375)), 0);
   const totalShortageBagsAll = filteredEntries.reduce((acc, curr) => acc + (curr.shortage_bags || 0), 0);
   const totalRejectedBagsAll = filteredEntries.reduce((acc, curr) => acc + (curr.rejected_bags || 0), 0);
+  const verifiedDeliveredCount = filteredEntries.filter((e) => e.delivery_status === 'Delivered').length;
+  const unverifiedPendingCount = filteredEntries.filter((e) => (e.delivery_status || 'Dispatched') !== 'Delivered').length;
+
+  const handleResetFilters = () => {
+    setSearch('');
+    setShellerFilter('All');
+    setAgencyFilter('All');
+    setVarietyFilter('All');
+    setBagTypeFilter('All');
+    setStatusFilter('All');
+  };
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-emerald-900/10 overflow-hidden space-y-4">
@@ -369,14 +422,26 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setIsModalOpen(true)}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-amber-400 hover:bg-amber-300 text-purple-950 rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer self-start md:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          <span>+ ਨਵਾਂ ਟਰੱਕ ਗੇਟ ਪਾਸ ਕੱਟੋ (New Dispatch)</span>
-        </button>
+        <div className="flex items-center gap-2 self-start md:self-auto flex-wrap">
+          <button
+            type="button"
+            onClick={() => setIsPrintModalOpen(true)}
+            className="inline-flex items-center gap-2 px-3.5 py-2 bg-purple-800 hover:bg-purple-700 text-white border border-purple-500 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+            title="ਪੂਰੇ ਲਿਫਟਿੰਗ ਚਾਰਟ ਨੂੰ PDF ਜਾਂ ਪ੍ਰਿੰਟ ਕਰੋ"
+          >
+            <Printer className="w-4 h-4 text-amber-300" />
+            <span>🖨️ PDF / ਪ੍ਰਿੰਟ ਪੂਰਾ ਚਾਰਟ (Export Chart)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsModalOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-amber-400 hover:bg-amber-300 text-purple-950 rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>+ ਨਵਾਂ ਟਰੱਕ ਗੇਟ ਪਾਸ ਕੱਟੋ (New Dispatch)</span>
+          </button>
+        </div>
       </div>
 
       {/* DEDICATED FIRM FILTER TABS */}
@@ -437,23 +502,38 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
         <div className="bg-purple-50 border border-purple-200 rounded-xl p-3">
           <span className="text-gray-500 block text-[11px]">ਕੁੱਲ ਚੁੱਕੇ ਗੱਟੇ (Lifted Bags)</span>
           <div className="text-lg font-bold font-mono text-purple-950">{totalBagsAll} Bags</div>
-          <div className="text-[10px] text-purple-700 font-mono mt-0.5">{totalWeightAll.toFixed(2)} Qtl</div>
+          <div className="flex items-center gap-1.5 mt-1 font-mono text-[10px]">
+            <span className="bg-blue-100 text-blue-900 font-bold px-1.5 py-0.5 rounded">
+              {totalAClassBagsAll} A-Class
+            </span>
+            <span className="bg-amber-100 text-amber-900 font-bold px-1.5 py-0.5 rounded">
+              {totalBClassBagsAll} B-Class
+            </span>
+          </div>
+          <div className="text-[10px] text-purple-800 font-mono font-bold mt-1">{totalWeightAll.toFixed(2)} Qtl</div>
         </div>
 
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
           <span className="text-gray-500 block text-[11px]">ਕੁੱਲ ਟਰੱਕ (Selected Trucks)</span>
           <div className="text-lg font-bold font-mono text-blue-950">{filteredEntries.length} Trucks</div>
-          <div className="text-[10px] text-blue-700">
-            {firmTab === 'All' ? 'ਦੋਵੇਂ ਫਰਮਾਂ' : firmTab}
+          <div className="text-[10px] text-blue-700 mt-1">
+            {firmTab === 'All' ? 'ਦੋਵੇਂ ਫਰਮਾਂ (Combined)' : firmTab}
           </div>
         </div>
 
         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
-          <span className="text-gray-500 block text-[11px]">ਸ਼ੈਲਰ ਪਹੁੰਚੇ (Delivered)</span>
-          <div className="text-lg font-bold font-mono text-emerald-950">
-            {filteredEntries.filter((e) => e.delivery_status === 'Delivered').length} Trucks
+          <span className="text-gray-500 block text-[11px]">ਵੈਰੀਫਿਕੇਸ਼ਨ ਸਥਿਤੀ (Verification)</span>
+          <div className="text-sm font-bold font-mono mt-1 space-y-0.5">
+            <div className="text-emerald-800 flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              <span>ਤਸਦੀਕ: {verifiedDeliveredCount} ਟਰੱਕ</span>
+            </div>
+            <div className="text-amber-800 flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5 text-amber-600" />
+              <span>ਅਣ-ਤਸਦੀਕ: {unverifiedPendingCount} ਟਰੱਕ</span>
+            </div>
           </div>
-          <div className="text-[10px] text-emerald-700">ਤਸਦੀਕ ਸ਼ੁਦਾ</div>
+          <div className="text-[10px] text-gray-500 mt-0.5">ਸ਼ੈਲਰ ਪਹੁੰਚੇ ਬਨਾਮ ਰਾਹ ਵਿੱਚ</div>
         </div>
 
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
@@ -461,34 +541,123 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
           <div className="text-sm font-bold font-mono text-red-800 mt-1">
             ਤੋਟਾ: {totalShortageBagsAll} ਬੈਗ • ਰੱਦ: {totalRejectedBagsAll} ਬੈਗ
           </div>
-          <div className="text-[10px] text-gray-500">ਸ਼ੈਲਰ ਰਿਪੋਰਟ</div>
+          <div className="text-[10px] text-gray-500 mt-0.5">ਸ਼ੈਲਰ ਡਿਲੀਵਰੀ ਰਿਪੋਰਟ</div>
         </div>
       </div>
 
-      {/* Search & Status Filters */}
-      <div className="px-5 py-2 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-        <div className="relative w-full sm:w-96">
-          <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="ਟਰੱਕ ਨੰਬਰ, ਡਰਾਈਵਰ ਦਾ ਨਾਮ, ਮੋਬਾਈਲ, ਸ਼ੈਲਰ, ਚਲਾਨ..."
-            className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:border-purple-600 focus:bg-white"
-          />
+      {/* ADVANCED MULTI-FILTER BAR */}
+      <div className="mx-5 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2.5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+            <Filter className="w-4 h-4 text-purple-700" />
+            <span>ਚਾਰਟ ਫਿਲਟਰ (Chart Filters - ਸ਼ੈਲਰ, ਏਜੰਸੀ, ਕਿਸਮ, A/B ਕਲਾਸ ਤੇ ਸਟੇਟਸ):</span>
+          </div>
+          {(shellerFilter !== 'All' || agencyFilter !== 'All' || varietyFilter !== 'All' || bagTypeFilter !== 'All' || statusFilter !== 'All' || search) && (
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              className="text-[11px] text-purple-700 hover:text-purple-900 font-bold flex items-center gap-1 cursor-pointer"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>ਫਿਲਟਰ ਰੀਸੈੱਟ ਕਰੋ (Clear All)</span>
+            </button>
+          )}
         </div>
 
-        <div className="flex items-center gap-2 self-end sm:self-auto">
-          <span className="text-gray-500 text-xs">ਸਟੇਜ:</span>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as any)}
-            className="px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-gray-700 font-semibold focus:outline-none cursor-pointer"
-          >
-            <option value="All">ਸਾਰੇ ਸਟੇਟਸ (All)</option>
-            <option value="Dispatched">ਰਵਾਨਾ / ਰਾਹ ਵਿੱਚ (Dispatched)</option>
-            <option value="Delivered">ਸ਼ੈਲਰ ਪਹੁੰਚਿਆ (Delivered)</option>
-          </select>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-xs">
+          {/* 1. Sheller Filter */}
+          <div>
+            <label className="block text-[10px] font-bold text-gray-600 mb-0.5">ਸ਼ੈਲਰ (Sheller):</label>
+            <select
+              value={shellerFilter}
+              onChange={(e) => setShellerFilter(e.target.value)}
+              className="w-full p-1.5 bg-white border border-gray-300 rounded-lg text-gray-900 font-semibold focus:ring-1 focus:ring-purple-500"
+            >
+              <option value="All">ਸਾਰੇ ਸ਼ੈਲਰ (All)</option>
+              {shellers.map((s) => (
+                <option key={s.id} value={s.name}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* 2. Agency Filter */}
+          <div>
+            <label className="block text-[10px] font-bold text-gray-600 mb-0.5">ਏਜੰਸੀ (Agency):</label>
+            <select
+              value={agencyFilter}
+              onChange={(e) => setAgencyFilter(e.target.value)}
+              className="w-full p-1.5 bg-white border border-gray-300 rounded-lg text-gray-900 font-semibold focus:ring-1 focus:ring-purple-500"
+            >
+              <option value="All">ਸਾਰੀਆਂ ਏਜੰਸੀਆਂ (All)</option>
+              <option value="Pungrain">Pungrain (ਪਨਗਰੇਨ)</option>
+              <option value="Markfed">Markfed (ਮਾਰਕਫੈੱਡ)</option>
+              <option value="Punsup">Punsup (ਪਨਸਪ)</option>
+              <option value="PSWC">PSWC (ਵੇਅਰਹਾਊਸ)</option>
+              <option value="FCI">FCI (ਖੁਰਾਕ ਨਿਗਮ)</option>
+            </select>
+          </div>
+
+          {/* 3. Paddy Variety Filter */}
+          <div>
+            <label className="block text-[10px] font-bold text-gray-600 mb-0.5">ਝੋਨੇ ਦੀ ਕਿਸਮ (Variety):</label>
+            <select
+              value={varietyFilter}
+              onChange={(e) => setVarietyFilter(e.target.value)}
+              className="w-full p-1.5 bg-white border border-gray-300 rounded-lg text-gray-900 font-semibold focus:ring-1 focus:ring-purple-500"
+            >
+              <option value="All">ਸਾਰੀਆਂ ਕਿਸਮਾਂ (All)</option>
+              {PADDY_VARIETIES.map((v) => {
+                const shortVal = v.split(' ')[0];
+                return (
+                  <option key={v} value={shortVal}>{v}</option>
+                );
+              })}
+            </select>
+          </div>
+
+          {/* 4. Bags Category (A-Class & B-Class) Filter */}
+          <div>
+            <label className="block text-[10px] font-bold text-gray-600 mb-0.5">ਗੱਟੇ ਕਲਾਸ (Bags Class):</label>
+            <select
+              value={bagTypeFilter}
+              onChange={(e) => setBagTypeFilter(e.target.value as any)}
+              className="w-full p-1.5 bg-white border border-gray-300 rounded-lg text-gray-900 font-semibold focus:ring-1 focus:ring-purple-500"
+            >
+              <option value="All">ਸਾਰੇ ਗੱਟੇ (All Bags)</option>
+              <option value="A-Class">ਸਿਰਫ਼ A-Class (ਏ-ਕਲਾਸ)</option>
+              <option value="B-Class">ਸਿਰਫ਼ B-Class (ਬੀ-ਕਲਾਸ)</option>
+              <option value="both">ਦੋਵੇਂ (A-Class + B-Class)</option>
+            </select>
+          </div>
+
+          {/* 5. Verification Status (ਤਸਦੀਕ / ਅਣ-ਤਸਦੀਕ) */}
+          <div>
+            <label className="block text-[10px] font-bold text-gray-600 mb-0.5">ਸਟੇਟਸ (Status):</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as any)}
+              className="w-full p-1.5 bg-white border border-gray-300 rounded-lg text-gray-900 font-semibold focus:ring-1 focus:ring-purple-500"
+            >
+              <option value="All">ਸਾਰੇ (All Status)</option>
+              <option value="Delivered">✓ ਤਸਦੀਕ (ਸ਼ੈਲਰ ਪਹੁੰਚਿਆ)</option>
+              <option value="Dispatched">⏳ ਅਣ-ਤਸਦੀਕ (ਰਾਹ ਵਿੱਚ)</option>
+            </select>
+          </div>
+
+          {/* 6. Search Bar */}
+          <div>
+            <label className="block text-[10px] font-bold text-gray-600 mb-0.5">ਖੋਜ (Search):</label>
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="ਟਰੱਕ, ਡਰਾਈਵਰ, ਚਲਾਨ..."
+                className="w-full pl-7 pr-2 py-1.5 bg-white border border-gray-300 rounded-lg text-gray-900 text-xs focus:ring-1 focus:ring-purple-500"
+              />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -500,9 +669,9 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
               <th className="py-3 px-3">ਚਲਾਨ ਨੰਬਰ / ਸਮਾਂ</th>
               <th className="py-3 px-3">ਆੜ੍ਹਤੀਆ ਫਰਮ</th>
               <th className="py-3 px-3">ਟਰੱਕ, ਫੋਟੋ ਤੇ ਡਰਾਈਵਰ</th>
-              <th className="py-3 px-3">ਸ਼ੈਲਰ / ਏਜੰਸੀ</th>
-              <th className="py-3 px-3 text-right">ਗੱਟੇ ਤੇ ਵਜ਼ਨ (Auto Qtl)</th>
-              <th className="py-3 px-3 text-center">ਸਟੇਜ (2-ਸਟੇਜ ਲਾਈਫਸਾਈਕਲ)</th>
+              <th className="py-3 px-3">ਸ਼ੈਲਰ, ਏਜੰਸੀ ਤੇ ਕਿਸਮ</th>
+              <th className="py-3 px-3 text-right">ਗੱਟੇ (A-Class & B-Class) ਤੇ ਵਜ਼ਨ</th>
+              <th className="py-3 px-3 text-center">ਸਟੇਟਸ (ਤਸਦੀਕ / ਅਣ-ਤਸਦੀਕ)</th>
               <th className="py-3 px-3 text-center">ਸ਼ਾਰਟੇਜ / ਰਿਜੈਕਟ</th>
               <th className="py-3 px-3 text-center">Sheet Sync</th>
               <th className="py-3 px-3 text-right">ਐਕਸ਼ਨ</th>
@@ -512,7 +681,7 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
             {filteredEntries.length === 0 ? (
               <tr>
                 <td colSpan={9} className="py-10 text-center text-gray-400 text-xs">
-                  ਕੋਈ ਲਿਫਟਿੰਗ ਐਂਟਰੀ ਨਹੀਂ ਮਿਲੀ। ਨਵਾਂ ਟਰੱਕ ਗੇਟ ਪਾਸ ਕੱਟਣ ਲਈ ਉੱਪਰ ਵਾਲੇ ਬਟਨ 'ਤੇ ਕਲਿੱਕ ਕਰੋ।
+                  ਕੋਈ ਲਿਫਟਿੰਗ ਐਂਟਰੀ ਨਹੀਂ ਮਿਲੀ। ਫਿਲਟਰ ਬਦਲੋ ਜਾਂ ਨਵਾਂ ਟਰੱਕ ਗੇਟ ਪਾਸ ਕੱਟੋ।
                 </td>
               </tr>
             ) : (
@@ -578,8 +747,14 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
                         <Factory className="w-3.5 h-3.5 text-orange-600" />
                         <span>{item.seller_sheller_name || item.destination_godown}</span>
                       </div>
-                      <div className="text-[11px] text-emerald-800 font-medium">
-                        {item.purchasing_agency} ({item.crop_type})
+                      <div className="text-[11px] text-gray-700 font-medium">
+                        {item.purchasing_agency}
+                      </div>
+                      <div className="mt-0.5">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-bold text-[10px] bg-amber-50 text-amber-900 border border-amber-200">
+                          <Wheat className="w-3 h-3 text-amber-600" />
+                          <span>{item.crop_variety || item.crop_type || 'Paddy Grade A'}</span>
+                        </span>
                       </div>
                     </td>
 
@@ -590,17 +765,26 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
                       <div className="text-[10px] text-emerald-700 font-bold">
                         = {calcQtl.toFixed(2)} Qtl
                       </div>
-                      <div className="text-[9px] text-gray-500">
-                        {item.new_bags ? `${item.new_bags}N ` : ''}{item.old_bags ? `${item.old_bags}O` : ''}
+                      <div className="text-[9px] flex items-center justify-end gap-1 mt-0.5 font-sans font-bold">
+                        {item.new_bags ? (
+                          <span className="bg-blue-100 text-blue-900 px-1.5 py-0.2 rounded">
+                            {item.new_bags} A-Class
+                          </span>
+                        ) : null}
+                        {item.old_bags ? (
+                          <span className="bg-amber-100 text-amber-900 px-1.5 py-0.2 rounded">
+                            {item.old_bags} B-Class
+                          </span>
+                        ) : null}
                       </div>
                     </td>
 
                     <td className="py-3 px-3 text-center">
                       {isDelivered ? (
                         <div>
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold bg-emerald-100 text-emerald-900 px-2.5 py-1 rounded-full">
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300 px-2.5 py-1 rounded-full shadow-2xs">
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>ਸ਼ੈਲਰ ਪਹੁੰਚਿਆ</span>
+                            <span>✓ ਤਸਦੀਕ (ਸ਼ੈਲਰ ਪਹੁੰਚਿਆ)</span>
                           </span>
                           {item.delivered_date_time && (
                             <div className="text-[9px] text-gray-400 mt-0.5">{item.delivered_date_time}</div>
@@ -608,9 +792,9 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
                         </div>
                       ) : (
                         <div className="space-y-1">
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold bg-amber-100 text-amber-950 px-2.5 py-1 rounded-full border border-amber-300">
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold bg-amber-100 text-amber-950 border border-amber-300 px-2.5 py-1 rounded-full shadow-2xs">
                             <Clock className="w-3.5 h-3.5 text-amber-700" />
-                            <span>ਮੰਡੀ ਤੋਂ ਰਵਾਨਾ</span>
+                            <span>⏳ ਅਣ-ਤਸਦੀਕ (ਰਾਹ ਵਿੱਚ)</span>
                           </span>
                           <div>
                             <button
@@ -618,7 +802,7 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
                               onClick={() => openReconciliationModal(item)}
                               className="text-[10px] text-blue-700 hover:text-blue-900 font-bold underline cursor-pointer"
                             >
-                              ਸ਼ੈਲਰ ਪਹੁੰਚ ਦਰਜ ਕਰੋ →
+                              ਸ਼ੈਲਰ ਤਸਦੀਕ ਕਰੋ →
                             </button>
                           </div>
                         </div>
@@ -768,6 +952,28 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
                     <option value="FCI (ਭਾਰਤੀ ਖੁਰਾਕ ਨਿਗਮ)">FCI (ਕੇਂਦਰੀ ਖੁਰਾਕ ਨਿਗਮ)</option>
                   </select>
                 </div>
+              </div>
+
+              {/* Paddy Variety Dropdown */}
+              <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl">
+                <label className="block text-amber-950 font-bold mb-1 flex items-center gap-1.5">
+                  <Wheat className="w-4 h-4 text-amber-700" />
+                  <span>ਝੋਨੇ ਦੀ ਕਿਸਮ / ਵਰਾਇਟੀ (Paddy Variety - ਕਿਹੜਾ ਮਾਲ ਗਿਆ):</span>
+                </label>
+                <select
+                  value={cropVariety}
+                  onChange={(e) => setCropVariety(e.target.value)}
+                  className="w-full p-2.5 bg-white border border-amber-300 rounded-xl font-bold text-amber-950 text-xs"
+                >
+                  {PADDY_VARIETIES.map((v) => (
+                    <option key={v} value={v}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-amber-800 mt-1">
+                  ਇਹ ਵਰਾਇਟੀ ਟਰੱਕ ਚਲਾਨ ਅਤੇ ਲਿਸਟ ਵਿੱਚ ਸਾਫ਼ ਦਿਖਾਈ ਦੇਵੇਗੀ ਤਾਂ ਜੋ ਪਤਾ ਲੱਗ ਸਕੇ ਕਿਸ ਟਰੱਕ ਵਿੱਚ ਕਿਹੜਾ ਮਾਲ ਗਿਆ।
+                </p>
               </div>
 
               {/* Destination Sheller */}
@@ -924,10 +1130,10 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
                 </div>
               </div>
 
-              {/* Bag Categories (Old, New, Both) and Auto Quintal */}
+              {/* Bag Categories (A-Class, B-Class, Both) and Auto Quintal */}
               <div className="p-3 bg-purple-50/70 border border-purple-200 rounded-xl space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-purple-950">ਬਾਰਦਾਨਾ ਕਿਸਮ ਚੁਣੋ (Old / New / Both):</span>
+                  <span className="font-bold text-purple-950">ਬਾਰਦਾਨਾ ਕਲਾਸ ਚੁਣੋ (A-Class / B-Class):</span>
                   <span className="text-[11px] font-bold text-emerald-800">
                     ਆਟੋ ਵਜ਼ਨ: {autoWeightQuintals} ਕੁਇੰਟਲ
                   </span>
@@ -945,7 +1151,7 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
                       onChange={() => setBagCategory('both')}
                       className="sr-only"
                     />
-                    <span>ਦੋਵੇਂ (New + Old)</span>
+                    <span>ਦੋਵੇਂ (A + B Class)</span>
                   </label>
 
                   <label className={`p-2 rounded-lg border text-center font-bold cursor-pointer transition-all ${
@@ -958,7 +1164,7 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
                       onChange={() => setBagCategory('new')}
                       className="sr-only"
                     />
-                    <span>ਸਿਰਫ਼ ਨਵਾਂ (New)</span>
+                    <span>ਸਿਰਫ਼ ਏ-ਕਲਾਸ (A-Class)</span>
                   </label>
 
                   <label className={`p-2 rounded-lg border text-center font-bold cursor-pointer transition-all ${
@@ -971,7 +1177,7 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
                       onChange={() => setBagCategory('old')}
                       className="sr-only"
                     />
-                    <span>ਸਿਰਫ਼ ਪੁਰਾਣਾ (Old)</span>
+                    <span>ਸਿਰਫ਼ ਬੀ-ਕਲਾਸ (B-Class)</span>
                   </label>
                 </div>
 
@@ -979,7 +1185,7 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
                 <div className="grid grid-cols-2 gap-3 pt-1">
                   {(bagCategory === 'both' || bagCategory === 'new') && (
                     <div>
-                      <label className="block text-gray-600 font-semibold mb-1">ਨਵੇਂ ਬਾਰਦਾਨਾ ਗੱਟੇ (New Bags):</label>
+                      <label className="block text-gray-700 font-bold mb-1">ਏ-ਕਲਾਸ ਗੱਟੇ (A-Class Bags):</label>
                       <input
                         type="number"
                         value={newBags}
@@ -991,7 +1197,7 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
 
                   {(bagCategory === 'both' || bagCategory === 'old') && (
                     <div>
-                      <label className="block text-gray-600 font-semibold mb-1">ਪੁਰਾਣੇ ਬਾਰਦਾਨਾ ਗੱਟੇ (Old Bags):</label>
+                      <label className="block text-gray-700 font-bold mb-1">ਬੀ-ਕਲਾਸ ਗੱਟੇ (B-Class Bags):</label>
                       <input
                         type="number"
                         value={oldBags}
@@ -1185,20 +1391,23 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
       )}
 
       {/* ============================================================== */}
-      {/* 100% FULL EDIT MODAL                                           */}
+      {/* 100% FULL EDIT MODAL - ALL FIELDS EDITABLE                     */}
       {/* ============================================================== */}
       {editingEntry && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 overflow-y-auto">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl border border-gray-200 overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-150">
-            <div className="p-4 bg-blue-900 text-white flex items-center justify-between">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl border border-gray-200 overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-150">
+            <div className="p-4 bg-gradient-to-r from-blue-900 via-indigo-900 to-purple-900 text-white flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Edit3 className="w-5 h-5 text-amber-400" />
                 <div>
-                  <h3 className="text-sm font-bold">ਲਿਫਟਿੰਗ ਐਂਟਰੀ ਸੋਧੋ (Edit Lifting Entry 100%)</h3>
-                  <p className="text-[10px] text-blue-200">ਚਲਾਨ: {editingEntry.challan_no}</p>
+                  <h3 className="text-sm font-bold">ਲਿਫਟਿੰਗ ਐਂਟਰੀ ਸੋਧੋ (Edit 100% Full Entry)</h3>
+                  <p className="text-[10px] text-blue-200">
+                    ਚਲਾਨ ਨੰਬਰ: {editingEntry.challan_no} • ਹਰ ਜਾਣਕਾਰੀ ਸੋਧੀ ਜਾ ਸਕਦੀ ਹੈ
+                  </p>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setEditingEntry(null)}
                 className="text-gray-300 hover:text-white p-1 rounded-lg cursor-pointer"
               >
@@ -1206,14 +1415,15 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleUpdateSubmit} className="p-5 space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-3">
+            <form onSubmit={handleUpdateSubmit} className="p-5 space-y-3.5 text-xs max-h-[82vh] overflow-y-auto">
+              {/* Firm and Mandi */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-purple-50/70 border border-purple-200 rounded-xl">
                 <div>
-                  <label className="block text-gray-600 font-semibold mb-1">ਆੜ੍ਹਤੀਆ ਫਰਮ (Firm):</label>
+                  <label className="block text-gray-700 font-bold mb-1">ਆੜ੍ਹਤੀਆ ਫਰਮ (Firm):</label>
                   <select
                     value={editingEntry.firm_name}
                     onChange={(e) => setEditingEntry({ ...editingEntry, firm_name: e.target.value })}
-                    className="w-full p-2 bg-gray-50 border border-gray-300 rounded-xl font-bold text-gray-900"
+                    className="w-full p-2 bg-white border border-purple-300 rounded-lg font-bold text-gray-900"
                   >
                     {ARHTIA_FIRMS.map((firm) => (
                       <option key={firm.id} value={firm.name}>{firm.name}</option>
@@ -1221,43 +1431,78 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
                   </select>
                 </div>
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-gray-600 font-semibold">ਟਰੱਕ ਨੰਬਰ (Truck No):</label>
-                    <span className="text-[9px] text-purple-700 font-semibold bg-purple-100 px-1 py-0.2 rounded">4 ਅੰਕ ਲਿਖੋ</span>
-                  </div>
-                  <input
-                    type="text"
-                    list="lifting-truck-options"
-                    value={editingEntry.truck_number}
-                    onChange={(e) => handleEditTruckChange(e.target.value)}
-                    placeholder="PB-03-AF-9876 ਜਾਂ 4 ਅੰਕ"
-                    className="w-full p-2 bg-gray-50 border border-gray-300 rounded-xl font-mono uppercase font-bold text-gray-900"
-                  />
+                  <label className="block text-gray-700 font-bold mb-1">ਦਾਣਾ ਮੰਡੀ (Dana Mandi):</label>
+                  <select
+                    value={editingEntry.mandi_name}
+                    onChange={(e) => setEditingEntry({ ...editingEntry, mandi_name: e.target.value })}
+                    className="w-full p-2 bg-white border border-purple-300 rounded-lg font-bold text-gray-900"
+                  >
+                    {MANDI_LOCATIONS.map((loc) => (
+                      <option key={loc} value={loc}>{loc}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              {/* Date & Time and Challan Number */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-gray-600 font-semibold mb-1">ਡਰਾਈਵਰ ਦਾ ਨਾਮ:</label>
+                  <label className="block text-gray-600 font-semibold mb-1">ਮਿਤੀ ਤੇ ਸਮਾਂ (Date & Time):</label>
                   <input
-                    type="text"
-                    value={editingEntry.driver_name || ''}
-                    onChange={(e) => setEditingEntry({ ...editingEntry, driver_name: e.target.value })}
-                    className="w-full p-2 bg-gray-50 border border-gray-300 rounded-xl text-gray-900"
-                  />
-                </div>
-                <div>
-                  <label className="block text-gray-600 font-semibold mb-1">ਡਰਾਈਵਰ ਮੋਬਾਈਲ:</label>
-                  <input
-                    type="tel"
-                    value={editingEntry.driver_mobile || ''}
-                    onChange={(e) => setEditingEntry({ ...editingEntry, driver_mobile: e.target.value })}
+                    type="datetime-local"
+                    value={editingEntry.date_time}
+                    onChange={(e) => setEditingEntry({ ...editingEntry, date_time: e.target.value })}
                     className="w-full p-2 bg-gray-50 border border-gray-300 rounded-xl font-mono text-gray-900"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-600 font-semibold mb-1">ਚਲਾਨ ਨੰਬਰ (Challan No):</label>
+                  <input
+                    type="text"
+                    value={editingEntry.challan_no}
+                    onChange={(e) => setEditingEntry({ ...editingEntry, challan_no: e.target.value })}
+                    className="w-full p-2 bg-gray-50 border border-gray-300 rounded-xl font-mono font-bold text-gray-900"
+                    required
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              {/* Agency and Paddy Variety */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-gray-600 font-semibold mb-1">ਖਰੀਦ ਏਜੰਸੀ (Purchasing Agency):</label>
+                  <select
+                    value={editingEntry.purchasing_agency}
+                    onChange={(e) => setEditingEntry({ ...editingEntry, purchasing_agency: e.target.value })}
+                    className="w-full p-2 bg-gray-50 border border-gray-300 rounded-xl font-bold text-gray-900"
+                  >
+                    <option value="Pungrain (ਪਨਗਰੇਨ)">Pungrain (ਪਨਗਰੇਨ)</option>
+                    <option value="Markfed (ਮਾਰਕਫੈੱਡ)">Markfed (ਮਾਰਕਫੈੱਡ)</option>
+                    <option value="Punsup (ਪਨਸਪ)">Punsup (ਪਨਸਪ)</option>
+                    <option value="Punjab State Warehousing (PSWC)">PSWC (ਵੇਅਰਹਾਊਸ)</option>
+                    <option value="FCI (ਭਾਰਤੀ ਖੁਰਾਕ ਨਿਗਮ)">FCI (ਕੇਂਦਰੀ ਖੁਰਾਕ ਨਿਗਮ)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-amber-950 font-bold mb-1 flex items-center gap-1">
+                    <Wheat className="w-3.5 h-3.5 text-amber-600" />
+                    <span>ਝੋਨੇ ਦੀ ਕਿਸਮ / ਵਰਾਇਟੀ (Paddy Variety):</span>
+                  </label>
+                  <select
+                    value={editingEntry.crop_variety || editingEntry.crop_type || PADDY_VARIETIES[0]}
+                    onChange={(e) => setEditingEntry({ ...editingEntry, crop_variety: e.target.value })}
+                    className="w-full p-2 bg-amber-50 border border-amber-300 rounded-xl font-bold text-amber-950"
+                  >
+                    {PADDY_VARIETIES.map((v) => (
+                      <option key={v} value={v}>{v}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Destination Sheller & Godown */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-gray-600 font-semibold mb-1">ਸ਼ੈਲਰ (Destination Sheller):</label>
                   <select
@@ -1271,59 +1516,209 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-gray-600 font-semibold mb-1">ਸਟੇਟਸ (Delivery Status):</label>
+                  <label className="block text-gray-600 font-semibold mb-1">ਮੰਜ਼ਿਲ ਗੋਦਾਮ / ਪਲਾਂਟ (Godown):</label>
+                  <input
+                    type="text"
+                    value={editingEntry.destination_godown || ''}
+                    onChange={(e) => setEditingEntry({ ...editingEntry, destination_godown: e.target.value })}
+                    placeholder="Miller Plant / Godown"
+                    className="w-full p-2 bg-gray-50 border border-gray-300 rounded-xl text-gray-900 font-semibold"
+                  />
+                </div>
+              </div>
+
+              {/* Truck Details, Driver Name & Driver Mobile */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-gray-700 font-bold">ਟਰੱਕ ਨੰਬਰ (Truck No):</label>
+                    <span className="text-[9px] text-purple-700 font-semibold bg-purple-100 px-1 py-0.2 rounded">4 ਅੰਕ ਲਿਖੋ</span>
+                  </div>
+                  <input
+                    type="text"
+                    list="lifting-truck-options"
+                    value={editingEntry.truck_number}
+                    onChange={(e) => handleEditTruckChange(e.target.value)}
+                    placeholder="PB-03-AF-9876 ਜਾਂ 4 ਅੰਕ"
+                    className="w-full p-2 bg-white border border-gray-300 rounded-lg font-mono uppercase font-bold text-gray-900"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-700 font-bold mb-1">ਡਰਾਈਵਰ ਦਾ ਨਾਮ:</label>
+                  <input
+                    type="text"
+                    value={editingEntry.driver_name || ''}
+                    onChange={(e) => setEditingEntry({ ...editingEntry, driver_name: e.target.value })}
+                    className="w-full p-2 bg-white border border-gray-300 rounded-lg text-gray-900 font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-700 font-bold mb-1">ਡਰਾਈਵਰ ਮੋਬਾਈਲ:</label>
+                  <input
+                    type="tel"
+                    value={editingEntry.driver_mobile || ''}
+                    onChange={(e) => setEditingEntry({ ...editingEntry, driver_mobile: e.target.value })}
+                    className="w-full p-2 bg-white border border-gray-300 rounded-lg font-mono text-gray-900"
+                  />
+                </div>
+              </div>
+
+              {/* Bags Breakdown: A-Class, B-Class, Total Bags & Auto Weight */}
+              <div className="p-3 bg-purple-50/70 border border-purple-200 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-purple-950">ਗੱਟੇ ਕਲਾਸ ਬ੍ਰੇਕਡਾਊਨ (A-Class & B-Class):</span>
+                  <span className="text-[11px] font-bold text-emerald-800">
+                    ਕੁੱਲ: {editingEntry.bags_lifted || 0} ਬੈਗ = {editingEntry.weight_quintals || 0} Qtl
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-0.5">ਏ-ਕਲਾਸ ਗੱਟੇ (A-Class):</label>
+                    <input
+                      type="number"
+                      value={editingEntry.new_bags ?? 0}
+                      onChange={(e) => {
+                        const aVal = Number(e.target.value) || 0;
+                        const bVal = Number(editingEntry.old_bags || 0);
+                        const tot = aVal + bVal;
+                        setEditingEntry({
+                          ...editingEntry,
+                          new_bags: aVal,
+                          bags_lifted: tot,
+                          weight_quintals: Number((tot * 0.375).toFixed(2)),
+                        });
+                      }}
+                      className="w-full p-2 bg-white border border-purple-300 rounded-lg font-mono font-bold text-blue-950"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-0.5">ਬੀ-ਕਲਾਸ ਗੱਟੇ (B-Class):</label>
+                    <input
+                      type="number"
+                      value={editingEntry.old_bags ?? 0}
+                      onChange={(e) => {
+                        const bVal = Number(e.target.value) || 0;
+                        const aVal = Number(editingEntry.new_bags || 0);
+                        const tot = aVal + bVal;
+                        setEditingEntry({
+                          ...editingEntry,
+                          old_bags: bVal,
+                          bags_lifted: tot,
+                          weight_quintals: Number((tot * 0.375).toFixed(2)),
+                        });
+                      }}
+                      className="w-full p-2 bg-white border border-purple-300 rounded-lg font-mono font-bold text-amber-950"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-0.5">ਕੁੱਲ ਗੱਟੇ (Total Bags):</label>
+                    <input
+                      type="number"
+                      value={editingEntry.bags_lifted || 0}
+                      onChange={(e) => {
+                        const tot = Number(e.target.value) || 0;
+                        setEditingEntry({
+                          ...editingEntry,
+                          bags_lifted: tot,
+                          weight_quintals: Number((tot * 0.375).toFixed(2)),
+                        });
+                      }}
+                      className="w-full p-2 bg-white border border-purple-300 rounded-lg font-mono font-bold text-purple-950"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-0.5">ਵਜ਼ਨ (Quintals):</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={editingEntry.weight_quintals || Number(((editingEntry.bags_lifted || 0) * 0.375).toFixed(2))}
+                      onChange={(e) => setEditingEntry({ ...editingEntry, weight_quintals: Number(e.target.value) })}
+                      className="w-full p-2 bg-white border border-purple-300 rounded-lg font-mono font-bold text-emerald-900"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Status and Yard Stock */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-gray-700 font-bold mb-1">ਸਟੇਟਸ (Delivery Status):</label>
                   <select
                     value={editingEntry.delivery_status || 'Dispatched'}
                     onChange={(e) => setEditingEntry({ ...editingEntry, delivery_status: e.target.value as any })}
                     className="w-full p-2 bg-gray-50 border border-gray-300 rounded-xl font-bold text-gray-900"
                   >
-                    <option value="Dispatched">ਮੰਡੀ ਤੋਂ ਰਵਾਨਾ (Dispatched)</option>
-                    <option value="Delivered">ਸ਼ੈਲਰ ਪਹੁੰਚਿਆ (Delivered)</option>
+                    <option value="Dispatched">⏳ ਅਣ-ਤਸਦੀਕ (ਮੰਡੀ ਤੋਂ ਰਵਾਨਾ / ਰਾਹ ਵਿੱਚ)</option>
+                    <option value="Delivered">✓ ਤਸਦੀਕ (ਸ਼ੈਲਰ ਪਹੁੰਚਿਆ / Delivered)</option>
                   </select>
+                </div>
+                <div>
+                  <label className="block text-gray-700 font-bold mb-1">ਫੜ੍ਹ ਵਿੱਚ ਬਾਕੀ (Yard Stock Bags):</label>
+                  <input
+                    type="number"
+                    value={editingEntry.pending_yard_bags || 0}
+                    onChange={(e) => setEditingEntry({ ...editingEntry, pending_yard_bags: Number(e.target.value) })}
+                    className="w-full p-2 bg-gray-50 border border-gray-300 rounded-xl font-mono font-bold text-gray-900"
+                  />
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-2 p-3 bg-purple-50/70 border border-purple-200 rounded-xl">
-                <div>
-                  <label className="block text-gray-600 font-semibold mb-1">ਲੱਦੇ ਗੱਟੇ (Bags):</label>
-                  <input
-                    type="number"
-                    value={editingEntry.bags_lifted}
-                    onChange={(e) => {
-                      const bags = Number(e.target.value) || 0;
-                      setEditingEntry({
-                        ...editingEntry,
-                        bags_lifted: bags,
-                        weight_quintals: Number((bags * 0.375).toFixed(2)),
-                      });
-                    }}
-                    className="w-full p-2 bg-white border border-purple-300 rounded-lg font-mono font-bold text-purple-950"
-                  />
+              {/* Reconciliation Details: Shortage & Rejected Bags */}
+              <div className="p-3 bg-red-50/60 border border-red-200 rounded-xl space-y-2">
+                <span className="font-bold text-red-950 block">ਸ਼ੈਲਰ ਰਿਪੋਰਟ (ਸ਼ਾਰਟੇਜ ਤੇ ਰੱਦ ਗੱਟੇ):</span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div>
+                    <label className="block text-gray-600 font-semibold mb-0.5">ਤੋਟਾ/ਸ਼ਾਰਟੇਜ ਗੱਟੇ:</label>
+                    <input
+                      type="number"
+                      value={editingEntry.shortage_bags || 0}
+                      onChange={(e) => {
+                        const sBags = Number(e.target.value) || 0;
+                        setEditingEntry({
+                          ...editingEntry,
+                          shortage_bags: sBags,
+                          shortage_quintals: Number((sBags * 0.375).toFixed(2)),
+                        });
+                      }}
+                      className="w-full p-2 bg-white border border-red-300 rounded-lg font-mono font-bold text-red-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-600 font-semibold mb-0.5">ਸ਼ਾਰਟੇਜ ਵਜ਼ਨ (Qtl):</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={editingEntry.shortage_quintals || 0}
+                      onChange={(e) => setEditingEntry({ ...editingEntry, shortage_quintals: Number(e.target.value) })}
+                      className="w-full p-2 bg-white border border-red-300 rounded-lg font-mono font-bold text-red-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-600 font-semibold mb-0.5">ਰੱਦ ਗੱਟੇ (Rejected):</label>
+                    <input
+                      type="number"
+                      value={editingEntry.rejected_bags || 0}
+                      onChange={(e) => setEditingEntry({ ...editingEntry, rejected_bags: Number(e.target.value) })}
+                      className="w-full p-2 bg-white border border-red-300 rounded-lg font-mono font-bold text-red-900"
+                    />
+                  </div>
                 </div>
                 <div>
-                  <label className="block text-gray-600 font-semibold mb-1">ਆਟੋ ਕੁਇੰਟਲ (Qtl):</label>
+                  <label className="block text-gray-600 font-semibold mb-0.5">ਸ਼ੈਲਰ ਰਿਮਾਰਕਸ / ਨੋਟਸ (Notes):</label>
                   <input
-                    type="number"
-                    step="0.01"
-                    value={editingEntry.weight_quintals || Number((editingEntry.bags_lifted * 0.375).toFixed(2))}
-                    onChange={(e) => setEditingEntry({ ...editingEntry, weight_quintals: Number(e.target.value) })}
-                    className="w-full p-2 bg-white border border-purple-300 rounded-lg font-mono font-bold text-emerald-900"
-                  />
-                </div>
-                <div>
-                  <label className="block text-gray-600 font-semibold mb-1">ਯਾਰਡ ਸਟਾਕ (Pending):</label>
-                  <input
-                    type="number"
-                    value={editingEntry.pending_yard_bags}
-                    onChange={(e) => setEditingEntry({ ...editingEntry, pending_yard_bags: Number(e.target.value) })}
-                    className="w-full p-2 bg-white border border-purple-300 rounded-lg font-mono font-bold text-gray-900"
+                    type="text"
+                    value={editingEntry.delivery_notes || ''}
+                    onChange={(e) => setEditingEntry({ ...editingEntry, delivery_notes: e.target.value })}
+                    placeholder="e.g. 5 bags damaged, delivered safely"
+                    className="w-full p-2 bg-white border border-red-200 rounded-lg text-gray-900"
                   />
                 </div>
               </div>
 
               {/* Edit Truck Photo */}
               <div>
-                <label className="block text-gray-600 font-semibold mb-1">ਟਰੱਕ ਫੋਟੋ ਬਦਲੋ (Update Photo):</label>
+                <label className="block text-gray-700 font-bold mb-1">ਟਰੱਕ ਫੋਟੋ ਬਦਲੋ (Update Photo):</label>
                 <div className="flex items-center gap-3">
                   <input
                     type="file"
@@ -1332,7 +1727,7 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
                     className="text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-blue-100 file:text-blue-800"
                   />
                   {editingEntry.truck_photo && (
-                    <div className="w-10 h-10 rounded border border-gray-300 overflow-hidden flex-shrink-0">
+                    <div className="w-12 h-12 rounded border border-gray-300 overflow-hidden flex-shrink-0">
                       <img src={editingEntry.truck_photo} alt="Truck" className="w-full h-full object-cover" />
                     </div>
                   )}
@@ -1351,10 +1746,230 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
                   type="submit"
                   className="px-5 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-xl font-bold transition-all shadow-md cursor-pointer"
                 >
-                  ਸੋਧ ਸੇਵ ਕਰੋ (Update)
+                  ਸੋਧ ਸੇਵ ਕਰੋ (Update 100% Entry)
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* FULL CHART EXPORT / PRINT MODAL (PDF / PRINT)                  */}
+      {/* ============================================================== */}
+      {isPrintModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl border border-gray-300 overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-150 max-h-[92vh] flex flex-col">
+            
+            {/* Modal Header */}
+            <div className="p-4 bg-purple-950 text-white flex items-center justify-between flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <Printer className="w-5 h-5 text-amber-300" />
+                <div>
+                  <h3 className="text-sm font-bold">ਮੰਡੀ ਲਿਫਟਿੰਗ ਤੇ ਚਲਾਨ ਰਿਪੋਰਟ (Lifting Dispatch Chart PDF / Print)</h3>
+                  <p className="text-[10px] text-purple-200">
+                    ਫਿਲਟਰ ਕੀਤੇ ਕੁੱਲ ਟਰੱਕ: {filteredEntries.length} • ਕੁੱਲ ਗੱਟੇ: {totalBagsAll} ({totalAClassBagsAll} A-Class, {totalBClassBagsAll} B-Class)
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="px-4 py-1.5 bg-amber-400 hover:bg-amber-300 text-purple-950 font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-md cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>ਪ੍ਰਿੰਟ / PDF ਸੇਵ ਕਰੋ (Print)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsPrintModalOpen(false)}
+                  className="text-gray-300 hover:text-white p-1 rounded-lg cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Printable Report Canvas */}
+            <div className="p-6 overflow-y-auto flex-1 bg-white text-gray-900 space-y-4 print:p-2" id="printable-lifting-chart">
+              
+              {/* Report Header */}
+              <div className="border-b-2 border-purple-900 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h1 className="text-xl font-black text-purple-950">
+                    {firmTab === 'All' ? 'JAMMU TRADING CO. / NEW JAMMU TRADING CO.' : firmTab}
+                  </h1>
+                  <p className="text-xs text-gray-600 font-semibold">
+                    ਕਮਿਸ਼ਨ ਏਜੰਟ • ਅਨਾਜ ਮੰਡੀ ਕਮਾਲਪੁਰ, ਮਹਿਰਾਜਵਾਲਾ, ਕੰਗ ਖੁਰਦ
+                  </p>
+                  <p className="text-[11px] text-purple-800 font-bold">
+                    ਮੰਡੀ ਲਿਫਟਿੰਗ, ਟਰੱਕ ਗੇਟ ਪਾਸ ਤੇ ਸ਼ੈਲਰ ਡਿਸਪੈਚ ਚਾਰਟ
+                  </p>
+                </div>
+                <div className="text-right text-xs">
+                  <div className="font-bold text-gray-700">ਮਿਤੀ: {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                  <div className="text-[10px] text-gray-500">ਸਮਾਂ: {new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</div>
+                  <div className="text-[10px] text-purple-900 font-semibold mt-1">
+                    ਫਿਲਟਰ: {shellerFilter !== 'All' ? `ਸ਼ੈਲਰ: ${shellerFilter}` : 'ਸਾਰੇ ਸ਼ੈਲਰ'} • {varietyFilter !== 'All' ? `ਕਿਸਮ: ${varietyFilter}` : 'ਸਾਰੀਆਂ ਕਿਸਮਾਂ'}
+                  </div>
+                </div>
+              </div>
+
+              {/* KPI Summary Strip */}
+              <div className="grid grid-cols-4 gap-2 text-xs">
+                <div className="p-2.5 bg-purple-50 border border-purple-200 rounded-xl">
+                  <span className="text-[10px] text-gray-500 block">ਕੁੱਲ ਟਰੱਕ</span>
+                  <span className="text-base font-bold font-mono text-purple-950">{filteredEntries.length} Trucks</span>
+                </div>
+                <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-xl">
+                  <span className="text-[10px] text-gray-500 block">ਕੁੱਲ ਚੁੱਕੇ ਗੱਟੇ</span>
+                  <span className="text-base font-bold font-mono text-blue-950">{totalBagsAll} Bags</span>
+                  <div className="text-[10px] text-blue-800 font-semibold">
+                    {totalAClassBagsAll} A-Class • {totalBClassBagsAll} B-Class
+                  </div>
+                </div>
+                <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl">
+                  <span className="text-[10px] text-gray-500 block">ਕੁੱਲ ਵਜ਼ਨ</span>
+                  <span className="text-base font-bold font-mono text-emerald-950">{totalWeightAll.toFixed(2)} Qtl</span>
+                </div>
+                <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl">
+                  <span className="text-[10px] text-gray-500 block">ਵੈਰੀਫਿਕੇਸ਼ਨ ਸਥਿਤੀ</span>
+                  <span className="text-xs font-bold text-emerald-800 block">ਤਸਦੀਕ: {verifiedDeliveredCount}</span>
+                  <span className="text-xs font-bold text-amber-800 block">ਅਣ-ਤਸਦੀਕ: {unverifiedPendingCount}</span>
+                </div>
+              </div>
+
+              {/* Printable Table */}
+              <div className="overflow-x-auto border border-gray-300 rounded-xl">
+                <table className="w-full text-left text-[11px] border-collapse">
+                  <thead>
+                    <tr className="bg-gray-100 text-gray-800 font-bold border-b border-gray-300">
+                      <th className="p-2 border-r border-gray-200">ਲੜੀ</th>
+                      <th className="p-2 border-r border-gray-200">ਚਲਾਨ ਨੰਬਰ ਤੇ ਮਿਤੀ</th>
+                      <th className="p-2 border-r border-gray-200">ਆੜ੍ਹਤੀਆ ਫਰਮ</th>
+                      <th className="p-2 border-r border-gray-200">ਟਰੱਕ ਨੰਬਰ</th>
+                      <th className="p-2 border-r border-gray-200">ਡਰਾਈਵਰ ਤੇ ਮੋਬਾਈਲ</th>
+                      <th className="p-2 border-r border-gray-200">ਸ਼ੈਲਰ ਦਾ ਨਾਮ</th>
+                      <th className="p-2 border-r border-gray-200">ਏਜੰਸੀ</th>
+                      <th className="p-2 border-r border-gray-200">ਝੋਨੇ ਦੀ ਕਿਸਮ</th>
+                      <th className="p-2 border-r border-gray-200 text-right">A-Class</th>
+                      <th className="p-2 border-r border-gray-200 text-right">B-Class</th>
+                      <th className="p-2 border-r border-gray-200 text-right">ਕੁੱਲ ਬੈਗ</th>
+                      <th className="p-2 border-r border-gray-200 text-right">ਵਜ਼ਨ (Qtl)</th>
+                      <th className="p-2 text-center">ਸਥਿਤੀ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 font-mono">
+                    {filteredEntries.map((item, idx) => {
+                      const isDelivered = item.delivery_status === 'Delivered';
+                      const qtl = item.weight_quintals || Number((item.bags_lifted * 0.375).toFixed(2));
+                      return (
+                        <tr key={item.id} className="hover:bg-gray-50">
+                          <td className="p-2 border-r border-gray-200 font-sans text-center">{idx + 1}</td>
+                          <td className="p-2 border-r border-gray-200 font-bold text-gray-900">
+                            <div>{item.challan_no}</div>
+                            <div className="text-[9px] text-gray-400 font-normal">{item.date_time}</div>
+                          </td>
+                          <td className="p-2 border-r border-gray-200 font-sans font-semibold text-[10px]">
+                            {item.firm_name}
+                          </td>
+                          <td className="p-2 border-r border-gray-200 font-bold text-purple-950">
+                            {item.truck_number}
+                          </td>
+                          <td className="p-2 border-r border-gray-200 font-sans text-[10px]">
+                            <div>{item.driver_name || '-'}</div>
+                            <div className="text-gray-500 font-mono text-[9px]">{item.driver_mobile || ''}</div>
+                          </td>
+                          <td className="p-2 border-r border-gray-200 font-sans text-[10px] font-semibold text-gray-800">
+                            {item.seller_sheller_name || item.destination_godown}
+                          </td>
+                          <td className="p-2 border-r border-gray-200 font-sans text-[10px]">
+                            {item.purchasing_agency}
+                          </td>
+                          <td className="p-2 border-r border-gray-200 font-sans font-bold text-[10px] text-amber-900">
+                            {item.crop_variety || item.crop_type || 'Paddy Grade A'}
+                          </td>
+                          <td className="p-2 border-r border-gray-200 text-right font-bold text-blue-900">
+                            {item.new_bags || 0}
+                          </td>
+                          <td className="p-2 border-r border-gray-200 text-right font-bold text-amber-900">
+                            {item.old_bags || 0}
+                          </td>
+                          <td className="p-2 border-r border-gray-200 text-right font-bold text-purple-950">
+                            {item.bags_lifted}
+                          </td>
+                          <td className="p-2 border-r border-gray-200 text-right font-bold text-emerald-900">
+                            {qtl.toFixed(2)}
+                          </td>
+                          <td className="p-2 font-sans text-center">
+                            {isDelivered ? (
+                              <span className="font-bold text-emerald-800 text-[10px]">✓ ਤਸਦੀਕ</span>
+                            ) : (
+                              <span className="font-bold text-amber-800 text-[10px]">⏳ ਅਣ-ਤਸਦੀਕ</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-purple-900 text-white font-bold font-mono text-xs">
+                      <td colSpan={8} className="p-2.5 text-right font-sans">ਕੁੱਲ ਜੋੜ (Grand Total):</td>
+                      <td className="p-2.5 text-right font-bold text-blue-200">{totalAClassBagsAll}</td>
+                      <td className="p-2.5 text-right font-bold text-amber-200">{totalBClassBagsAll}</td>
+                      <td className="p-2.5 text-right font-black">{totalBagsAll}</td>
+                      <td className="p-2.5 text-right font-black text-amber-300">{totalWeightAll.toFixed(2)}</td>
+                      <td className="p-2.5 text-center font-sans text-[10px]">
+                        ਤ:{verifiedDeliveredCount} / ਅ:{unverifiedPendingCount}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+
+              {/* Signatures Footer */}
+              <div className="pt-8 grid grid-cols-3 gap-6 text-center text-xs text-gray-700 font-semibold border-t border-gray-200 mt-6">
+                <div>
+                  <div className="border-t border-gray-400 pt-1 mt-6">ਆੜ੍ਹਤੀਆ ਦਸਤਖਤ / ਮੋਹਰ</div>
+                  <div className="text-[10px] text-gray-400 font-normal">KisanMitra ERP Official</div>
+                </div>
+                <div>
+                  <div className="border-t border-gray-400 pt-1 mt-6">ਸ਼ੈਲਰ ਪ੍ਰਤੀਨਿਧ / ਰਸੀਵਰ</div>
+                  <div className="text-[10px] text-gray-400 font-normal">Rice Mill Authorized Receiver</div>
+                </div>
+                <div>
+                  <div className="border-t border-gray-400 pt-1 mt-6">ਟਰਾਂਸਪੋਰਟਰ / ਡਰਾਈਵਰ ਦਸਤਖਤ</div>
+                  <div className="text-[10px] text-gray-400 font-normal">Truck Driver Signature</div>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Modal Bottom Actions */}
+            <div className="p-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between flex-shrink-0">
+              <span className="text-xs text-gray-500">
+                ਟਿਪ: ਪ੍ਰਿੰਟ ਵਿੱਚ 'Save as PDF' ਚੁਣ ਕੇ ਪੀ.ਡੀ.ਐੱਫ ਫਾਈਲ ਸੇਵ ਕਰ ਸਕਦੇ ਹੋ।
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsPrintModalOpen(false)}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 font-bold rounded-xl text-xs hover:bg-gray-100 cursor-pointer"
+                >
+                  ਬੰਦ ਕਰੋ (Close)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="px-5 py-2 bg-purple-900 hover:bg-purple-950 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-md cursor-pointer"
+                >
+                  <Printer className="w-4 h-4 text-amber-300" />
+                  <span>ਪ੍ਰਿੰਟ / PDF ਬਣਾਓ (Print / Save PDF)</span>
+                </button>
+              </div>
+            </div>
+
           </div>
         </div>
       )}

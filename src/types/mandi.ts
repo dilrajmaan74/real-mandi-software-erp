@@ -195,6 +195,23 @@ export interface AgencyPurchaseEntry {
 }
 
 // 4. Lifting & Dispatch (ਮੰਡੀ ਲਿਫਟਿੰਗ ਤੇ ਚਲਾਨ)
+export const PADDY_VARIETIES: string[] = [
+  'PR-126 (ਪੀ.ਆਰ 126)',
+  'PR-131 (ਪੀ.ਆਰ 131)',
+  'PR-130 (ਪੀ.ਆਰ 130)',
+  'PR-128 (ਪੀ.ਆਰ 128)',
+  'PR-114 (ਪੀ.ਆਰ 114)',
+  'Pusa 44 (ਪੂਸਾ 44)',
+  '1509 Basmati (1509 ਬਾਸਮਤੀ)',
+  '1718 Basmati (1718 ਬਾਸਮਤੀ)',
+  '1121 Basmati (1121 ਬਾਸਮਤੀ)',
+  '1401 Basmati (1401 ਬਾਸਮਤੀ)',
+  'Paddy Grade A (ਜਨਰਲ ਗ੍ਰੇਡ-ਏ)',
+  'Hybrid (ਹਾਈਬ੍ਰਿਡ)',
+  'Sarbati (ਸਰਬਤੀ)',
+  'Other / ਹੋਰ ਕਿਸਮ',
+];
+
 export interface LiftingDispatchEntry {
   id: string;
   date_time: string;
@@ -203,21 +220,22 @@ export interface LiftingDispatchEntry {
   purchasing_agency: string;
   seller_sheller_name: string; // Destination Sheller
   crop_type: string;
+  crop_variety?: string; // e.g. PR-126, 1509 Basmati, etc.
   truck_number: string;
   driver_name?: string;
   driver_mobile?: string;
   truck_photo?: string; // base64 or photo URL
   destination_godown?: string; // FCI Godown, Sheller Plant, Markfed Warehouse
   bag_category?: 'old' | 'new' | 'both';
-  new_bags?: number;
-  old_bags?: number;
+  new_bags?: number; // A-Class bags
+  old_bags?: number; // B-Class bags
   bags_lifted: number;
   weight_quintals?: number; // Auto: bags * 0.375
   pending_yard_bags: number;
   challan_no: string;
   lifting_status: 'Fully Lifted' | 'Partially Lifted';
   
-  // Two-stage reconciliation: Dispatched (ਮੰਡੀ ਤੋਂ ਰਵਾਨਾ) vs Delivered (ਸ਼ੈਲਰ ਪਹੁੰਚਿਆ)
+  // Two-stage reconciliation: Dispatched (ਅਣ-ਤਸਦੀਕ / Mandi Dispatched) vs Delivered (ਤਸਦੀਕ / Sheller Verified)
   delivery_status?: 'Dispatched' | 'Delivered';
   shortage_bags?: number;
   shortage_quintals?: number;

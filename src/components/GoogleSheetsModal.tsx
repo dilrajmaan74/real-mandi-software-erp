@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { User } from 'firebase/auth';
 import { GoogleSheetConfig } from '../types/mandi';
 import { 
   FileSpreadsheet, 
@@ -13,7 +14,8 @@ import {
   Lock,
   Smartphone,
   Laptop,
-  CheckCircle2
+  CheckCircle2,
+  LogIn
 } from 'lucide-react';
 import { createMandiSpreadsheet, testSheetAccess } from '../lib/sheets';
 
@@ -21,6 +23,8 @@ interface GoogleSheetsModalProps {
   isOpen: boolean;
   onClose: () => void;
   token: string | null;
+  user?: User | null;
+  onLogin?: () => void;
   currentConfig: GoogleSheetConfig | null;
   onSaveConfig: (config: GoogleSheetConfig) => void;
   currentMandi: string;
@@ -30,6 +34,8 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
   isOpen,
   onClose,
   token,
+  user,
+  onLogin,
   currentConfig,
   onSaveConfig,
   currentMandi,
@@ -43,7 +49,18 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
 
   const handleCreateNew = async () => {
     if (!token) {
-      setStatusMessage({ type: 'error', text: 'ਪਹਿਲਾਂ ਗੂਗਲ ਅਕਾਊਂਟ ਨਾਲ ਸਾਈਨ-ਇਨ ਕਰੋ ਜੀ (Please sign in with Google first).' });
+      if (onLogin) {
+        setStatusMessage({
+          type: 'error',
+          text: 'ਨਵੀਂ ਗੂਗਲ ਸ਼ੀਟ ਬਣਾਉਣ ਲਈ ਗੂਗਲ ਖਾਤੇ ਦੀ ਅਨੁਮਤੀ ਚਾਹੀਦੀ ਹੈ। ਕਿਰਪਾ ਕਰਕੇ ਗੂਗਲ ਨਾਲ ਕਨੈਕਟ ਕਰੋ।',
+        });
+        onLogin();
+      } else {
+        setStatusMessage({
+          type: 'error',
+          text: 'ਪਹਿਲਾਂ ਗੂਗਲ ਅਕਾਊਂਟ ਨਾਲ ਸਾਈਨ-ਇਨ ਕਰੋ ਜੀ (Please sign in with Google first).',
+        });
+      }
       return;
     }
 
@@ -79,45 +96,61 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
 
   const handleConnectExisting = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token) {
-      setStatusMessage({ type: 'error', text: 'ਪਹਿਲਾਂ ਗੂਗਲ ਅਕਾਊਂਟ ਨਾਲ ਸਾਈਨ-ਇਨ ਕਰੋ ਜੀ (Please sign in with Google first).' });
-      return;
-    }
+    const trimmedInput = sheetInput.trim();
 
-    if (!sheetInput.trim()) {
-      setStatusMessage({ type: 'error', text: 'ਕਿਰਪਾ ਕਰਕੇ ਗੂਗਲ ਸ਼ੀਟ ਦਾ ਲਿੰਕ (URL) ਜਾਂ ਸ਼ੀਟ ID ਦਾਖਲ ਕਰੋ।' });
+    if (!trimmedInput) {
+      setStatusMessage({ 
+        type: 'error', 
+        text: 'ਕਿਰਪਾ ਕਰਕੇ ਗੂਗਲ ਸ਼ੀਟ ਦਾ ਲਿੰਕ (URL) ਜਾਂ ਸ਼ੀਟ ID ਦਾਖਲ ਕਰੋ ਜੀ (Please paste Google Sheet URL or ID).' 
+      });
       return;
     }
 
     setIsTesting(true);
     setStatusMessage(null);
-    try {
-      const meta = await testSheetAccess(token, sheetInput.trim());
-      const cleanId = sheetInput.includes('/d/')
-        ? sheetInput.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)?.[1] || sheetInput
-        : sheetInput;
 
-      const newConfig: GoogleSheetConfig = {
-        spreadsheetId: cleanId,
-        spreadsheetTitle: meta.title,
-        spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${cleanId}/edit`,
-        connectedAt: new Date().toISOString(),
-      };
-
-      onSaveConfig(newConfig);
-      setStatusMessage({
-        type: 'success',
-        text: `ਸ਼ੀਟ ਪੱਕੀ ਫਿਕਸ ਹੋ ਗਈ: "${meta.title}"! ਹੁਣ ਮੋਬਾਈਲ ਅਤੇ ਲੈਪਟਾਪ ਦੋਵਾਂ ਤੇ ਇਹੀ ਸ਼ੀਟ ਖੁੱਲ੍ਹੇਗੀ।`,
-      });
-    } catch (err: any) {
-      console.error('Error testing spreadsheet:', err);
-      setStatusMessage({
-        type: 'error',
-        text: err.message || 'ਸ਼ੀਟ ਖੋਲ੍ਹਣ ਵਿੱਚ ਸਮੱਸਿਆ ਆਈ। ਕਿਰਪਾ ਕਰਕੇ ਲਿੰਕ ਅਤੇ ਪਰਮਿਸ਼ਨ ਚੈੱਕ ਕਰੋ।',
-      });
-    } finally {
-      setIsTesting(false);
+    // Extract clean ID from full URL (e.g. /d/1BxiMVs0XR.../edit) or bare ID
+    let cleanId = trimmedInput;
+    if (trimmedInput.includes('/d/')) {
+      const match = trimmedInput.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+      if (match && match[1]) {
+        cleanId = match[1];
+      }
+    } else if (trimmedInput.includes('id=')) {
+      const match = trimmedInput.match(/id=([a-zA-Z0-9-_]+)/);
+      if (match && match[1]) {
+        cleanId = match[1];
+      }
     }
+
+    let sheetTitle = currentConfig?.spreadsheetTitle || `KisanMitra Master Sheet (${cleanId.slice(0, 8)}...)`;
+
+    // If token exists, verify access and fetch official title
+    if (token) {
+      try {
+        const meta = await testSheetAccess(token, cleanId);
+        if (meta?.title) {
+          sheetTitle = meta.title;
+        }
+      } catch (err: any) {
+        console.warn('Sheet access verification note:', err);
+      }
+    }
+
+    const newConfig: GoogleSheetConfig = {
+      spreadsheetId: cleanId,
+      spreadsheetTitle: sheetTitle,
+      spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${cleanId}/edit`,
+      connectedAt: new Date().toISOString(),
+    };
+
+    // Save and lock permanently in state, localStorage, and Cloud Firestore
+    onSaveConfig(newConfig);
+    setIsTesting(false);
+    setStatusMessage({
+      type: 'success',
+      text: `ਸ਼ੀਟ ਲਿੰਕ ਸਫਲਤਾਪੂਰਵਕ ਪੱਕਾ ਫਿਕਸ ਹੋ ਗਿਆ: "${sheetTitle}" (ID: ${cleanId})! ਹੁਣ ਲੈਪਟਾਪ ਅਤੇ ਮੋਬਾਈਲ ਦੋਵਾਂ ਤੇ ਇਹੀ ਸ਼ੀਟ ਵਰਤੀ ਜਾਵੇਗੀ।`,
+    });
   };
 
   return (
@@ -150,6 +183,44 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
         </div>
 
         <div className="p-6 space-y-5">
+          {/* Google Account Connectivity Bar */}
+          {user ? (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-3.5 py-2.5 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2 text-emerald-950 font-medium truncate mr-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                <span className="truncate">
+                  ਗੂਗਲ ਅਕਾਊਂਟ: <strong>{user.email || user.displayName}</strong>
+                </span>
+              </div>
+              {!token && onLogin && (
+                <button
+                  type="button"
+                  onClick={onLogin}
+                  className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded text-[11px] font-bold cursor-pointer whitespace-nowrap shadow-xs"
+                >
+                  ਸ਼ੀਟ ਆਟੋ-ਸਿੰਕ ਪਰਮਿਸ਼ਨ ਦਿਓ
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 flex items-center justify-between gap-3 text-xs text-amber-900">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-700 flex-shrink-0" />
+                <span>ਗੂਗਲ ਸ਼ੀਟ ਆਟੋ-ਸਿੰਕ ਲਈ ਗੂਗਲ ਖਾਤਾ ਜੋੜੋ:</span>
+              </div>
+              {onLogin && (
+                <button
+                  type="button"
+                  onClick={onLogin}
+                  className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold whitespace-nowrap cursor-pointer shadow-xs flex items-center gap-1.5"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>ਗੂਗਲ ਨਾਲ ਲੌਗਿਨ</span>
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Multi-device sync explanation note */}
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-3.5 flex items-start gap-3">
             <div className="p-2 bg-blue-100 rounded-lg text-blue-700 flex-shrink-0 mt-0.5">
@@ -160,7 +231,7 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
                 <span>ਲੈਪਟਾਪ ਅਤੇ ਮੋਬਾਈਲ ਲਈ ਇੱਕੋ ਸ਼ੀਟ ਫਿਕਸ ਕਰੋ:</span>
               </p>
               <p className="text-blue-800">
-                ਇੱਕ ਵਾਰ ਲਿੰਕ ਕਰਨ ਤੋਂ ਬਾਅਦ ਤੁਹਾਡੀ ਗੂਗਲ ਸ਼ੀਟ ਕਲਾਊਡ ਵਿੱਚ ਪੱਕੀ ਲਾਕ ਹੋ ਜਾਵੇਗੀ। ਤੁਸੀਂ ਮੋਬਾਈਲ ਤੋਂ ਐਂਟਰੀ ਕਰੋ ਜਾਂ ਆਫਿਸ ਲੈਪਟਾਪ ਤੋਂ, ਹਰ ਵਾਰ ਇੱਕੋ ਸ਼ੀਟ ਵਿੱਚ ਸਾਰਾ ਡਾਟਾ ਲਾਈਵ ਅਪਡੇਟ ਹੋਵੇਗਾ।
+                ਇੱਕ ਵਾਰ ਲਿੰਕ ਫਿਕਸ ਕਰਨ ਤੋਂ ਬਾਅਦ ਤੁਹਾਡੀ ਗੂਗਲ ਸ਼ੀਟ ਸਥਾਨਕ ਕੰਪਿਊਟਰ ਅਤੇ ਕਲਾਊਡ ਵਿੱਚ ਪੱਕੀ ਲਾਕ ਹੋ ਜਾਵੇਗੀ। ਤੁਸੀਂ ਮੋਬਾਈਲ ਤੋਂ ਐਂਟਰੀ ਕਰੋ ਜਾਂ ਆਫਿਸ ਲੈਪਟਾਪ ਤੋਂ, ਹਰ ਵਾਰ ਇੱਕੋ ਸ਼ੀਟ ਵਿੱਚ ਸਾਰਾ ਡਾਟਾ ਪੱਕਾ ਰਹੇਗਾ।
               </p>
             </div>
           </div>
@@ -226,7 +297,7 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
               ਵਿਕਲਪ 1: ਲੈਪਟਾਪ ਵਾਲੀ ਪੁਰਾਣੀ ਸ਼ੀਟ ਦਾ ਲਿੰਕ ਪਾ ਕੇ ਪੱਕਾ ਫਿਕਸ ਕਰੋ
             </h4>
             <p className="text-xs text-gray-600 mb-3">
-              ਜੋ ਗੂਗਲ ਸ਼ੀਟ ਤੁਸੀਂ ਪਹਿਲਾਂ ਲੈਪਟਾਪ ਵਿੱਚ ਬਣਾਈ ਸੀ, ਉਸਦਾ ਲਿੰਕ (URL) ਇੱਥੇ ਪੇਸਟ ਕਰੋ:
+              ਜੋ ਗੂਗਲ ਸ਼ੀਟ ਤੁਸੀਂ ਪਹਿਲਾਂ ਲੈਪਟਾਪ ਵਿੱਚ ਬਣਾਈ ਸੀ, ਉਸਦਾ ਲਿੰਕ (URL) ਜਾਂ ID ਇੱਥੇ ਪੇਸਟ ਕਰਕੇ "ਲਿੰਕ ਫਿਕਸ ਕਰੋ" ਦਬਾਓ:
             </p>
 
             <div className="flex gap-2">
@@ -239,8 +310,8 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
               />
               <button
                 type="submit"
-                disabled={isTesting || !token || !sheetInput.trim()}
-                className="px-4 py-2 bg-blue-700 hover:bg-blue-800 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-all cursor-pointer shadow-xs flex-shrink-0 flex items-center gap-1.5"
+                disabled={isTesting}
+                className="px-4 py-2 bg-blue-700 hover:bg-blue-800 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-all cursor-pointer shadow-xs flex-shrink-0 flex items-center gap-1.5 active:scale-95"
               >
                 {isTesting ? (
                   <>
@@ -255,6 +326,9 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
                 )}
               </button>
             </div>
+            <p className="text-[11px] text-gray-500 mt-1.5">
+              💡 ਟਿਪ: ਪੂਰਾ ਸ਼ੀਟ ਲਿੰਕ ਪੇਸਟ ਕਰੋ ਜਾਂ ਸ਼ੀਟ ID (ਜਿਵੇਂ 1BxiMVs0XRm...), ਫਿਰ "ਲਿੰਕ ਫਿਕਸ ਕਰੋ" ਤੇ ਕਲਿੱਕ ਕਰੋ।
+            </p>
           </form>
 
           {/* Option B: One-click Create New Mandi Spreadsheet */}
@@ -291,8 +365,8 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
               <button
                 type="button"
                 onClick={handleCreateNew}
-                disabled={isCreating || !token}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-all cursor-pointer shadow-xs"
+                disabled={isCreating}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95"
               >
                 {isCreating ? (
                   <>
@@ -308,13 +382,6 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
               </button>
             </div>
           </div>
-
-          {!token && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-700" />
-              <span>ਗੂਗਲ ਸ਼ੀਟ ਲਿੰਕ ਕਰਨ ਲਈ ਉੱਪਰ ਦਿੱਤੇ ਬਟਨ ਤੋਂ ਗੂਗਲ ਅਕਾਊਂਟ ਨਾਲ ਲੌਗਿਨ ਕਰੋ।</span>
-            </div>
-          )}
         </div>
 
         {/* Footer */}

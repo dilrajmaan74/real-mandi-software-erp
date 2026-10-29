@@ -24,10 +24,10 @@ provider.setCustomParameters({
   prompt: 'consent',
 });
 
-// Cache the access token in memory and sessionStorage
+// Cache the access token in memory, sessionStorage, and localStorage
 let cachedAccessToken: string | null = null;
 try {
-  cachedAccessToken = sessionStorage.getItem('kisanmitra_oauth_token');
+  cachedAccessToken = sessionStorage.getItem('kisanmitra_oauth_token') || localStorage.getItem('kisanmitra_oauth_token');
 } catch (e) {
   // ignore
 }
@@ -45,6 +45,7 @@ export const initAuth = (
           cachedAccessToken = credential.accessToken;
           try {
             sessionStorage.setItem('kisanmitra_oauth_token', credential.accessToken);
+            localStorage.setItem('kisanmitra_oauth_token', credential.accessToken);
           } catch (e) {}
         }
         if (onAuthSuccess) {
@@ -60,7 +61,7 @@ export const initAuth = (
     if (user) {
       if (!cachedAccessToken) {
         try {
-          cachedAccessToken = sessionStorage.getItem('kisanmitra_oauth_token');
+          cachedAccessToken = sessionStorage.getItem('kisanmitra_oauth_token') || localStorage.getItem('kisanmitra_oauth_token');
         } catch (e) {}
       }
       if (onAuthSuccess) {
@@ -70,6 +71,7 @@ export const initAuth = (
       cachedAccessToken = null;
       try {
         sessionStorage.removeItem('kisanmitra_oauth_token');
+        localStorage.removeItem('kisanmitra_oauth_token');
       } catch (e) {}
       if (onAuthFailure) onAuthFailure();
     }
@@ -83,7 +85,10 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
     const token = credential?.accessToken || '';
     cachedAccessToken = token;
     try {
-      if (token) sessionStorage.setItem('kisanmitra_oauth_token', token);
+      if (token) {
+        sessionStorage.setItem('kisanmitra_oauth_token', token);
+        localStorage.setItem('kisanmitra_oauth_token', token);
+      }
     } catch (e) {}
     return { user: result.user, accessToken: token };
   } catch (error: any) {
@@ -102,6 +107,11 @@ export const googleSignInRedirect = async (): Promise<void> => {
 };
 
 export const getAccessToken = async (): Promise<string | null> => {
+  if (!cachedAccessToken) {
+    try {
+      cachedAccessToken = sessionStorage.getItem('kisanmitra_oauth_token') || localStorage.getItem('kisanmitra_oauth_token');
+    } catch (e) {}
+  }
   return cachedAccessToken;
 };
 
@@ -110,6 +120,7 @@ export const logout = async () => {
   cachedAccessToken = null;
   try {
     sessionStorage.removeItem('kisanmitra_oauth_token');
+    localStorage.removeItem('kisanmitra_oauth_token');
   } catch (e) {}
 };
 

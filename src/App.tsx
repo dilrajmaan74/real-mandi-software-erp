@@ -1462,6 +1462,8 @@ export default function App() {
         isOpen={isSheetModalOpen}
         onClose={() => setIsSheetModalOpen(false)}
         token={token}
+        user={user}
+        onLogin={handleLogin}
         currentConfig={sheetConfig}
         onSaveConfig={handleSaveSheetConfig}
         currentMandi={currentMandi}
