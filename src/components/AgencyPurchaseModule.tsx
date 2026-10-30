@@ -389,10 +389,11 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
     setSingleSelectedKey(key);
     const found = allSelectableFarmers.find((item) => item.uniqueKey === key);
     if (found) {
-      setSingleFarmerName(found.mainFarmerName);
+      const chosenName = found.namePa ? `${found.nameEn} (${found.namePa})` : found.nameEn;
+      setSingleFarmerName(chosenName);
       setSingleFatherHusband(found.fatherHusbandName);
-      setSingleBilledToName(found.nameEn);
-      setSingleRelation(found.relation);
+      setSingleBilledToName(chosenName);
+      setSingleRelation(found.isLinked ? found.relation : 'Self');
       setSingleVillage(found.village);
       setSingleMobile(found.mobile);
     }
