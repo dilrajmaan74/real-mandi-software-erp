@@ -17,7 +17,7 @@ import {
   CheckCircle2,
   LogIn
 } from 'lucide-react';
-import { createMandiSpreadsheet, testSheetAccess } from '../lib/sheets';
+import { createMandiSpreadsheet, testSheetAccess, ensureMandiTabsExist } from '../lib/sheets';
 
 interface GoogleSheetsModalProps {
   isOpen: boolean;
@@ -28,6 +28,7 @@ interface GoogleSheetsModalProps {
   currentConfig: GoogleSheetConfig | null;
   onSaveConfig: (config: GoogleSheetConfig) => void;
   currentMandi: string;
+  onSyncAllToSheet?: () => Promise<{ success: boolean; count?: number; message?: string } | void>;
 }
 
 export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
@@ -39,10 +40,12 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
   currentConfig,
   onSaveConfig,
   currentMandi,
+  onSyncAllToSheet,
 }) => {
   const [sheetInput, setSheetInput] = useState(currentConfig?.spreadsheetId || '');
   const [isCreating, setIsCreating] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
+  const [isSyncingAll, setIsSyncingAll] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   if (!isOpen) return null;
@@ -83,6 +86,11 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
         type: 'success',
         text: `ਸ਼ੀਟ ਸਫਲਤਾਪੂਰਵਕ ਬਣ ਗਈ ਅਤੇ ਪੱਕੀ ਫਿਕਸ ਕਰ ਦਿੱਤੀ ਗਈ: "${result.title}"`,
       });
+
+      // Also trigger initial sync of all existing data
+      if (onSyncAllToSheet) {
+        onSyncAllToSheet().catch(console.warn);
+      }
     } catch (err: any) {
       console.error('Error creating spreadsheet:', err);
       setStatusMessage({
@@ -125,13 +133,15 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
 
     let sheetTitle = currentConfig?.spreadsheetTitle || `KisanMitra Master Sheet (${cleanId.slice(0, 8)}...)`;
 
-    // If token exists, verify access and fetch official title
+    // If token exists, verify access and make sure all 5 tabs and headers exist in this sheet!
     if (token) {
       try {
         const meta = await testSheetAccess(token, cleanId);
         if (meta?.title) {
           sheetTitle = meta.title;
         }
+        // Ensure standard Mandi tabs exist in this connected sheet
+        await ensureMandiTabsExist(token, cleanId);
       } catch (err: any) {
         console.warn('Sheet access verification note:', err);
       }
@@ -149,8 +159,43 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
     setIsTesting(false);
     setStatusMessage({
       type: 'success',
-      text: `ਸ਼ੀਟ ਲਿੰਕ ਸਫਲਤਾਪੂਰਵਕ ਪੱਕਾ ਫਿਕਸ ਹੋ ਗਿਆ: "${sheetTitle}" (ID: ${cleanId})! ਹੁਣ ਲੈਪਟਾਪ ਅਤੇ ਮੋਬਾਈਲ ਦੋਵਾਂ ਤੇ ਇਹੀ ਸ਼ੀਟ ਵਰਤੀ ਜਾਵੇਗੀ।`,
+      text: `ਸ਼ੀਟ ਲਿੰਕ ਸਫਲਤਾਪੂਰਵਕ ਪੱਕਾ ਫਿਕਸ ਹੋ ਗਿਆ: "${sheetTitle}" (ID: ${cleanId})! ਸਾਰੀਆਂ 5 ਟੈਬਾਂ ਤਿਆਰ ਹਨ।`,
     });
+
+    // Auto-trigger sync of all data into the newly locked sheet
+    if (onSyncAllToSheet && token) {
+      onSyncAllToSheet().catch(console.warn);
+    }
+  };
+
+  const handleSyncAllClick = async () => {
+    if (!token && onLogin) {
+      setStatusMessage({
+        type: 'error',
+        text: 'ਸ਼ੀਟ ਵਿੱਚ ਸਿੰਕ ਕਰਨ ਲਈ ਪਹਿਲਾਂ ਗੂਗਲ ਟੋਕਨ ਰਿਫ੍ਰੈਸ਼ / ਕਨੈਕਟ ਕਰੋ ਜੀ।',
+      });
+      onLogin();
+      return;
+    }
+    if (!onSyncAllToSheet) return;
+
+    setIsSyncingAll(true);
+    setStatusMessage(null);
+    try {
+      const res = await onSyncAllToSheet();
+      setStatusMessage({
+        type: 'success',
+        text: (res && res.message) || 'ਸਾਰਾ ਡਾਟਾ ਸਫਲਤਾਪੂਰਵਕ ਫਿਕਸ ਗੂਗਲ ਸ਼ੀਟ ਵਿੱਚ ਸਿੰਕ ਹੋ ਗਿਆ ਹੈ!',
+      });
+    } catch (err: any) {
+      console.error(err);
+      setStatusMessage({
+        type: 'error',
+        text: 'ਸਿੰਕ ਕਰਨ ਵਿੱਚ ਗਲਤੀ: ' + (err.message || 'Error'),
+      });
+    } finally {
+      setIsSyncingAll(false);
+    }
   };
 
   return (
@@ -238,37 +283,68 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
 
           {/* Active connection card if already connected */}
           {currentConfig && (
-            <div className="bg-emerald-50 border-2 border-emerald-500 rounded-xl p-4 flex items-start justify-between gap-3 shadow-xs">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 animate-pulse"></span>
-                  <span className="text-xs font-bold text-emerald-950 uppercase tracking-wide flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                    ਮੌਜੂਦਾ ਪੱਕੀ ਸ਼ੀਟ (Currently Fixed Sheet)
-                  </span>
+            <div className="bg-emerald-50 border-2 border-emerald-500 rounded-xl p-4 shadow-xs space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                    <span className="text-xs font-bold text-emerald-950 uppercase tracking-wide flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      ਮੌਜੂਦਾ ਪੱਕੀ ਫਿਕਸ ਸ਼ੀਟ (Permanent Fixed Sheet)
+                    </span>
+                  </div>
+                  <h4 className="font-bold text-sm text-gray-900 mt-1">
+                    {currentConfig.spreadsheetTitle}
+                  </h4>
+                  <p className="text-[11px] text-gray-500 font-mono mt-0.5 truncate max-w-sm">
+                    ID: {currentConfig.spreadsheetId}
+                  </p>
+                  <div className="flex items-center gap-2 mt-2 text-[11px] text-emerald-800 font-medium">
+                    <span className="flex items-center gap-1"><Smartphone className="w-3 h-3" /> ਮੋਬਾਈਲ ਲਾਈਵ</span>
+                    <span>•</span>
+                    <span className="flex items-center gap-1"><Laptop className="w-3 h-3" /> ਲੈਪਟਾਪ ਲਾਈਵ</span>
+                    <span>•</span>
+                    <span className="flex items-center gap-1">🔒 5 ਮੌਡਿਊਲ ਆਟੋ-ਸਿੰਕ</span>
+                  </div>
                 </div>
-                <h4 className="font-bold text-sm text-gray-900 mt-1">
-                  {currentConfig.spreadsheetTitle}
-                </h4>
-                <p className="text-[11px] text-gray-500 font-mono mt-0.5 truncate max-w-sm">
-                  ID: {currentConfig.spreadsheetId}
-                </p>
-                <div className="flex items-center gap-2 mt-2 text-[11px] text-emerald-800 font-medium">
-                  <span className="flex items-center gap-1"><Smartphone className="w-3 h-3" /> ਮੋਬਾਈਲ ਐਕਟਿਵ</span>
-                  <span>•</span>
-                  <span className="flex items-center gap-1"><Laptop className="w-3 h-3" /> ਲੈਪਟਾਪ ਐਕਟਿਵ</span>
+
+                <div className="flex flex-col items-end gap-1.5">
+                  <a
+                    href={currentConfig.spreadsheetUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow-xs transition-colors"
+                  >
+                    <span>ਸ਼ੀਟ ਖੋਲ੍ਹੋ</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
                 </div>
               </div>
 
-              <a
-                href={currentConfig.spreadsheetUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow-xs transition-colors"
-              >
-                <span>ਸ਼ੀਟ ਖੋਲ੍ਹੋ</span>
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
+              {/* 1-Click Sync All Records to this Fixed Sheet */}
+              <div className="pt-3 border-t border-emerald-200/80 flex flex-col sm:flex-row items-center justify-between gap-2.5">
+                <div className="text-[11px] text-emerald-900">
+                  <span>💡 ਸਾਫਟਵੇਅਰ ਦਾ ਸਾਰਾ ਪੁਰਾਣਾ ਤੇ ਨਵਾਂ ਡਾਟਾ ਇਸੇ ਸ਼ੀਟ ਵਿੱਚ ਭੇਜੋ:</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSyncAllClick}
+                  disabled={isSyncingAll}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-stone-950 font-bold rounded-lg text-xs transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                >
+                  {isSyncingAll ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>ਸਿੰਕ ਹੋ ਰਿਹਾ ਹੈ...</span>
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>🔄 ਸਾਰਾ ਡਾਟਾ ਇਸ ਫਿਕਸ ਸ਼ੀਟ ਵਿੱਚ ਸਿੰਕ ਕਰੋ</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           )}
 

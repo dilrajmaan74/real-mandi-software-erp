@@ -115,6 +115,15 @@ export const getAccessToken = async (): Promise<string | null> => {
   return cachedAccessToken;
 };
 
+export const refreshGoogleToken = async (): Promise<string | null> => {
+  const result = await googleSignIn();
+  return result?.accessToken || null;
+};
+
+export const reconnectGoogleSheets = async (): Promise<{ user: User; accessToken: string } | null> => {
+  return googleSignIn();
+};
+
 export const logout = async () => {
   await auth.signOut();
   cachedAccessToken = null;

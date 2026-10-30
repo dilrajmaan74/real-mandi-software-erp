@@ -35,11 +35,18 @@ import {
 import { initAuth, googleSignIn, googleSignInRedirect, logout } from './lib/auth';
 import { 
   appendFarmerToSheets, 
+  deleteFarmerFromSheets,
   appendCropArrivalToSheets, 
+  deleteCropArrivalFromSheets,
   appendBardanaToSheets, 
+  deleteBardanaFromSheets,
   appendAgencyPurchaseToSheets, 
+  deleteAgencyPurchaseFromSheets,
   appendLiftingDispatchToSheets,
-  appendMandiTransaction 
+  deleteLiftingDispatchFromSheets,
+  appendMandiTransaction,
+  ensureMandiTabsExist,
+  syncAllDataToFixedSheet
 } from './lib/sheets';
 import { 
   testConnection, 
@@ -790,7 +797,46 @@ export default function App() {
       if (user) {
         deleteFarmerFromCloud(user.uid, id).catch((e) => console.error('Cloud delete farmer error:', e));
       }
-      showToast('info', 'ਕਿਸਾਨ ਹਟਾਇਆ ਗਿਆ।');
+      if (token && sheetConfig) {
+        deleteFarmerFromSheets(token, sheetConfig.spreadsheetId, id).catch((e) => console.warn('Sheets delete farmer:', e));
+      }
+      showToast('info', 'ਕਿਸਾਨ ਹਟਾਇਆ ਗਿਆ (ਸਾਫਟਵੇਅਰ ਅਤੇ ਗੂਗਲ ਸ਼ੀਟ ਵਿੱਚੋਂ)।');
+    }
+  };
+
+  // 1-Click Sync all 5 modules data into the ONE permanent fixed Google Sheet
+  const handleSyncAllToSheet = async () => {
+    if (!sheetConfig) {
+      setIsSheetModalOpen(true);
+      return;
+    }
+    if (!token) {
+      showToast('error', 'ਗੂਗਲ ਸ਼ੀਟ ਅਕਸੈੱਸ ਟੋਕਨ ਦੀ ਮਿਆਦ ਪੁੱਗ ਗਈ ਹੈ। ਕਿਰਪਾ ਕਰਕੇ ਲੌਗਇਨ ਦੁਬਾਰਾ ਕਰੋ।');
+      await handleLogin();
+      return;
+    }
+
+    try {
+      showToast('info', 'ਸਾਰਾ ਡਾਟਾ ਫਿਕਸ ਗੂਗਲ ਸ਼ੀਟ ਵਿੱਚ ਸਿੰਕ ਹੋ ਰਿਹਾ ਹੈ...');
+      const res = await syncAllDataToFixedSheet(token, sheetConfig.spreadsheetId, {
+        farmers,
+        arrivals: cropArrivals,
+        bardana: bardanaEntries,
+        purchases: agencyPurchases,
+        lifting: liftingDispatches,
+      });
+
+      const msg = `ਸਫਲਤਾਪੂਰਵਕ ${res.totalSynced} ਨਵੇਂ ਰਿਕਾਰਡ ਫਿਕਸ ਗੂਗਲ ਸ਼ੀਟ ਵਿੱਚ ਸਿੰਕ ਹੋ ਗਏ! (ਕਿਸਾਨ: ${res.details.farmers}, ਆਵਕ: ${res.details.arrivals}, ਬਾਰਦਾਨਾ: ${res.details.bardana}, ਖਰੀਦ: ${res.details.purchases}, ਲਿਫਟਿੰਗ: ${res.details.lifting})`;
+      showToast('success', msg);
+      return { success: true, count: res.totalSynced, message: msg };
+    } catch (err: any) {
+      console.error('handleSyncAllToSheet error:', err);
+      if (err?.message?.includes('GOOGLE_AUTH_EXPIRED') || err?.status === 401) {
+        showToast('error', 'ਗੂਗਲ ਟੋਕਨ ਦੀ ਮਿਆਦ ਖ਼ਤਮ ਹੋ ਗਈ ਹੈ। ਕਿਰਪਾ ਕਰਕੇ ਗੂਗਲ ਨਾਲ ਮੁੜ-ਸਾਈਨ ਇਨ ਕਰੋ।');
+      } else {
+        showToast('error', 'ਸ਼ੀਟ ਸਿੰਕ ਵਿੱਚ ਗਲਤੀ: ' + (err.message || 'Error'));
+      }
+      throw err;
     }
   };
 
@@ -1297,7 +1343,10 @@ export default function App() {
                 if (user) {
                   deleteCropArrivalFromCloud(user.uid, id).catch(console.error);
                 }
-                showToast('info', 'ਆਵਕ ਐਂਟਰੀ ਹਟਾਈ ਗਈ।');
+                if (token && sheetConfig) {
+                  deleteCropArrivalFromSheets(token, sheetConfig.spreadsheetId, id).catch((e) => console.warn('Sheet delete arrival error:', e));
+                }
+                showToast('info', 'ਆਵਕ ਐਂਟਰੀ ਸਾਫਟਵੇਅਰ ਅਤੇ ਗੂਗਲ ਸ਼ੀਟ ਵਿੱਚੋਂ ਹਟਾਈ ਗਈ।');
               }
             }}
             registeredFarmers={farmers}
@@ -1320,7 +1369,10 @@ export default function App() {
                 if (user) {
                   deleteBardanaFromCloud(user.uid, id).catch(console.error);
                 }
-                showToast('info', 'ਬਾਰਦਾਨਾ ਐਂਟਰੀ ਹਟਾਈ ਗਈ।');
+                if (token && sheetConfig) {
+                  deleteBardanaFromSheets(token, sheetConfig.spreadsheetId, id).catch((e) => console.warn('Sheet delete bardana error:', e));
+                }
+                showToast('info', 'ਬਾਰਦਾਨਾ ਐਂਟਰੀ ਸਾਫਟਵੇਅਰ ਅਤੇ ਗੂਗਲ ਸ਼ੀਟ ਵਿੱਚੋਂ ਹਟਾਈ ਗਈ।');
               }
             }}
             registeredFarmers={farmers}
@@ -1345,7 +1397,10 @@ export default function App() {
                 if (user) {
                   deleteAgencyPurchaseFromCloud(user.uid, id).catch(console.error);
                 }
-                showToast('info', 'ਖਰੀਦ ਐਂਟਰੀ ਹਟਾਈ ਗਈ।');
+                if (token && sheetConfig) {
+                  deleteAgencyPurchaseFromSheets(token, sheetConfig.spreadsheetId, id).catch((e) => console.warn('Sheet delete purchase error:', e));
+                }
+                showToast('info', 'ਖਰੀਦ ਐਂਟਰੀ ਸਾਫਟਵੇਅਰ ਅਤੇ ਗੂਗਲ ਸ਼ੀਟ ਵਿੱਚੋਂ ਹਟਾਈ ਗਈ।');
               }
             }}
             onOpenJForm={(entry) => setSelectedJFormEntry(entry)}
@@ -1368,7 +1423,10 @@ export default function App() {
                 if (user) {
                   deleteLiftingDispatchFromCloud(user.uid, id).catch(console.error);
                 }
-                showToast('info', 'ਲਿਫਟਿੰਗ ਚਲਾਨ ਹਟਾਇਆ ਗਿਆ।');
+                if (token && sheetConfig) {
+                  deleteLiftingDispatchFromSheets(token, sheetConfig.spreadsheetId, id).catch((e) => console.warn('Sheet delete lifting error:', e));
+                }
+                showToast('info', 'ਲਿਫਟਿੰਗ ਚਲਾਨ ਸਾਫਟਵੇਅਰ ਅਤੇ ਗੂਗਲ ਸ਼ੀਟ ਵਿੱਚੋਂ ਹਟਾਇਆ ਗਿਆ।');
               }
             }}
             shellers={shellers}
@@ -1554,6 +1612,7 @@ export default function App() {
         currentConfig={sheetConfig}
         onSaveConfig={handleSaveSheetConfig}
         currentMandi={currentMandi}
+        onSyncAllToSheet={handleSyncAllToSheet}
       />
 
       {/* Firebase & Google OAuth Troubleshooter Modal */}
