@@ -169,14 +169,6 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
   };
 
   const handleSyncAllClick = async () => {
-    if (!token && onLogin) {
-      setStatusMessage({
-        type: 'error',
-        text: 'ਸ਼ੀਟ ਵਿੱਚ ਸਿੰਕ ਕਰਨ ਲਈ ਪਹਿਲਾਂ ਗੂਗਲ ਟੋਕਨ ਰਿਫ੍ਰੈਸ਼ / ਕਨੈਕਟ ਕਰੋ ਜੀ।',
-      });
-      onLogin();
-      return;
-    }
     if (!onSyncAllToSheet) return;
 
     setIsSyncingAll(true);
@@ -189,9 +181,12 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
       });
     } catch (err: any) {
       console.error(err);
+      const isExpired = err?.message?.includes('GOOGLE_AUTH_EXPIRED') || err?.status === 401;
       setStatusMessage({
         type: 'error',
-        text: 'ਸਿੰਕ ਕਰਨ ਵਿੱਚ ਗਲਤੀ: ' + (err.message || 'Error'),
+        text: isExpired
+          ? 'GOOGLE_AUTH_EXPIRED: ਗੂਗਲ ਅਕਸੈੱਸ ਟੋਕਨ ਦੀ ਮਿਆਦ ਖ਼ਤਮ ਹੋ ਗਈ ਹੈ। ਹੇਠਾਂ ਦਿੱਤਾ ਬਟਨ ਦਬਾ ਕੇ ਟੋਕਨ ਰਿਫ੍ਰੈਸ਼ ਕਰੋ।'
+          : 'ਸਿੰਕ ਕਰਨ ਵਿੱਚ ਗਲਤੀ: ' + (err.message || 'Error'),
       });
     } finally {
       setIsSyncingAll(false);
@@ -351,18 +346,54 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
           {/* Feedback message banner */}
           {statusMessage && (
             <div
-              className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
+              className={`p-3.5 rounded-xl text-xs flex flex-col gap-2.5 shadow-xs ${
                 statusMessage.type === 'success'
                   ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
                   : 'bg-rose-100 text-rose-900 border border-rose-300'
               }`}
             >
-              {statusMessage.type === 'success' ? (
-                <Check className="w-4 h-4 text-emerald-700 flex-shrink-0" />
-              ) : (
-                <AlertCircle className="w-4 h-4 text-rose-700 flex-shrink-0" />
+              <div className="flex items-center gap-2">
+                {statusMessage.type === 'success' ? (
+                  <Check className="w-4 h-4 text-emerald-700 flex-shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-rose-700 flex-shrink-0" />
+                )}
+                <span className="font-bold">{statusMessage.text}</span>
+              </div>
+
+              {/* Direct 1-Click Renew & Sync button if GOOGLE_AUTH_EXPIRED */}
+              {statusMessage.type === 'error' && (statusMessage.text.includes('GOOGLE_AUTH_EXPIRED') || statusMessage.text.includes('ਟੋਕਨ')) && onLogin && (
+                <div className="pt-2 border-t border-rose-200 flex flex-col sm:flex-row items-center justify-between gap-2 bg-white/70 p-2.5 rounded-lg">
+                  <span className="text-[11px] text-rose-950 font-medium">
+                    ਗੂਗਲ ਅਕਾਊਂਟ ਦਾ ਟੋਕਨ 1 ਘੰਟੇ ਬਾਅਦ ਰੀਨਿਊ ਕਰਨਾ ਜ਼ਰੂਰੀ ਹੁੰਦਾ ਹੈ:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        setIsSyncingAll(true);
+                        setStatusMessage({ type: 'success', text: 'ਗੂਗਲ ਲੌਗਇਨ ਵਿੰਡੋ ਖੁੱਲ੍ਹ ਰਹੀ ਹੈ...' });
+                        await onLogin();
+                        if (onSyncAllToSheet) {
+                          const res = await onSyncAllToSheet();
+                          setStatusMessage({
+                            type: 'success',
+                            text: (res && res.message) || 'ਟੋਕਨ ਰਿਫ੍ਰੈਸ਼ ਹੋ ਗਿਆ ਅਤੇ ਸਾਰਾ ਡਾਟਾ ਸ਼ੀਟ ਵਿੱਚ ਸਿੰਕ ਹੋ ਗਿਆ!',
+                          });
+                        }
+                      } catch (e: any) {
+                        setStatusMessage({ type: 'error', text: 'ਟੋਕਨ ਰਿਫ੍ਰੈਸ਼ ਨਹੀਂ ਹੋਇਆ: ' + (e?.message || 'Error') });
+                      } finally {
+                        setIsSyncingAll(false);
+                      }
+                    }}
+                    className="w-full sm:w-auto px-4 py-1.5 bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <LogIn className="w-3.5 h-3.5" />
+                    <span>🔑 ਹੁਣੇ ਟੋਕਨ ਰਿਫ੍ਰੈਸ਼ ਕਰੋ ਅਤੇ ਸਿੰਕ ਕਰੋ</span>
+                  </button>
+                </div>
               )}
-              <span className="font-medium">{statusMessage.text}</span>
             </div>
           )}
 

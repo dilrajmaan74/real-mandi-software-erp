@@ -810,15 +810,31 @@ export default function App() {
       setIsSheetModalOpen(true);
       return;
     }
-    if (!token) {
-      showToast('error', 'ਗੂਗਲ ਸ਼ੀਟ ਅਕਸੈੱਸ ਟੋਕਨ ਦੀ ਮਿਆਦ ਪੁੱਗ ਗਈ ਹੈ। ਕਿਰਪਾ ਕਰਕੇ ਲੌਗਇਨ ਦੁਬਾਰਾ ਕਰੋ।');
-      await handleLogin();
-      return;
+
+    let activeToken = token;
+    // If token is missing, prompt sign-in to get active access token
+    if (!activeToken) {
+      showToast('info', 'ਗੂਗਲ ਸ਼ੀਟ ਅਕਸੈੱਸ ਟੋਕਨ ਰਿਫ੍ਰੈਸ਼ ਕੀਤਾ ਜਾ ਰਿਹਾ ਹੈ...');
+      try {
+        const loginRes = await googleSignIn();
+        if (loginRes?.accessToken) {
+          activeToken = loginRes.accessToken;
+          setToken(loginRes.accessToken);
+          setUser(loginRes.user);
+        }
+      } catch (err: any) {
+        showToast('error', 'ਗੂਗਲ ਸਾਈਨ-ਇਨ ਰੱਦ ਹੋਇਆ। ਕਿਰਪਾ ਕਰਕੇ ਲੌਗਇਨ ਕਰੋ।');
+        throw new Error('GOOGLE_AUTH_EXPIRED: ਗੂਗਲ ਖਾਤੇ ਨਾਲ ਸਾਈਨ-ਇਨ ਕਰਕੇ ਟੋਕਨ ਰਿਫ੍ਰੈਸ਼ ਕਰੋ ਜੀ।');
+      }
+    }
+
+    if (!activeToken) {
+      throw new Error('GOOGLE_AUTH_EXPIRED: ਗੂਗਲ ਸ਼ੀਟ ਟੋਕਨ ਨਹੀਂ ਮਿਲਿਆ।');
     }
 
     try {
       showToast('info', 'ਸਾਰਾ ਡਾਟਾ ਫਿਕਸ ਗੂਗਲ ਸ਼ੀਟ ਵਿੱਚ ਸਿੰਕ ਹੋ ਰਿਹਾ ਹੈ...');
-      const res = await syncAllDataToFixedSheet(token, sheetConfig.spreadsheetId, {
+      const res = await syncAllDataToFixedSheet(activeToken, sheetConfig.spreadsheetId, {
         farmers,
         arrivals: cropArrivals,
         bardana: bardanaEntries,
@@ -831,11 +847,34 @@ export default function App() {
       return { success: true, count: res.totalSynced, message: msg };
     } catch (err: any) {
       console.error('handleSyncAllToSheet error:', err);
-      if (err?.message?.includes('GOOGLE_AUTH_EXPIRED') || err?.status === 401) {
-        showToast('error', 'ਗੂਗਲ ਟੋਕਨ ਦੀ ਮਿਆਦ ਖ਼ਤਮ ਹੋ ਗਈ ਹੈ। ਕਿਰਪਾ ਕਰਕੇ ਗੂਗਲ ਨਾਲ ਮੁੜ-ਸਾਈਨ ਇਨ ਕਰੋ।');
-      } else {
-        showToast('error', 'ਸ਼ੀਟ ਸਿੰਕ ਵਿੱਚ ਗਲਤੀ: ' + (err.message || 'Error'));
+      const isExpired = err?.message?.includes('GOOGLE_AUTH_EXPIRED') || err?.status === 401;
+      
+      // Auto-recover from GOOGLE_AUTH_EXPIRED by prompting 1-click token renewal and retrying sync
+      if (isExpired) {
+        showToast('info', 'ਗੂਗਲ ਟੋਕਨ ਐਕਸਪਾਇਰ ਹੋ ਗਿਆ ਹੈ। ਟੋਕਨ ਰਿਫ੍ਰੈਸ਼ ਕਰਨ ਲਈ ਵਿੰਡੋ ਖੁੱਲ੍ਹ ਰਹੀ ਹੈ...');
+        try {
+          const loginRes = await googleSignIn();
+          if (loginRes?.accessToken) {
+            setToken(loginRes.accessToken);
+            setUser(loginRes.user);
+            const retryRes = await syncAllDataToFixedSheet(loginRes.accessToken, sheetConfig.spreadsheetId, {
+              farmers,
+              arrivals: cropArrivals,
+              bardana: bardanaEntries,
+              purchases: agencyPurchases,
+              lifting: liftingDispatches,
+            });
+            const retryMsg = `ਟੋਕਨ ਰਿਫ੍ਰੈਸ਼ ਸਫਲ! ${retryRes.totalSynced} ਰਿਕਾਰਡ ਫਿਕਸ ਗੂਗਲ ਸ਼ੀਟ ਵਿੱਚ ਸਿੰਕ ਹੋ ਗਏ।`;
+            showToast('success', retryMsg);
+            return { success: true, count: retryRes.totalSynced, message: retryMsg };
+          }
+        } catch (reAuthErr: any) {
+          showToast('error', 'ਗੂਗਲ ਟੋਕਨ ਰਿਫ੍ਰੈਸ਼ ਨਹੀਂ ਹੋ ਸਕਿਆ।');
+          throw new Error('GOOGLE_AUTH_EXPIRED: ਗੂਗਲ ਟੋਕਨ ਐਕਸਪਾਇਰ ਹੈ। ਕਿਰਪਾ ਕਰਕੇ ਹੇਠਾਂ ਦਿੱਤਾ "ਟੋਕਨ ਰਿਫ੍ਰੈਸ਼" ਬਟਨ ਦਬਾਓ।');
+        }
       }
+
+      showToast('error', 'ਸ਼ੀਟ ਸਿੰਕ ਵਿੱਚ ਗਲਤੀ: ' + (err.message || 'Error'));
       throw err;
     }
   };

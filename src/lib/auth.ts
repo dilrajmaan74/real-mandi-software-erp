@@ -46,6 +46,8 @@ export const initAuth = (
           try {
             sessionStorage.setItem('kisanmitra_oauth_token', credential.accessToken);
             localStorage.setItem('kisanmitra_oauth_token', credential.accessToken);
+            sessionStorage.setItem('kisanmitra_oauth_token_time', Date.now().toString());
+            localStorage.setItem('kisanmitra_oauth_token_time', Date.now().toString());
           } catch (e) {}
         }
         if (onAuthSuccess) {
@@ -88,6 +90,8 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
       if (token) {
         sessionStorage.setItem('kisanmitra_oauth_token', token);
         localStorage.setItem('kisanmitra_oauth_token', token);
+        sessionStorage.setItem('kisanmitra_oauth_token_time', Date.now().toString());
+        localStorage.setItem('kisanmitra_oauth_token_time', Date.now().toString());
       }
     } catch (e) {}
     return { user: result.user, accessToken: token };
@@ -95,6 +99,15 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
     console.error('Google Sign In error:', error);
     throw error;
   }
+};
+
+export const isTokenExpired = (): boolean => {
+  const timeStr = localStorage.getItem('kisanmitra_oauth_token_time') || sessionStorage.getItem('kisanmitra_oauth_token_time');
+  if (!timeStr) return true;
+  const time = parseInt(timeStr, 10);
+  if (isNaN(time)) return true;
+  // Expired if older than 50 minutes (Google tokens expire in 60 mins)
+  return Date.now() - time > 50 * 60 * 1000;
 };
 
 export const googleSignInRedirect = async (): Promise<void> => {
