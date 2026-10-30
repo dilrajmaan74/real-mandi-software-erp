@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Printer, 
   Download, 
@@ -15,11 +15,112 @@ import {
   Calendar,
   Hash,
   Eye,
-  Edit3
+  Edit3,
+  MapPin,
+  Check,
+  FileCheck,
+  Minimize2,
+  Layout,
+  AlignLeft
 } from 'lucide-react';
-import html2canvas from 'html2canvas';
+import { toJpeg, toPng } from 'html-to-image';
 import jsPDF from 'jspdf';
 import { FarmerMaster, ARHTIA_FIRMS, LetterPadDocument } from '../types/mandi';
+
+export interface MandiOption {
+  id: string;
+  name: string;
+  punjabiName: string;
+  defaultAddress: string;
+  footerTag: string;
+}
+
+export const MANDI_OPTIONS: MandiOption[] = [
+  {
+    id: 'kamalpur',
+    name: 'Mandi Kamalpur',
+    punjabiName: 'ਮੰਡੀ ਕਮਾਲਪੁਰ (Kamalpur)',
+    defaultAddress: 'New Grain Market, Kamalpur (Pb.) • ਨਵੀਂ ਦਾਣਾ ਮੰਡੀ, ਕਮਾਲਪੁਰ (ਪੰਜਾਬ)',
+    footerTag: 'MANDI KAMALPUR',
+  },
+  {
+    id: 'mehrajwala',
+    name: 'Mehrajwala Yard',
+    punjabiName: 'ਮਹਿਰਾਜਵਾਲਾ ਯਾਰਡ (Mehrajwala)',
+    defaultAddress: 'Grain Yard, Mehrajwala (Pb.) • ਦਾਣਾ ਮੰਡੀ ਖਰੀਦ ਯਾਰਡ, ਮਹਿਰਾਜਵਾਲਾ (ਪੰਜਾਬ)',
+    footerTag: 'MEHRAJWALA YARD',
+  },
+  {
+    id: 'kang_khurd',
+    name: 'Kang Khurd Mandi',
+    punjabiName: 'ਕੰਗ ਖੁਰਦ ਮੰਡੀ (Kang Khurd)',
+    defaultAddress: 'New Grain Market, Kang Khurd (Pb.) • ਨਵੀਂ ਦਾਣਾ ਮੰਡੀ, ਕੰਗ ਖੁਰਦ (ਪੰਜਾਬ)',
+    footerTag: 'KANG KHURD MANDI',
+  },
+  {
+    id: 'all_mandi',
+    name: 'All Mandi (Kamalpur / Mehrajwala / Kang Khurd)',
+    punjabiName: 'ਸਮੂਹ ਮੰਡੀਆਂ (ਕਮਾਲਪੁਰ / ਮਹਿਰਾਜਵਾਲਾ / ਕੰਗ ਖੁਰਦ)',
+    defaultAddress: 'New Grain Market, Kamalpur / Mehrajwala / Kang Khurd (Pb.)',
+    footerTag: 'ALL MANDI KAMALPUR / MEHRAJWALA / KANG KHURD',
+  },
+  {
+    id: 'khanna',
+    name: 'Khanna Grain Market',
+    punjabiName: 'ਖੰਨਾ ਦਾਣਾ ਮੰਡੀ (Khanna - Asia’s Largest)',
+    defaultAddress: 'Asia’s Largest Grain Market, Khanna (Distt. Ludhiana, Pb.) • ਦਾਣਾ ਮੰਡੀ, ਖੰਨਾ',
+    footerTag: 'GRAIN MARKET KHANNA',
+  },
+  {
+    id: 'barnala',
+    name: 'Barnala Mandi',
+    punjabiName: 'ਬਰਨਾਲਾ ਦਾਣਾ ਮੰਡੀ (Barnala)',
+    defaultAddress: 'Main Grain Market, Barnala (Pb.) • ਮੁੱਖ ਦਾਣਾ ਮੰਡੀ, ਬਰਨਾਲਾ',
+    footerTag: 'GRAIN MARKET BARNALA',
+  },
+  {
+    id: 'moga',
+    name: 'Moga Grain Market',
+    punjabiName: 'ਮੋਗਾ ਦਾਣਾ ਮੰਡੀ (Moga)',
+    defaultAddress: 'Principal Grain Market, GT Road, Moga (Pb.) • ਮੁੱਖ ਦਾਣਾ ਮੰਡੀ, ਮੋਗਾ',
+    footerTag: 'GRAIN MARKET MOGA',
+  },
+  {
+    id: 'bhadaur',
+    name: 'Bhadaur Yard',
+    punjabiName: 'ਭਦੌੜ ਯਾਰਡ (Bhadaur)',
+    defaultAddress: 'Sub Yard Grain Market, Bhadaur (Barnala, Pb.) • ਸਬ ਯਾਰਡ, ਭਦੌੜ',
+    footerTag: 'SUB YARD BHADAUR',
+  },
+  {
+    id: 'sangrur',
+    name: 'Sangrur Mandi',
+    punjabiName: 'ਸੰਗਰੂਰ ਦਾਣਾ ਮੰਡੀ (Sangrur)',
+    defaultAddress: 'New Grain Market, Sangrur (Pb.) • ਨਵੀਂ ਦਾਣਾ ਮੰਡੀ, ਸੰਗਰੂਰ',
+    footerTag: 'GRAIN MARKET SANGRUR',
+  },
+  {
+    id: 'jalandhar',
+    name: 'Jalandhar Mandi',
+    punjabiName: 'ਜਲੰਧਰ ਦਾਣਾ ਮੰਡੀ (Jalandhar)',
+    defaultAddress: 'New Grain Market, Jalandhar (Pb.) • ਨਵੀਂ ਦਾਣਾ ਮੰਡੀ, ਜਲੰਧਰ',
+    footerTag: 'GRAIN MARKET JALANDHAR',
+  },
+  {
+    id: 'ludhiana',
+    name: 'Ludhiana Mandi',
+    punjabiName: 'ਲੁਧਿਆਣਾ ਦਾਣਾ ਮੰਡੀ (Ludhiana)',
+    defaultAddress: 'Gill Road Grain Market, Ludhiana (Pb.) • ਦਾਣਾ ਮੰਡੀ, ਲੁਧਿਆਣਾ',
+    footerTag: 'GRAIN MARKET LUDHIANA',
+  },
+  {
+    id: 'custom',
+    name: 'Custom Other Mandi',
+    punjabiName: 'ਹੋਰ ਆਪਣੀ ਮੰਡੀ (Custom Mandi Name...)',
+    defaultAddress: 'New Grain Market, Punjab • ਨਵੀਂ ਦਾਣਾ ਮੰਡੀ',
+    footerTag: 'GRAIN MARKET',
+  },
+];
 
 interface LetterPadModuleProps {
   registeredFarmers: FarmerMaster[];
@@ -29,12 +130,26 @@ interface LetterPadModuleProps {
 
 export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
   registeredFarmers,
-  currentMandi = 'Mandi Kamalpur / Mehrajwala / Kang Khurd',
+  currentMandi,
   onToast,
 }) => {
   const printRef = useRef<HTMLDivElement>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [activeTab, setActiveTab] = useState<'editor' | 'preview' | 'history'>('editor');
+
+  // Letter Mode: Typed Letter vs Blank A4 Sheet vs Blank with Ruled Lines
+  const [letterMode, setLetterMode] = useState<'typed' | 'blank_plain' | 'blank_lines'>('typed');
+  const [blankRefFormat, setBlankRefFormat] = useState<'printed' | 'dots' | 'hidden'>('dots');
+
+  // Mandi Selection State
+  const [selectedMandiId, setSelectedMandiId] = useState<string>('all_mandi');
+  const [customMandiTitle, setCustomMandiTitle] = useState<string>('');
+  const [mandiAddress, setMandiAddress] = useState<string>(
+    'New Grain Market, Kamalpur / Mehrajwala / Kang Khurd (Pb.)'
+  );
+  const [footerMandiText, setFooterMandiText] = useState<string>(
+    'ALL MANDI KAMALPUR / MEHRAJWALA / KANG KHURD'
+  );
 
   // Firm 1 and Firm 2 defaults from constants
   const firm1 = ARHTIA_FIRMS[0] || {
@@ -73,10 +188,6 @@ export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
   const [firm2Mobile, setFirm2Mobile] = useState(firm2.mobile);
   const [firm2Proprietor, setFirm2Proprietor] = useState(firm2.proprietor || 'PROPRIETOR / PARTNER');
 
-  const [mandiAddress, setMandiAddress] = useState(
-    'New Grain Market, Kamalpur / Mehrajwala / Kang Khurd (Pb.)'
-  );
-
   // Recipient
   const [recipientTitle, setRecipientTitle] = useState('ਸੇਵਾ ਵਿਖੇ / To,');
   const [recipientName, setRecipientName] = useState('ਸ਼ਾਖਾ ਪ੍ਰਬੰਧਕ ਸਾਹਿਬ (The Branch Manager),');
@@ -94,9 +205,7 @@ export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
   const [signatory1Title, setSignatory1Title] = useState('ਵਾਸਤੇ: ਜੰਮੂ ਟਰੇਡਿੰਗ ਕੰਪਨੀ (For Jammu Trading Co.)');
   const [signatory2Title, setSignatory2Title] = useState('ਵਾਸਤੇ: ਨਿਊ ਜੰਮੂ ਟਰੇਡਿੰਗ ਕੰਪਨੀ (For New Jammu Trading Co.)');
   const [showWatermark, setShowWatermark] = useState(true);
-  const [notesFooter, setNotesFooter] = useState(
-    'ਨੋਟ: ਇਹ ਪੱਤਰ ਸਿਰਫ ਸਰਕਾਰੀ/ਬੈਂਕ ਕੰਮਾਂ ਲਈ ਹੀ ਵੈਧ ਹੈ। ਸਮੂਹ ਝਗੜੇ ਮੰਡੀ ਕਮੇਟੀ ਦੇ ਅਧਿਕਾਰ ਖੇਤਰ ਅਧੀਨ ਹਨ।'
-  );
+  const [notesFooter, setNotesFooter] = useState('');
 
   // Selected Farmer for Autofill
   const [selectedFarmerId, setSelectedFarmerId] = useState('');
@@ -112,6 +221,35 @@ export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
     return [];
   });
 
+  // Handle Mandi Selection Change
+  const handleMandiChange = (mandiId: string) => {
+    setSelectedMandiId(mandiId);
+    const found = MANDI_OPTIONS.find((m) => m.id === mandiId);
+    if (found) {
+      if (found.id === 'custom') {
+        if (!customMandiTitle) {
+          setCustomMandiTitle('ਆਪਣੀ ਮੰਡੀ ਦਾ ਨਾਮ');
+          setMandiAddress('ਨਵੀਂ ਦਾਣਾ ਮੰਡੀ, ਪੰਜਾਬ • New Grain Market (Pb.)');
+          setFooterMandiText('GRAIN MARKET');
+        }
+      } else {
+        setMandiAddress(found.defaultAddress);
+        setFooterMandiText(found.footerTag);
+        if (onToast) {
+          onToast('success', `ਮੰਡੀ ਸਿਲੈਕਟ ਹੋਈ: ${found.punjabiName}`);
+        }
+      }
+    }
+  };
+
+  // Handle Custom Mandi Input
+  const handleCustomMandiInput = (customName: string) => {
+    setCustomMandiTitle(customName);
+    const trimmed = customName.trim() || 'ਮੰਡੀ';
+    setMandiAddress(`ਨਵੀਂ ਦਾਣਾ ਮੰਡੀ, ${trimmed} (ਪੰਜਾਬ) • New Grain Market, ${trimmed} (Pb.)`);
+    setFooterMandiText(`GRAIN MARKET ${trimmed.toUpperCase()}`);
+  };
+
   // Handle Farmer Autofill
   const handleFarmerSelect = (farmerId: string) => {
     setSelectedFarmerId(farmerId);
@@ -120,11 +258,13 @@ export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
     const farmer = registeredFarmers.find((f) => f.id === farmerId);
     if (!farmer) return;
 
+    // Auto-switch to typed mode when farmer is chosen
+    setLetterMode('typed');
+
     const fName = farmer.name_pa || farmer.name_en;
     const fFather = farmer.father_husband_name_pa || farmer.father_husband_name_en || 'ਸ. ...';
     const fVillage = farmer.village_pa || farmer.village_en || '...';
     const fMobile = farmer.mobile_number || '';
-    const fBank = farmer.bank_name ? `${farmer.bank_name} (A/c: ${farmer.bank_account})` : '';
 
     setSubject(`ਵਿਸ਼ਾ: ਕਿਸਾਨ ${fName} ਪੁੱਤਰ ${fFather}, ਪਿੰਡ ${fVillage} ਦੇ ਖਾਤੇ ਸੰਬੰਧੀ ਤਸਦੀਕ ਪੱਤਰ।`);
     setBodyText(
@@ -138,8 +278,28 @@ export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
     }
   };
 
-  // Pre-designed Punjabi Letter Templates
+  // Pre-designed Templates Handler
   const handleApplyTemplate = (templateKey: string) => {
+    if (templateKey === 'blank_plain') {
+      setLetterMode('blank_plain');
+      setBlankRefFormat('dots');
+      if (onToast) {
+        onToast('info', 'ਬਿਲਕੁਲ ਕੋਰਾ / ਖਾਲੀ A4 ਲੈਟਰ ਪੈਡ ਤਿਆਰ ਹੈ!');
+      }
+      return;
+    }
+
+    if (templateKey === 'blank_lines') {
+      setLetterMode('blank_lines');
+      setBlankRefFormat('dots');
+      if (onToast) {
+        onToast('info', 'ਲਾਈਨਾਂ ਵਾਲਾ ਖਾਲੀ A4 ਲੈਟਰ ਪੈਡ ਤਿਆਰ ਹੈ!');
+      }
+      return;
+    }
+
+    setLetterMode('typed');
+
     if (templateKey === 'bank_kcc') {
       setSubject('ਵਿਸ਼ਾ: ਕਿਸਾਨ ਦੇ ਖੇਤੀਬਾੜੀ ਖਾਤੇ ਅਤੇ ਫਸਲ ਵਿਕਰੀ ਸੰਬੰਧੀ ਤਸਦੀਕ ਪੱਤਰ (KCC ਲਿਮਿਟ)।');
       setRecipientTitle('ਸੇਵਾ ਵਿਖੇ / To,');
@@ -154,7 +314,7 @@ export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
       setSubject('ਵਿਸ਼ਾ: ਹਿਸਾਬ-ਕਿਤਾਬ ਕਲੀਅਰੈਂਸ ਅਤੇ ਬੇ-ਬਾਕੀ ਸਰਟੀਫਿਕੇਟ (No Dues / Clearance Certificate)।');
       setRecipientTitle('ਜਿਸ ਦੇ ਵੀ ਸਬੰਧਿਤ ਹੋਵੇ / To Whom It May Concern,');
       setRecipientName('ਸਮੂਹ ਸਬੰਧਿਤ ਅਦਾਰੇ / ਬੈਂਕ / ਮਾਰਕੀਟ ਕਮੇਟੀ,');
-      setRecipientAddress('ਮੰਡੀ ਕਮਾਲਪੁਰ / ਮਹਿਰਾਜਵਾਲਾ / ਕੰਗ ਖੁਰਦ।');
+      setRecipientAddress(mandiAddress);
       setBodyText(
         `ਇਹ ਤਸਦੀਕ ਕੀਤਾ ਜਾਂਦਾ ਹੈ ਕਿ ਕਿਸਾਨ ............................ ਪੁੱਤਰ ............................, ਵਾਸੀ ਪਿੰਡ ............................ ਦਾ ਸਾਡੀ ਫਰਮ ਨਾਲ ਚੱਲਦਾ ਸਮੁੱਚਾ ਹਿਸਾਬ-ਕਿਤਾਬ ਅਤੇ ਖਾਤਾ ਮਿਤੀ .................... ਤੱਕ ਪੂਰੀ ਤਰ੍ਹਾਂ ਨਿਪਟ ਚੁੱਕਾ ਹੈ।
 
@@ -180,12 +340,6 @@ export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
 
 ਇਸ ਮਾਲ ਦਾ ਨਿਰੀਖਣ ਕਰਕੇ ਗੇਟ ਪਾਸ ਜਾਰੀ ਕਰਨ ਦੀ ਕ੍ਰਿਪਾਲਤਾ ਕੀਤੀ ਜਾਵੇ ਤਾਂ ਜੋ ਗੱਡੀ ਸਮੇਂ ਸਿਰ ਰਵਾਨਾ ਹੋ ਸਕੇ।`
       );
-    } else if (templateKey === 'blank') {
-      setSubject('ਵਿਸ਼ਾ: ................................................................');
-      setRecipientTitle('ਸੇਵਾ ਵਿਖੇ / To,');
-      setRecipientName('................................................................');
-      setRecipientAddress('................................................................');
-      setBodyText('');
     }
 
     if (onToast) {
@@ -198,7 +352,7 @@ export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
     window.print();
   };
 
-  // High-Resolution PDF Download using html2canvas + jsPDF
+  // High-Resolution 100% Exact A4 PDF Download
   const handleDownloadPdf = async () => {
     if (!printRef.current) return;
     setIsGeneratingPdf(true);
@@ -206,37 +360,45 @@ export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
     try {
       const element = printRef.current;
       
-      // Render canvas with high scale for vector-like print sharpness
-      const canvas = await html2canvas(element, {
-        scale: 2.5,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-        windowWidth: element.scrollWidth,
-      });
+      // html-to-image natively supports modern CSS (oklch, lab, CSS variables, web fonts)
+      let imgData: string;
+      try {
+        imgData = await toJpeg(element, {
+          quality: 0.98,
+          pixelRatio: 2.5,
+          backgroundColor: '#ffffff',
+          cacheBust: true,
+        });
+      } catch (err) {
+        console.warn('toJpeg fallback to toPng:', err);
+        imgData = await toPng(element, {
+          pixelRatio: 2,
+          backgroundColor: '#ffffff',
+        });
+      }
 
-      const imgData = canvas.toDataURL('image/jpeg', 0.98);
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
         format: 'a4',
       });
 
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+      // Exact A4 dimensions in mm: 210 x 297
+      pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297);
       const sanitizedRef = refNo.replace(/[/\\?%*:|"<>]/g, '_');
-      pdf.save(`Letter_${sanitizedRef}.pdf`);
+      const filename = letterMode !== 'typed' ? `Blank_Letterhead_${selectedMandiId}.pdf` : `Letter_${sanitizedRef}.pdf`;
+      pdf.save(filename);
 
       if (onToast) {
-        onToast('success', `PDF ਸਫਲਤਾਪੂਰਵਕ ਡਾਊਨਲੋਡ ਹੋਈ: Letter_${sanitizedRef}.pdf`);
+        onToast('success', `PDF ਸਫਲਤਾਪੂਰਵਕ ਡਾਊਨਲੋਡ ਹੋਈ: ${filename}`);
       }
     } catch (error) {
       console.error('PDF Generation Error:', error);
       if (onToast) {
-        onToast('error', 'PDF ਤਿਆਰ ਕਰਨ ਵਿੱਚ ਸਮੱਸਿਆ ਆਈ। ਕਿਰਪਾ ਕਰਕੇ ਪ੍ਰਿੰਟ ਬਟਨ ਵਰਤੋ।');
+        onToast('error', 'PDF ਤਿਆਰ ਕਰਨ ਵਿੱਚ ਸਮੱਸਿਆ ਆਈ। ਪ੍ਰਿੰਟ ਵਿੰਡੋ ਰਾਹੀਂ "Save as PDF" ਚੁਣੋ।');
       }
+      // Offer window.print as a seamless native fallback
+      window.print();
     } finally {
       setIsGeneratingPdf(false);
     }
@@ -271,6 +433,9 @@ export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
       signatory2_title: signatory2Title,
       show_watermark: showWatermark,
       notes_footer: notesFooter,
+      selected_mandi_id: selectedMandiId,
+      letter_mode: letterMode,
+      footer_mandi_text: footerMandiText,
       created_at: new Date().toISOString(),
     };
 
@@ -314,6 +479,9 @@ export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
     setSignatory2Title(doc.signatory2_title);
     setShowWatermark(doc.show_watermark);
     setNotesFooter(doc.notes_footer || '');
+    if (doc.selected_mandi_id) setSelectedMandiId(doc.selected_mandi_id);
+    if (doc.footer_mandi_text) setFooterMandiText(doc.footer_mandi_text);
+    if (doc.letter_mode) setLetterMode(doc.letter_mode);
     setActiveTab('editor');
 
     if (onToast) {
@@ -340,27 +508,95 @@ export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
 
   return (
     <div className="space-y-6">
+      
+      {/* Exact A4 Portrait Print Styles Injection to eliminate 2nd page spillover */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        @page {
+          size: A4 portrait;
+          margin: 6mm 8mm 6mm 8mm;
+        }
+        @media print {
+          html, body {
+            width: 210mm !important;
+            height: 297mm !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #ffffff !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .print\\:hidden {
+            display: none !important;
+          }
+          #letterhead-printable {
+            width: 194mm !important;
+            max-width: 194mm !important;
+            min-height: 284mm !important;
+            height: 284mm !important;
+            max-height: 284mm !important;
+            margin: 0 auto !important;
+            padding: 5mm 6mm !important;
+            border: none !important;
+            box-shadow: none !important;
+            page-break-after: avoid !important;
+            page-break-inside: avoid !important;
+            page-break-before: avoid !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: space-between !important;
+          }
+        }
+      `}} />
+
       {/* Top Banner / Navigation - Hidden in Print */}
       <div className="print:hidden bg-gradient-to-r from-emerald-950 via-emerald-900 to-teal-950 text-white rounded-2xl p-5 sm:p-6 shadow-xl border border-emerald-800">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-400 text-emerald-950">
                 ਦੋਵੇਂ ਫਰਮਾਂ ਦਾ ਸਾਂਝਾ ਲੈਟਰ ਪੈਡ (Dual-Firm Letterhead)
               </span>
-              <span className="text-xs text-emerald-300 font-mono">Official Mandi Stationary</span>
+              <span className="text-xs text-emerald-300 font-mono">ਪਰਫੈਕਟ A4 ਸਾਈਜ਼</span>
+              <span className="text-[11px] bg-emerald-800 text-amber-300 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                <MapPin className="w-3 h-3 text-amber-300" />
+                {MANDI_OPTIONS.find((m) => m.id === selectedMandiId)?.name || 'ਮੰਡੀ'}
+              </span>
             </div>
             <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2">
               <FileText className="w-6 h-6 text-amber-400" />
-              <span>ਮੰਡੀ ਲੈਟਰ ਪੈਡ & ਸਰਟੀਫਿਕੇਟ ਮੇਕਰ</span>
+              <span>ਮੰਡੀ ਲੈਟਰ ਪੈਡ & ਖਾਲੀ A4 ਸਟੇਸ਼ਨਰੀ ਮੇਕਰ</span>
             </h2>
             <p className="text-xs sm:text-sm text-emerald-200">
-              ਦੋਵੇਂ ਫਰਮਾਂ: <strong>{firm1.name}</strong> ਅਤੇ <strong>{firm2.name}</strong> ਲਈ ਸਰਕਾਰੀ ਪੱਤਰ, ਕਿਸਾਨ ਤਸਦੀਕ, ਬੈਂਕ ਲਿਮਿਟ ਤੇ ਸ਼ੈਲਰ ਪੱਤਰ ਤਿਆਰ ਕਰੋ।
+              ਫਰਮਾਂ: <strong>{firm1.name}</strong> ਅਤੇ <strong>{firm2.name}</strong> ਲਈ ਅਲੱਗ-ਅਲੱਗ ਮੰਡੀਆਂ ਦੇ ਨਾਮ 'ਤੇ ਟਾਈਪ ਕੀਤੇ ਜਾਂ <strong>ਬਿਲਕੁਲ ਖਾਲੀ A4 ਲੈਟਰ ਪੈਡ</strong> ਪ੍ਰਿੰਟ ਕਰੋ।
             </p>
           </div>
 
-          {/* Action Buttons: Print & Download PDF */}
+          {/* Action Buttons: Print, PDF, Blank Mode Toggle */}
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            {/* 1-Click Blank Letterhead Toggle */}
+            <button
+              type="button"
+              onClick={() => {
+                if (letterMode === 'blank_plain') {
+                  setLetterMode('typed');
+                  if (onToast) onToast('info', 'ਟਾਈਪ ਕੀਤੇ ਲੈਟਰ ਮੋਡ ਵਿੱਚ ਬਦਲਿਆ ਗਿਆ');
+                } else {
+                  setLetterMode('blank_plain');
+                  setBlankRefFormat('dots');
+                  if (onToast) onToast('success', 'ਬਿਲਕੁਲ ਖਾਲੀ A4 ਲੈਟਰ ਪੈਡ ਲਾਗੂ ਹੋ ਗਿਆ!');
+                }
+              }}
+              className={`inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs sm:text-sm shadow-md transition cursor-pointer border ${
+                letterMode === 'blank_plain'
+                  ? 'bg-amber-400 text-emerald-950 border-amber-300 ring-2 ring-amber-300 ring-offset-2 ring-offset-emerald-950'
+                  : 'bg-emerald-900/90 text-white border-emerald-700 hover:bg-emerald-800'
+              }`}
+              title="1-ਕਲਿੱਕ ਨਾਲ ਬਿਲਕੁਲ ਖਾਲੀ ਲੈਟਰ ਪੈਡ ਬਣਾਓ"
+            >
+              <FileCheck className="w-4 h-4 text-amber-300" />
+              <span>{letterMode === 'blank_plain' ? '✓ ਖਾਲੀ A4 ਐਕਟਿਵ ਹੈ' : '📄 ਬਿਲਕੁਲ ਖਾਲੀ A4 ਪੈਡ'}</span>
+            </button>
+
             <button
               type="button"
               onClick={handlePrint}
@@ -368,7 +604,7 @@ export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
               title="ਵਿੰਡੋ ਪ੍ਰਿੰਟਰ ਰਾਹੀਂ ਪ੍ਰਿੰਟ ਕਰੋ"
             >
               <Printer className="w-4 h-4" />
-              <span>ਪ੍ਰਿੰਟ ਕਰੋ (Print)</span>
+              <span>ਪ੍ਰਿੰਟ ਕਰੋ (Print A4)</span>
             </button>
 
             <button
@@ -386,7 +622,7 @@ export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
               ) : (
                 <>
                   <Download className="w-4 h-4 text-emerald-700" />
-                  <span>PDF ਡਾਊਨਲੋਡ ਕਰੋ</span>
+                  <span>PDF ਡਾਊਨਲੋਡ</span>
                 </>
               )}
             </button>
@@ -398,14 +634,14 @@ export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
               title="ਇਸ ਲੈਟਰ ਨੂੰ ਡਰਾਫਟ/ਇਤਿਹਾਸ ਵਿੱਚ ਸਾਂਭੋ"
             >
               <Save className="w-4 h-4 text-emerald-300" />
-              <span>ਸੇਵ ਡਰਾਫਟ</span>
+              <span>ਸੇਵ</span>
             </button>
           </div>
         </div>
 
-        {/* Tab Switcher */}
+        {/* Tab & Format Controls Bar */}
         <div className="mt-5 pt-4 border-t border-emerald-800/80 flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
               onClick={() => setActiveTab('editor')}
@@ -416,7 +652,7 @@ export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
               }`}
             >
               <Edit3 className="w-3.5 h-3.5" />
-              <span>ਐਡੀਟਰ (Editor Controls)</span>
+              <span>ਐਡੀਟਰ (Controls & Settings)</span>
             </button>
 
             <button
@@ -446,10 +682,16 @@ export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
             </button>
           </div>
 
-          {/* Quick Info */}
-          <div className="text-xs text-emerald-300 flex items-center gap-1">
-            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-            <span>A4 ਸਾਈਜ਼, ਉੱਚ ਕੁਆਲਿਟੀ ਪ੍ਰਿੰਟ ਅਤੇ ਵਾਟਰਮਾਰਕ ਸਮੇਤ</span>
+          {/* Quick Mode Indicator */}
+          <div className="flex items-center gap-2 bg-emerald-900/80 px-3 py-1 rounded-xl text-xs text-emerald-200 border border-emerald-700/60">
+            <span className="font-bold text-amber-300">ਮੌਜੂਦਾ ਮੋਡ:</span>
+            <span>
+              {letterMode === 'blank_plain'
+                ? '📄 ਬਿਲਕੁਲ ਕੋਰਾ A4 ਪੈਡ (Plain Blank)'
+                : letterMode === 'blank_lines'
+                ? '📝 ਲਾਈਨਾਂ ਵਾਲਾ ਖਾਲੀ ਪੈਡ (Ruled A4)'
+                : '✍️ ਟਾਈਪ ਕੀਤਾ ਪੱਤਰ (Typed Letter)'}
+            </span>
           </div>
         </div>
       </div>
@@ -457,99 +699,252 @@ export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
       {/* Main Grid: Left Controls (if in editor mode) & Right Letter Preview */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
-        {/* LEFT COLUMN: Controls & Templates (Hidden in Print & Hidden when in preview-only or history tab) */}
+        {/* LEFT COLUMN: Controls & Settings (Hidden in Print & Hidden when in preview-only or history tab) */}
         {activeTab === 'editor' && (
           <div className="print:hidden lg:col-span-5 space-y-5">
-            {/* Template Selector Card */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-gray-200 space-y-4">
+
+            {/* 1. MANDI SELECTION CARD (ਮੰਡੀ ਦੀ ਚੋਣ - ਅਲੱਗ ਅਲੱਗ ਮੰਡੀਆਂ ਦੇ ਨਾਮ ਤੋਂ ਲੈਟਰ ਪੈਡ ਕੱਢੋ) */}
+            <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border-2 border-emerald-600/30 space-y-3.5 bg-gradient-to-br from-white to-emerald-50/30">
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-emerald-600" />
-                  <span>ਤਿਆਰ ਕੀਤੇ ਫਾਰਮੈਟ (Ready Templates)</span>
+                  <MapPin className="w-4 h-4 text-emerald-700" />
+                  <span>ਮੰਡੀ ਦੀ ਚੋਣ ਕਰੋ (Select Mandi Location)</span>
                 </h3>
-                <span className="text-[11px] text-gray-500 font-medium">ਇੱਕ ਕਲਿੱਕ ਵਿੱਚ ਭਰੋ</span>
+                <span className="text-[10px] bg-emerald-100 text-emerald-900 font-bold px-2 py-0.5 rounded-full">
+                  ਅਲੱਗ-ਅਲੱਗ ਮੰਡੀਆਂ
+                </span>
               </div>
+              <p className="text-xs text-gray-600">
+                ਜਿਸ ਮੰਡੀ ਦੇ ਨਾਮ ਤੋਂ ਲੈਟਰ ਪੈਡ ਕੱਢਣਾ ਚਾਹੁੰਦੇ ਹੋ, ਹੇਠਾਂ ਦਿੱਤੀ ਸੂਚੀ ਵਿੱਚੋਂ ਚੁਣੋ:
+              </p>
 
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleApplyTemplate('bank_kcc')}
-                  className="p-2.5 rounded-xl border border-gray-200 bg-gray-50 hover:bg-emerald-50 hover:border-emerald-300 text-left transition cursor-pointer"
-                >
-                  <div className="font-bold text-xs text-gray-900">🏦 ਬੈਂਕ KCC ਲਿਮਿਟ</div>
-                  <div className="text-[10px] text-gray-500">ਲਿਮਿਟ ਨਵਿਆਉਣ ਤਸਦੀਕ</div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleApplyTemplate('noc_clearance')}
-                  className="p-2.5 rounded-xl border border-gray-200 bg-gray-50 hover:bg-emerald-50 hover:border-emerald-300 text-left transition cursor-pointer"
-                >
-                  <div className="font-bold text-xs text-gray-900">✅ ਬੇ-ਬਾਕੀ / NOC</div>
-                  <div className="text-[10px] text-gray-500">ਸਾਫ ਹਿਸਾਬ ਕਲੀਅਰੈਂਸ</div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleApplyTemplate('sheller_guarantee')}
-                  className="p-2.5 rounded-xl border border-gray-200 bg-gray-50 hover:bg-emerald-50 hover:border-emerald-300 text-left transition cursor-pointer"
-                >
-                  <div className="font-bold text-xs text-gray-900">🏭 ਸ਼ੈਲਰ ਡਿਲਿਵਰੀ ਗਾਰੰਟੀ</div>
-                  <div className="text-[10px] text-gray-500">ਪੈਡੀ ਤੇ ਬਾਰਦਾਨਾ ਵਾਪਸੀ</div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleApplyTemplate('mandi_gatepass')}
-                  className="p-2.5 rounded-xl border border-gray-200 bg-gray-50 hover:bg-emerald-50 hover:border-emerald-300 text-left transition cursor-pointer"
-                >
-                  <div className="font-bold text-xs text-gray-900">🚚 ਗੇਟ ਪਾਸ ਸੂਚਨਾ</div>
-                  <div className="text-[10px] text-gray-500">ਮੰਡੀ ਬੈਰੀਅਰ ਰਵਾਨਗੀ</div>
-                </button>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => handleApplyTemplate('blank')}
-                className="w-full py-1.5 px-3 rounded-xl border border-dashed border-gray-300 hover:bg-gray-50 text-gray-600 text-xs font-medium text-center transition cursor-pointer"
-              >
-                ਖਾਲੀ ਲੈਟਰ ਪੈਡ (Blank Sheet - ਨਵੇਂ ਸਿਰੇ ਤੋਂ ਲਿਖੋ)
-              </button>
-            </div>
-
-            {/* Quick Farmer Autofill */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-gray-200 space-y-3">
-              <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
-                <UserCheck className="w-4 h-4 text-emerald-600" />
-                <span>ਕਿਸਾਨ ਦਾ ਵੇਰਵਾ ਭਰੋ (Farmer Autofill)</span>
-              </h3>
+              {/* Mandi Dropdown */}
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  ਰਜਿਸਟਰਡ ਕਿਸਾਨ ਚੁਣੋ:
-                </label>
                 <select
-                  value={selectedFarmerId}
-                  onChange={(e) => handleFarmerSelect(e.target.value)}
-                  className="w-full rounded-xl border border-gray-300 px-3 py-2 text-xs font-medium focus:ring-2 focus:ring-emerald-500 bg-white"
+                  value={selectedMandiId}
+                  onChange={(e) => handleMandiChange(e.target.value)}
+                  className="w-full rounded-xl border border-emerald-600/50 bg-white px-3 py-2 text-xs font-bold text-gray-900 focus:ring-2 focus:ring-emerald-500 shadow-2xs"
                 >
-                  <option value="">-- ਕਿਸਾਨ ਚੁਣੋ (Select Farmer) --</option>
-                  {registeredFarmers.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.name_pa || f.name_en} {f.father_husband_name_pa ? `(ਪੁੱਤਰ ${f.father_husband_name_pa})` : ''} - ਪਿੰਡ {f.village_pa || f.village_en} [{f.mobile_number}]
+                  {MANDI_OPTIONS.map((opt) => (
+                    <option key={opt.id} value={opt.id}>
+                      📍 {opt.punjabiName}
                     </option>
                   ))}
                 </select>
-                <p className="text-[10px] text-gray-500 mt-1">
-                  * ਕਿਸਾਨ ਚੁਣਦੇ ਹੀ ਲੈਟਰ ਵਿੱਚ ਨਾਮ, ਪਿਤਾ ਦਾ ਨਾਮ ਤੇ ਪਿੰਡ ਆਟੋਮੈਟਿਕ ਭਰ ਜਾਵੇਗਾ।
-                </p>
+              </div>
+
+              {/* Quick Select Mandi Chips */}
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {MANDI_OPTIONS.slice(0, 7).map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => handleMandiChange(m.id)}
+                    className={`text-[11px] px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
+                      selectedMandiId === m.id
+                        ? 'bg-emerald-800 text-white shadow-xs'
+                        : 'bg-gray-100 hover:bg-emerald-100 text-gray-700'
+                    }`}
+                  >
+                    {m.name.split(' ')[0]}
+                  </button>
+                ))}
+              </div>
+
+              {/* Custom Mandi Input (if Custom selected) */}
+              {selectedMandiId === 'custom' && (
+                <div className="pt-2 border-t border-emerald-200/60 space-y-2">
+                  <label className="block text-xs font-bold text-gray-700">
+                    ਆਪਣੀ ਮੰਡੀ ਦਾ ਨਾਮ ਦਰਜ ਕਰੋ (Custom Mandi Name):
+                  </label>
+                  <input
+                    type="text"
+                    value={customMandiTitle}
+                    onChange={(e) => handleCustomMandiInput(e.target.value)}
+                    placeholder="ਜਿਵੇਂ: ਰਾਮਪੁਰਾ ਫੂਲ / ਕੋਟਕਪੂਰਾ / ਨਾਭਾ"
+                    className="w-full rounded-xl border border-gray-300 px-3 py-2 text-xs font-bold text-gray-900 focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+              )}
+
+              {/* Editable Mandi Address Line on Letterhead */}
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-600 mb-1">
+                  ਲੈਟਰ ਪੈਡ ਉੱਤੇ ਛਪਣ ਵਾਲਾ ਮੰਡੀ ਦਾ ਪਤਾ (Letterhead Address):
+                </label>
+                <input
+                  type="text"
+                  value={mandiAddress}
+                  onChange={(e) => setMandiAddress(e.target.value)}
+                  className="w-full rounded-xl border border-gray-300 px-3 py-1.5 text-xs text-gray-800 focus:ring-2 focus:ring-emerald-500 font-medium"
+                />
               </div>
             </div>
 
-            {/* Header Layout Mode & Reference Details */}
+            {/* 2. LETTER PAD TYPE SELECTOR (Typed vs Blank A4 vs Ruled) */}
+            <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-gray-200 space-y-3.5">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
+                  <Layout className="w-4 h-4 text-emerald-600" />
+                  <span>ਲੈਟਰ ਪੈਡ ਦੀ ਕਿਸਮ (Letter Pad Type)</span>
+                </h3>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setLetterMode('blank_plain')}
+                  className={`p-3 rounded-xl border text-center transition cursor-pointer flex flex-col items-center justify-center gap-1 ${
+                    letterMode === 'blank_plain'
+                      ? 'bg-amber-50 border-amber-500 text-amber-950 font-bold ring-2 ring-amber-400'
+                      : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <FileText className="w-5 h-5 text-amber-600" />
+                  <span className="text-xs">ਬਿਲਕੁਲ ਕੋਰਾ A4</span>
+                  <span className="text-[10px] text-gray-500 font-normal">100% Blank A4</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setLetterMode('blank_lines')}
+                  className={`p-3 rounded-xl border text-center transition cursor-pointer flex flex-col items-center justify-center gap-1 ${
+                    letterMode === 'blank_lines'
+                      ? 'bg-amber-50 border-amber-500 text-amber-950 font-bold ring-2 ring-amber-400'
+                      : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <AlignLeft className="w-5 h-5 text-amber-600" />
+                  <span className="text-xs">ਲਾਈਨਾਂ ਵਾਲਾ A4</span>
+                  <span className="text-[10px] text-gray-500 font-normal">Ruled for Writing</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setLetterMode('typed')}
+                  className={`p-3 rounded-xl border text-center transition cursor-pointer flex flex-col items-center justify-center gap-1 ${
+                    letterMode === 'typed'
+                      ? 'bg-emerald-50 border-emerald-600 text-emerald-950 font-bold ring-2 ring-emerald-500'
+                      : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <Edit3 className="w-5 h-5 text-emerald-700" />
+                  <span className="text-xs">ਟਾਈਪ ਕੀਤਾ ਲੈਟਰ</span>
+                  <span className="text-[10px] text-gray-500 font-normal">Full Typed Letter</span>
+                </button>
+              </div>
+
+              {/* Blank Pad Options */}
+              {letterMode !== 'typed' && (
+                <div className="p-3 bg-amber-50/70 rounded-xl border border-amber-200 space-y-2">
+                  <label className="block text-xs font-bold text-amber-950">
+                    ਖਾਲੀ ਲੈਟਰ ਪੈਡ ਤੇ ਰੈਫ਼ਰੈਂਸ ਨੰ. ਅਤੇ ਮਿਤੀ ਲਾਈਨ:
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <label className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer font-medium ${
+                      blankRefFormat === 'dots' ? 'bg-white border-amber-500 text-amber-950 font-bold' : 'bg-transparent border-gray-300 text-gray-700'
+                    }`}>
+                      <input
+                        type="radio"
+                        name="refFmt"
+                        checked={blankRefFormat === 'dots'}
+                        onChange={() => setBlankRefFormat('dots')}
+                      />
+                      <span>ਖਾਲੀ ਡਾਟਿਡ (..../202...)</span>
+                    </label>
+
+                    <label className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer font-medium ${
+                      blankRefFormat === 'printed' ? 'bg-white border-amber-500 text-amber-950 font-bold' : 'bg-transparent border-gray-300 text-gray-700'
+                    }`}>
+                      <input
+                        type="radio"
+                        name="refFmt"
+                        checked={blankRefFormat === 'printed'}
+                        onChange={() => setBlankRefFormat('printed')}
+                      />
+                      <span>ਅੱਜ ਦੀ ਮਿਤੀ ਛਾਪੋ</span>
+                    </label>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 3. READY TEMPLATES CARD (When in typed mode) */}
+            {letterMode === 'typed' && (
+              <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-gray-200 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-emerald-600" />
+                    <span>ਤਿਆਰ ਕੀਤੇ ਫਾਰਮੈਟ (Ready Templates)</span>
+                  </h3>
+                  <span className="text-[11px] text-gray-500 font-medium">ਇੱਕ ਕਲਿੱਕ ਵਿੱਚ ਭਰੋ</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleApplyTemplate('bank_kcc')}
+                    className="p-2.5 rounded-xl border border-gray-200 bg-gray-50 hover:bg-emerald-50 hover:border-emerald-300 text-left transition cursor-pointer"
+                  >
+                    <div className="font-bold text-xs text-gray-900">🏦 ਬੈਂਕ KCC ਲਿਮਿਟ</div>
+                    <div className="text-[10px] text-gray-500">ਲਿਮਿਟ ਨਵਿਆਉਣ ਤਸਦੀਕ</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleApplyTemplate('noc_clearance')}
+                    className="p-2.5 rounded-xl border border-gray-200 bg-gray-50 hover:bg-emerald-50 hover:border-emerald-300 text-left transition cursor-pointer"
+                  >
+                    <div className="font-bold text-xs text-gray-900">✅ ਬੇ-ਬਾਕੀ / NOC</div>
+                    <div className="text-[10px] text-gray-500">ਸਾਫ ਹਿਸਾਬ ਕਲੀਅਰੈਂਸ</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleApplyTemplate('sheller_guarantee')}
+                    className="p-2.5 rounded-xl border border-gray-200 bg-gray-50 hover:bg-emerald-50 hover:border-emerald-300 text-left transition cursor-pointer"
+                  >
+                    <div className="font-bold text-xs text-gray-900">🏭 ਸ਼ੈਲਰ ਡਿਲਿਵਰੀ ਗਾਰੰਟੀ</div>
+                    <div className="text-[10px] text-gray-500">ਪੈਡੀ ਤੇ ਬਾਰਦਾਨਾ ਵਾਪਸੀ</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleApplyTemplate('mandi_gatepass')}
+                    className="p-2.5 rounded-xl border border-gray-200 bg-gray-50 hover:bg-emerald-50 hover:border-emerald-300 text-left transition cursor-pointer"
+                  >
+                    <div className="font-bold text-xs text-gray-900">🚚 ਗੇਟ ਪਾਸ ਸੂਚਨਾ</div>
+                    <div className="text-[10px] text-gray-500">ਮੰਡੀ ਬੈਰੀਅਰ ਰਵਾਨਗੀ</div>
+                  </button>
+                </div>
+
+                {/* Quick Farmer Autofill */}
+                <div className="pt-2 border-t border-gray-100">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1 flex items-center gap-1.5">
+                    <UserCheck className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>ਕਿਸਾਨ ਦਾ ਵੇਰਵਾ ਆਪਣੇ-ਆਪ ਭਰੋ:</span>
+                  </label>
+                  <select
+                    value={selectedFarmerId}
+                    onChange={(e) => handleFarmerSelect(e.target.value)}
+                    className="w-full rounded-xl border border-gray-300 px-3 py-1.5 text-xs font-medium focus:ring-2 focus:ring-emerald-500 bg-white"
+                  >
+                    <option value="">-- ਕਿਸਾਨ ਚੁਣੋ (Select Farmer) --</option>
+                    {registeredFarmers.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.name_pa || f.name_en} {f.father_husband_name_pa ? `(ਪੁੱਤਰ ${f.father_husband_name_pa})` : ''} - ਪਿੰਡ {f.village_pa || f.village_en}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {/* 4. FIRM MODE & LETTER DETAILS */}
             <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-gray-200 space-y-4">
               <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
                 <Building className="w-4 h-4 text-emerald-600" />
-                <span>ਫਰਮ ਸੈਟਿੰਗ (Header & Firm Config)</span>
+                <span>ਫਰਮ ਸੈਟਿੰਗ (Firm & Letterhead Mode)</span>
               </h3>
 
               {/* Firm Mode Toggle */}
@@ -636,96 +1031,100 @@ export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
                     onChange={(e) => setShowWatermark(e.target.checked)}
                     className="rounded text-emerald-600 focus:ring-emerald-500"
                   />
-                  <span>ਵਾਟਰਮਾਰਕ ਚਿੰਨ੍ਹ ਦਿਖਾਓ (Show Background Watermark)</span>
+                  <span>ਵਾਟਰਮਾਰਕ ਚਿੰਨ੍ਹ ਦਿਖਾਓ (Show Watermark)</span>
                 </label>
               </div>
             </div>
 
-            {/* Recipient and Content Details */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-gray-200 space-y-4">
-              <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
-                <Edit3 className="w-4 h-4 text-emerald-600" />
-                <span>ਪੱਤਰ ਸਮੱਗਰੀ (Letter Body & Recipient)</span>
-              </h3>
+            {/* 5. TYPED LETTER RECIPIENT & BODY (Only when typed mode is on) */}
+            {letterMode === 'typed' && (
+              <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-gray-200 space-y-4">
+                <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
+                  <Edit3 className="w-4 h-4 text-emerald-600" />
+                  <span>ਪੱਤਰ ਸਮੱਗਰੀ (Letter Body & Recipient)</span>
+                </h3>
 
-              {/* Recipient */}
-              <div className="space-y-2">
-                <label className="block text-xs font-semibold text-gray-700">ਪੱਤਰ ਪ੍ਰਾਪਤਕਰਤਾ (To / Recipient):</label>
-                <div className="grid grid-cols-2 gap-2">
+                {/* Recipient */}
+                <div className="space-y-2">
+                  <label className="block text-xs font-semibold text-gray-700">ਪੱਤਰ ਪ੍ਰਾਪਤਕਰਤਾ (To / Recipient):</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      placeholder="ਸੇਵਾ ਵਿਖੇ / To"
+                      value={recipientTitle}
+                      onChange={(e) => setRecipientTitle(e.target.value)}
+                      className="rounded-xl border border-gray-300 px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-emerald-500"
+                    />
+                    <input
+                      type="text"
+                      placeholder="ਅਹੁਦਾ / ਸ਼ਾਖਾ ਪ੍ਰਬੰਧਕ ਸਾਹਿਬ"
+                      value={recipientName}
+                      onChange={(e) => setRecipientName(e.target.value)}
+                      className="rounded-xl border border-gray-300 px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
                   <input
                     type="text"
-                    placeholder="ਸੇਵਾ ਵਿਖੇ / To"
-                    value={recipientTitle}
-                    onChange={(e) => setRecipientTitle(e.target.value)}
-                    className="rounded-xl border border-gray-300 px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-emerald-500"
-                  />
-                  <input
-                    type="text"
-                    placeholder="ਅਹੁਦਾ / ਸ਼ਾਖਾ ਪ੍ਰਬੰਧਕ ਸਾਹਿਬ"
-                    value={recipientName}
-                    onChange={(e) => setRecipientName(e.target.value)}
-                    className="rounded-xl border border-gray-300 px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-emerald-500"
+                    placeholder="ਸੰਸਥਾ / ਬੈਂਕ ਦਾ ਨਾਮ ਤੇ ਪਤਾ"
+                    value={recipientAddress}
+                    onChange={(e) => setRecipientAddress(e.target.value)}
+                    className="w-full rounded-xl border border-gray-300 px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
-                <input
-                  type="text"
-                  placeholder="ਸੰਸਥਾ / ਬੈਂਕ ਦਾ ਨਾਮ ਤੇ ਪਤਾ"
-                  value={recipientAddress}
-                  onChange={(e) => setRecipientAddress(e.target.value)}
-                  className="w-full rounded-xl border border-gray-300 px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
 
-              {/* Subject */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">ਵਿਸ਼ਾ (Subject):</label>
-                <input
-                  type="text"
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  className="w-full rounded-xl border border-gray-300 px-2.5 py-1.5 text-xs font-bold focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
+                {/* Subject */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">ਵਿਸ਼ਾ (Subject):</label>
+                  <input
+                    type="text"
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    className="w-full rounded-xl border border-gray-300 px-2.5 py-1.5 text-xs font-bold focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
 
-              {/* Salutation */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">ਸੰਬੋਧਨ (Salutation):</label>
-                <input
-                  type="text"
-                  value={salutation}
-                  onChange={(e) => setSalutation(e.target.value)}
-                  className="w-full rounded-xl border border-gray-300 px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
+                {/* Salutation */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">ਸੰਬੋਧਨ (Salutation):</label>
+                  <input
+                    type="text"
+                    value={salutation}
+                    onChange={(e) => setSalutation(e.target.value)}
+                    className="w-full rounded-xl border border-gray-300 px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
 
-              {/* Body */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  ਮੁੱਖ ਵਿਸ਼ਾ-ਵਸਤੂ (Main Letter Body):
-                </label>
-                <textarea
-                  rows={6}
-                  value={bodyText}
-                  onChange={(e) => setBodyText(e.target.value)}
-                  placeholder="ਲੈਟਰ ਵਿੱਚ ਜੋ ਲਿਖਣਾ ਚਾਹੁੰਦੇ ਹੋ ਇੱਥੇ ਲਿਖੋ..."
-                  className="w-full rounded-xl border border-gray-300 p-2.5 text-xs font-serif leading-relaxed focus:ring-2 focus:ring-emerald-500"
-                />
-                <p className="text-[10px] text-gray-500 mt-1">
-                  * ਪੈਰਾ ਬਦਲਣ ਲਈ ਦੋ ਵਾਰ Enter ਦਬਾਓ।
-                </p>
-              </div>
+                {/* Body */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    ਮੁੱਖ ਵਿਸ਼ਾ-ਵਸਤੂ (Main Letter Body):
+                  </label>
+                  <textarea
+                    rows={6}
+                    value={bodyText}
+                    onChange={(e) => setBodyText(e.target.value)}
+                    placeholder="ਲੈਟਰ ਵਿੱਚ ਜੋ ਲਿਖਣਾ ਚਾਹੁੰਦੇ ਹੋ ਇੱਥੇ ਲਿਖੋ..."
+                    className="w-full rounded-xl border border-gray-300 p-2.5 text-xs font-serif leading-relaxed focus:ring-2 focus:ring-emerald-500"
+                  />
+                  <p className="text-[10px] text-gray-500 mt-1">
+                    * ਪੈਰਾ ਬਦਲਣ ਲਈ ਦੋ ਵਾਰ Enter ਦਬਾਓ।
+                  </p>
+                </div>
 
-              {/* Footer Note */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">ਹੇਠਲੀ ਨੋਟ ਲਾਈਨ (Footer Note):</label>
-                <input
-                  type="text"
-                  value={notesFooter}
-                  onChange={(e) => setNotesFooter(e.target.value)}
-                  className="w-full rounded-xl border border-gray-300 px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-emerald-500"
-                />
+                {/* Footer Note */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">ਹੇਠਲੀ ਨੋਟ ਲਾਈਨ (Footer Note):</label>
+                  <input
+                    type="text"
+                    value={notesFooter}
+                    onChange={(e) => setNotesFooter(e.target.value)}
+                    placeholder="ਕੋਈ ਵਾਧੂ ਨੋਟ ਜਾਂ ਹਦਾਇਤ (ਮਰਜ਼ੀ ਮੁਤਾਬਕ, ਖਾਲੀ ਰੱਖ ਸਕਦੇ ਹੋ)..."
+                    className="w-full rounded-xl border border-gray-300 px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
               </div>
-            </div>
+            )}
+
           </div>
         )}
 
@@ -735,7 +1134,7 @@ export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
           {/* Printable Letterhead Paper Canvas */}
           <div className="bg-gray-200 print:bg-white p-2 sm:p-4 md:p-6 rounded-2xl print:p-0 print:m-0 flex justify-center">
             
-            {/* The Actual A4 Sheet */}
+            {/* The Actual A4 Sheet (210mm x 297mm Standard Aspect Ratio) */}
             <div
               id="letterhead-printable"
               ref={printRef}
@@ -762,7 +1161,7 @@ export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
               )}
 
               {/* ===================== LETTERHEAD TOP SECTION ===================== */}
-              <div className="relative z-10 space-y-4">
+              <div className="relative z-10 space-y-3.5">
                 
                 {/* 1. Religious Inscription Top Center */}
                 <div className="text-center border-b border-emerald-900/20 pb-2">
@@ -850,7 +1249,7 @@ export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
                       {firm1Name}
                     </h1>
                     <div className="text-sm font-bold text-emerald-900">ਜੰਮੂ ਟਰੇਡਿੰਗ ਕੰਪਨੀ</div>
-                    <div className="flex items-center justify-center gap-4 text-xs text-gray-700 pt-1 font-medium">
+                    <div className="flex items-center justify-center gap-4 text-xs text-gray-700 pt-1 font-medium flex-wrap">
                       <span>ਲਾਈਸੰਸ ਨੰ: <strong>{firm1Lic}</strong></span>
                       <span>•</span>
                       <span>PAN: <strong>{firm1Pan}</strong></span>
@@ -870,7 +1269,7 @@ export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
                       {firm2Name}
                     </h1>
                     <div className="text-sm font-bold text-emerald-900">ਨਿਊ ਜੰਮੂ ਟਰੇਡਿੰਗ ਕੰਪਨੀ</div>
-                    <div className="flex items-center justify-center gap-4 text-xs text-gray-700 pt-1 font-medium">
+                    <div className="flex items-center justify-center gap-4 text-xs text-gray-700 pt-1 font-medium flex-wrap">
                       <span>ਲਾਈਸੰਸ ਨੰ: <strong>{firm2Lic}</strong></span>
                       <span>•</span>
                       <span>PAN: <strong>{firm2Pan}</strong></span>
@@ -880,10 +1279,11 @@ export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
                   </div>
                 )}
 
-                {/* Mandi Address Banner */}
-                <div className="text-center bg-emerald-50/80 py-1 px-2 border border-emerald-200 rounded-lg">
-                  <p className="text-[11px] sm:text-xs font-bold text-emerald-950">
-                    📍 {mandiAddress}
+                {/* Dynamic Selected Mandi Address Banner */}
+                <div className="text-center bg-emerald-50/90 py-1.5 px-3 border border-emerald-300 rounded-lg shadow-2xs">
+                  <p className="text-[11px] sm:text-xs font-bold text-emerald-950 tracking-wide flex items-center justify-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-emerald-700 flex-shrink-0" />
+                    <span>{mandiAddress}</span>
                   </p>
                 </div>
 
@@ -892,19 +1292,27 @@ export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
                   <div className="flex items-center gap-1.5">
                     <span className="text-gray-600">ਰੈਫ਼ਰੈਂਸ ਨੰ. / Ref No:</span>
                     <span className="font-mono font-bold text-emerald-950 underline decoration-dotted">
-                      {refNo}
+                      {letterMode !== 'typed' && blankRefFormat === 'dots'
+                        ? '....................................................'
+                        : refNo}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="text-gray-600">ਮਿਤੀ / Date:</span>
                     <span className="font-bold text-gray-950 font-mono">
-                      {date.split('-').reverse().join('/')}
+                      {letterMode !== 'typed' && blankRefFormat === 'dots'
+                        ? '......../......../202...'
+                        : date.split('-').reverse().join('/')}
                     </span>
                   </div>
                 </div>
 
-                {/* ===================== LETTER CONTENT SECTION ===================== */}
-                <div className="pt-4 space-y-4">
+              </div>
+
+              {/* ===================== LETTER CENTER BODY SECTION ===================== */}
+              {letterMode === 'typed' ? (
+                /* TYPED LETTER MODE */
+                <div className="relative z-10 pt-4 space-y-4 flex-1">
                   {/* Recipient Details */}
                   <div className="text-xs sm:text-sm leading-relaxed space-y-0.5">
                     <div className="font-bold text-gray-900">{recipientTitle}</div>
@@ -913,14 +1321,18 @@ export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
                   </div>
 
                   {/* Subject Line */}
-                  <div className="text-xs sm:text-sm font-bold text-gray-950 py-1.5 px-3 bg-gray-50 border-l-4 border-emerald-800 rounded-r-md">
-                    {subject}
-                  </div>
+                  {subject && (
+                    <div className="text-xs sm:text-sm font-bold text-gray-950 py-1.5 px-3 bg-gray-50 border-l-4 border-emerald-800 rounded-r-md">
+                      {subject}
+                    </div>
+                  )}
 
                   {/* Salutation */}
-                  <div className="text-xs sm:text-sm font-semibold text-gray-900">
-                    {salutation}
-                  </div>
+                  {salutation && (
+                    <div className="text-xs sm:text-sm font-semibold text-gray-900">
+                      {salutation}
+                    </div>
+                  )}
 
                   {/* Main Paragraphs */}
                   <div className="text-xs sm:text-sm leading-relaxed text-gray-900 space-y-3 whitespace-pre-line text-justify font-serif">
@@ -932,10 +1344,30 @@ export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
                     {closing}
                   </div>
                 </div>
-              </div>
+              ) : letterMode === 'blank_lines' ? (
+                /* BLANK WITH HANDWRITING RULED LINES */
+                <div className="relative z-10 pt-6 pb-4 flex-1 flex flex-col justify-between space-y-6">
+                  {Array.from({ length: 14 }).map((_, idx) => (
+                    <div key={idx} className="border-b border-gray-300/80 w-full h-0" />
+                  ))}
+                </div>
+              ) : (
+                /* 100% PERFECT BLANK A4 PAPER CANVAS */
+                <div className="relative z-10 flex-1 flex flex-col justify-center items-center py-20 select-none print:py-0">
+                  <div className="print:hidden border-2 border-dashed border-gray-300/80 bg-gray-50/70 rounded-2xl p-6 text-center max-w-md shadow-2xs">
+                    <FileText className="w-8 h-8 text-emerald-800/50 mx-auto mb-2" />
+                    <p className="text-xs font-bold text-emerald-950">
+                      ਬਿਲਕੁਲ ਖਾਲੀ A4 ਲੈਟਰ ਪੈਡ (100% Blank A4 Sheet)
+                    </p>
+                    <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+                      ਪ੍ਰਿੰਟ ਜਾਂ PDF ਵਿੱਚ ਇਹ ਵਿਚਕਾਰਲੀ ਥਾਂ ਬਿਲਕੁਲ ਕੋਰੀ (Blank) ਰਹੇਗੀ। ਤੁਸੀਂ ਸਿਰਫ ਹੈੱਡਰ ਅਤੇ ਦਸਤਖ਼ਤਾਂ ਵਾਲਾ ਪੱਕਾ ਲੈਟਰ ਪੈਡ ਪ੍ਰਿੰਟ ਕਰਕੇ ਬਾਅਦ 'ਚ ਹੱਥ ਨਾਲ ਲਿਖ ਸਕਦੇ ਹੋ ਜਾਂ ਪ੍ਰਿੰਟਰ ਵਿੱਚ ਪਾ ਸਕਦੇ ਹੋ।
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* ===================== SIGNATORY & FOOTER SECTION ===================== */}
-              <div className="relative z-10 pt-16 sm:pt-20 space-y-6">
+              <div className="relative z-10 pt-10 sm:pt-14 space-y-5">
                 
                 {/* Signatures: Dual Firm Signatures Side by Side */}
                 {firmMode === 'dual' ? (
@@ -945,7 +1377,7 @@ export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
                       <div className="text-[11px] sm:text-xs font-bold text-emerald-950">
                         {signatory1Title}
                       </div>
-                      <div className="h-16 flex items-end">
+                      <div className="h-14 flex items-end">
                         <div className="border-b border-dashed border-gray-400 w-44 pb-1 text-[10px] text-gray-400 italic">
                           (ਅਧਿਕਾਰਤ ਦਸਤਖ਼ਤ / ਮੋਹਰ)
                         </div>
@@ -963,7 +1395,7 @@ export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
                       <div className="text-[11px] sm:text-xs font-bold text-emerald-950">
                         {signatory2Title}
                       </div>
-                      <div className="h-16 flex items-end justify-end">
+                      <div className="h-14 flex items-end justify-end">
                         <div className="border-b border-dashed border-gray-400 w-44 pb-1 text-[10px] text-gray-400 italic text-right">
                           (ਅਧਿਕਾਰਤ ਦਸਤਖ਼ਤ / ਮੋਹਰ)
                         </div>
@@ -983,7 +1415,7 @@ export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
                       <div className="text-xs sm:text-sm font-bold text-emerald-950">
                         {firmMode === 'firm1' ? signatory1Title : signatory2Title}
                       </div>
-                      <div className="h-16 flex items-end justify-end">
+                      <div className="h-14 flex items-end justify-end">
                         <div className="border-b border-dashed border-gray-400 w-48 pb-1 text-[10px] text-gray-400 italic">
                           (ਅਧਿਕਾਰਤ ਦਸਤਖ਼ਤ / ਮੋਹਰ)
                         </div>
@@ -998,15 +1430,14 @@ export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
                   </div>
                 )}
 
-                {/* Footer Disclaimer & Mandi Notes */}
-                <div className="pt-4 border-t-2 border-emerald-900 text-center space-y-1">
-                  <div className="text-[10px] sm:text-[11px] text-gray-700 font-medium">
-                    {notesFooter}
+                {/* Optional Custom Footer Note (Only if specifically entered by user) */}
+                {notesFooter.trim().length > 0 && (
+                  <div className="pt-2 text-center">
+                    <div className="text-[10px] text-gray-500 font-medium italic">
+                      {notesFooter}
+                    </div>
                   </div>
-                  <div className="text-[9px] text-gray-500 uppercase tracking-widest">
-                    JAMMU TRADING CO. &bull; NEW JAMMU TRADING CO. &bull; ALL MANDI KAMALPUR / MEHRAJWALA / KANG KHURD
-                  </div>
-                </div>
+                )}
 
               </div>
             </div>
@@ -1015,7 +1446,7 @@ export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
 
       </div>
 
-      {/* SAVED LETTERS / DRAFTS MODAL OR SECTION */}
+      {/* SAVED LETTERS / DRAFTS SECTION */}
       {activeTab === 'history' && (
         <div className="print:hidden bg-white rounded-2xl p-6 shadow-sm border border-gray-200 space-y-4">
           <div className="flex items-center justify-between">
@@ -1042,58 +1473,62 @@ export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
               <FileText className="w-10 h-10 text-gray-300 mx-auto" />
               <p className="text-sm font-semibold text-gray-600">ਅਜੇ ਕੋਈ ਲੈਟਰ ਸੇਵ ਨਹੀਂ ਕੀਤਾ ਗਿਆ।</p>
               <p className="text-xs text-gray-400">
-                ਲੈਟਰ ਤਿਆਰ ਕਰਨ ਤੋਂ ਬਾਅਦ "ਸੇਵ ਡਰਾਫਟ" ਬਟਨ ਦਬਾਓ।
+                ਲੈਟਰ ਤਿਆਰ ਕਰਨ ਤੋਂ ਬਾਅਦ "ਸੇਵ" ਬਟਨ ਦਬਾਓ।
               </p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="bg-gray-50 text-gray-700 font-bold border-b border-gray-200">
-                  <tr>
-                    <th className="p-3">ਰੈਫਰੈਂਸ ਨੰਬਰ</th>
-                    <th className="p-3">ਮਿਤੀ</th>
-                    <th className="p-3">ਪ੍ਰਾਪਤਕਰਤਾ</th>
-                    <th className="p-3">ਵਿਸ਼ਾ</th>
-                    <th className="p-3">ਫਰਮ ਮੋਡ</th>
-                    <th className="p-3 text-right">ਕਾਰਵਾਈ</th>
+                <thead>
+                  <tr className="border-b border-gray-200 bg-gray-50 text-gray-600">
+                    <th className="py-2.5 px-3">ਰੈਫਰੈਂਸ ਨੰ.</th>
+                    <th className="py-2.5 px-3">ਮਿਤੀ</th>
+                    <th className="py-2.5 px-3">ਕਿਸਮ</th>
+                    <th className="py-2.5 px-3">ਮੰਡੀ</th>
+                    <th className="py-2.5 px-3">ਵਿਸ਼ਾ</th>
+                    <th className="py-2.5 px-3 text-right">ਐਕਸ਼ਨ</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {savedLetters.map((doc) => (
-                    <tr key={doc.id} className="hover:bg-gray-50 transition">
-                      <td className="p-3 font-mono font-bold text-emerald-900">
+                    <tr key={doc.id} className="hover:bg-gray-50/80 transition">
+                      <td className="py-2.5 px-3 font-mono font-bold text-emerald-950">
                         {doc.ref_no}
                       </td>
-                      <td className="p-3 font-mono">{doc.date}</td>
-                      <td className="p-3 font-medium text-gray-900 max-w-[150px] truncate">
-                        {doc.recipient_name}
+                      <td className="py-2.5 px-3 text-gray-600">
+                        {doc.date}
                       </td>
-                      <td className="p-3 text-gray-700 max-w-[250px] truncate">
-                        {doc.subject}
-                      </td>
-                      <td className="p-3">
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                          {doc.firm_mode === 'dual' ? 'ਦੋਵੇਂ ਫਰਮਾਂ' : doc.firm_mode}
+                      <td className="py-2.5 px-3">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900">
+                          {doc.letter_mode === 'blank_plain'
+                            ? 'ਖਾਲੀ A4'
+                            : doc.letter_mode === 'blank_lines'
+                            ? 'ਲਾਈਨਾਂ ਵਾਲਾ'
+                            : 'ਟਾਈਪ ਲੈਟਰ'}
                         </span>
                       </td>
-                      <td className="p-3 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => handleLoadLetter(doc)}
-                            className="px-2.5 py-1 rounded-lg bg-emerald-700 text-white font-bold text-xs hover:bg-emerald-600 transition cursor-pointer"
-                          >
-                            ਓਪਨ ਕਰੋ
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteSavedLetter(doc.id)}
-                            className="p-1 rounded-lg text-rose-600 hover:bg-rose-50 transition cursor-pointer"
-                            title="ਹਟਾਓ"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
+                      <td className="py-2.5 px-3 text-gray-700 font-medium">
+                        {doc.mandi_address?.split('•')[0] || doc.mandi_address}
+                      </td>
+                      <td className="py-2.5 px-3 text-gray-800 truncate max-w-xs font-medium">
+                        {doc.subject || '(ਕੋਰਾ ਲੈਟਰ ਪੈਡ)'}
+                      </td>
+                      <td className="py-2.5 px-3 text-right space-x-2">
+                        <button
+                          type="button"
+                          onClick={() => handleLoadLetter(doc)}
+                          className="px-2.5 py-1 rounded bg-emerald-100 hover:bg-emerald-200 text-emerald-900 font-bold text-[11px] transition"
+                        >
+                          ਲੋਡ ਕਰੋ
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteSavedLetter(doc.id)}
+                          className="p-1 rounded text-red-500 hover:bg-red-50 transition"
+                          title="ਹਟਾਓ"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 inline" />
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -1103,6 +1538,7 @@ export const LetterPadModule: React.FC<LetterPadModuleProps> = ({
           )}
         </div>
       )}
+
     </div>
   );
 };

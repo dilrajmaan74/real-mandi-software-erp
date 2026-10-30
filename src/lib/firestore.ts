@@ -178,6 +178,16 @@ export async function saveCropArrivalToCloud(userId: string, arrival: CropArriva
   }
 }
 
+export async function deleteCropArrivalFromCloud(userId: string, arrivalId: string): Promise<void> {
+  const docId = sanitizeDocId(arrivalId);
+  const path = `users/${userId}/crop_arrivals/${docId}`;
+  try {
+    await deleteDoc(doc(db, 'users', userId, 'crop_arrivals', docId));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, path);
+  }
+}
+
 export async function saveBardanaToCloud(userId: string, entry: BardanaEntry): Promise<void> {
   const docId = sanitizeDocId(entry.id);
   const path = `users/${userId}/bardana_entries/${docId}`;
@@ -186,6 +196,16 @@ export async function saveBardanaToCloud(userId: string, entry: BardanaEntry): P
     await setDoc(doc(db, 'users', userId, 'bardana_entries', docId), cleaned);
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
+  }
+}
+
+export async function deleteBardanaFromCloud(userId: string, entryId: string): Promise<void> {
+  const docId = sanitizeDocId(entryId);
+  const path = `users/${userId}/bardana_entries/${docId}`;
+  try {
+    await deleteDoc(doc(db, 'users', userId, 'bardana_entries', docId));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, path);
   }
 }
 
@@ -200,6 +220,16 @@ export async function saveAgencyPurchaseToCloud(userId: string, purchase: Agency
   }
 }
 
+export async function deleteAgencyPurchaseFromCloud(userId: string, purchaseId: string): Promise<void> {
+  const docId = sanitizeDocId(purchaseId);
+  const path = `users/${userId}/agency_purchases/${docId}`;
+  try {
+    await deleteDoc(doc(db, 'users', userId, 'agency_purchases', docId));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, path);
+  }
+}
+
 export async function saveLiftingDispatchToCloud(userId: string, dispatch: LiftingDispatchEntry): Promise<void> {
   const docId = sanitizeDocId(dispatch.id);
   const path = `users/${userId}/lifting_dispatches/${docId}`;
@@ -208,6 +238,16 @@ export async function saveLiftingDispatchToCloud(userId: string, dispatch: Lifti
     await setDoc(doc(db, 'users', userId, 'lifting_dispatches', docId), cleaned);
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
+  }
+}
+
+export async function deleteLiftingDispatchFromCloud(userId: string, dispatchId: string): Promise<void> {
+  const docId = sanitizeDocId(dispatchId);
+  const path = `users/${userId}/lifting_dispatches/${docId}`;
+  try {
+    await deleteDoc(doc(db, 'users', userId, 'lifting_dispatches', docId));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, path);
   }
 }
 

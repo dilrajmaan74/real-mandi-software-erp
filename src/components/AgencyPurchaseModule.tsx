@@ -24,7 +24,8 @@ import {
   Square,
   Sparkles,
   ArrowRight,
-  UserCheck
+  UserCheck,
+  Calendar
 } from 'lucide-react';
 import { appendAgencyPurchaseToSheets } from '../lib/sheets';
 import { AllEntryPdfModal } from './AllEntryPdfModal';
@@ -88,7 +89,17 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
   const [firmFilter, setFirmFilter] = useState('All');
   const [mandiFilter, setMandiFilter] = useState('All');
   const [agencyFilter, setAgencyFilter] = useState('All');
+  const [selectedDateTab, setSelectedDateTab] = useState<string>('All');
   const [isSyncing, setIsSyncing] = useState<string | null>(null);
+
+  // Distinct dates from entries for quick date tabs
+  const distinctEntryDates = useMemo(() => {
+    const set = new Set<string>();
+    entries.forEach((e) => {
+      if (e.date) set.add(e.date);
+    });
+    return Array.from(set).sort().reverse();
+  }, [entries]);
 
   // Modal Mode: 'batch' (Multi-Farmer 10-20 Farmers) vs 'single' (Single Farmer)
   const [modalMode, setModalMode] = useState<'batch' | 'single'>('batch');
@@ -308,6 +319,9 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
       const item = row.farmerItem;
       const uniqueSuffix = (Date.now() + index).toString().slice(-6);
 
+      // Strictly use ONLY the selected farmer's name (whether linked or main)
+      const selectedFarmerName = item.namePa || item.nameEn;
+
       return {
         id: `AUC-${uniqueSuffix}`,
         date,
@@ -315,13 +329,13 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
         firm_name: activeFirm.name,
         mandi_name: mandiName,
         farmer_id: item.farmerId,
-        farmer_name: item.mainFarmerName,
+        farmer_name: selectedFarmerName,
         father_husband_name: item.fatherHusbandName || undefined,
         address_village: item.village,
         village: item.village,
         mobile: item.mobile,
-        billed_to_name: item.nameEn,
-        relation_with_main: item.relation,
+        billed_to_name: selectedFarmerName,
+        relation_with_main: 'Self',
         crop_type: cropType,
         crop_variety: cropVariety,
         bag_packing_kg: bagPackingKg,
@@ -415,8 +429,8 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
       address_village: singleVillage.trim(),
       village: singleVillage.trim(),
       mobile: singleMobile.trim(),
-      billed_to_name: singleBilledToName.trim() || singleFarmerName.trim(),
-      relation_with_main: singleRelation,
+      billed_to_name: singleFarmerName.trim(),
+      relation_with_main: 'Self',
       crop_type: cropType,
       crop_variety: cropVariety,
       bag_packing_kg: bagPackingKg,
@@ -457,6 +471,8 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
 
     const updated: AgencyPurchaseEntry = {
       ...editingEntry,
+      farmer_name: editingEntry.farmer_name.trim(),
+      billed_to_name: editingEntry.farmer_name.trim(),
       total_bags: totBags > 0 ? totBags : editingEntry.total_bags,
       weight_quintals: w,
       total_amount: gross,
@@ -504,7 +520,8 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
     const matchFirm = firmFilter === 'All' || e.firm_id === firmFilter || e.firm_name === firmFilter;
     const matchMandi = mandiFilter === 'All' || e.mandi_name?.includes(mandiFilter);
     const matchAgency = agencyFilter === 'All' || e.purchasing_agency.includes(agencyFilter);
-    return matchSearch && matchFirm && matchMandi && matchAgency;
+    const matchDate = selectedDateTab === 'All' || e.date === selectedDateTab;
+    return matchSearch && matchFirm && matchMandi && matchAgency && matchDate;
   });
 
   const totalProcuredAmount = entries.reduce((acc, curr) => acc + (curr.total_amount || 0), 0);
@@ -535,14 +552,15 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Export All Entry PDF Button */}
+          {/* Daily Purchase Sheet / All Entry PDF Button */}
           <button
             type="button"
             onClick={() => setIsPdfModalOpen(true)}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
+            title="ਇੱਕੋ ਮਿਤੀ ਦੀਆਂ ਸਾਰੀਆਂ ਐਂਟਰੀਆਂ ਦਾ ਚਾਰਟ, PDF ਅਤੇ ਪ੍ਰਿੰਟ ਕੱਢੋ"
           >
             <FileDown className="w-4 h-4 text-amber-300" />
-            <span>ਆਲ-ਐਂਟਰੀ PDF ਐਕਸਪੋਰਟ (All Entry PDF)</span>
+            <span>📄 ਰੋਜ਼ਾਨਾ ਖਰੀਦ ਸ਼ੀਟ (PDF / ਪ੍ਰਿੰਟ)</span>
           </button>
 
           <button
@@ -633,32 +651,114 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
         </div>
       </div>
 
+      {/* Date-wise Browser Bar (ਅਲੱਗ-ਅਲੱਗ ਮਿਤੀਆਂ ਦੇ ਟੈਬਜ਼ - ਜਦੋਂ ਕਲਿੱਕ ਕਰੀਏ ਓਸ ਮਿਤੀ ਦੇ ਸਾਰੇ ਕਿਸਾਨ ਆ ਜਾਣ) */}
+      <div className="px-5 py-3 bg-slate-50 border-y border-gray-200 space-y-2">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-blue-700" />
+            <span className="text-xs font-bold text-gray-800">
+              ਮਿਤੀ ਅਨੁਸਾਰ ਸਰਕਾਰੀ ਖਰੀਦ (Browse by Purchase Date):
+            </span>
+          </div>
+          {selectedDateTab !== 'All' && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsPdfModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500 hover:bg-amber-400 active:scale-95 text-blue-950 rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
+              >
+                <FileDown className="w-3.5 h-3.5" />
+                <span>ਇਸ ਮਿਤੀ ({selectedDateTab.split('-').reverse().join('/')}) ਦੀ PDF / ਪ੍ਰਿੰਟ ਸ਼ੀਟ</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Date Tabs */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setSelectedDateTab('All')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+              selectedDateTab === 'All'
+                ? 'bg-blue-900 text-white shadow-xs'
+                : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-100'
+            }`}
+          >
+            <span>ਸਾਰੀਆਂ ਮਿਤੀਆਂ (All Dates)</span>
+            <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded-full font-mono">
+              {entries.length}
+            </span>
+          </button>
+
+          {distinctEntryDates.map((d) => {
+            const count = entries.filter((e) => e.date === d).length;
+            const isSelected = selectedDateTab === d;
+            return (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setSelectedDateTab(d)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold font-mono transition cursor-pointer flex items-center gap-1.5 ${
+                  isSelected
+                    ? 'bg-blue-800 text-white shadow-xs ring-2 ring-blue-500 ring-offset-1'
+                    : 'bg-white text-gray-700 border border-gray-200 hover:bg-blue-50'
+                }`}
+              >
+                <span>📅 {d.split('-').reverse().join('/')}</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-sans font-bold ${
+                  isSelected ? 'bg-amber-400 text-blue-950' : 'bg-gray-100 text-gray-600'
+                }`}>
+                  {count} ਕਿਸਾਨ
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Active Date Summary Strip */}
+        {selectedDateTab !== 'All' && (
+          <div className="pt-1.5 flex items-center gap-3 text-xs text-blue-950 font-medium flex-wrap">
+            <span className="bg-blue-100/80 text-blue-900 px-2 py-0.5 rounded-md font-bold">
+              ਚੁਣੀ ਹੋਈ ਮਿਤੀ: {selectedDateTab.split('-').reverse().join('/')}
+            </span>
+            <span>ਕੁੱਲ ਕਿਸਾਨ: <strong>{filteredEntries.length}</strong></span>
+            <span>•</span>
+            <span>ਕੁੱਲ ਬੋਰੀਆਂ: <strong>{filteredEntries.reduce((s, e) => s + (e.total_bags || 0), 0)} Bags</strong></span>
+            <span>•</span>
+            <span>ਕੁੱਲ ਵਜ਼ਨ: <strong>{filteredEntries.reduce((s, e) => s + (e.weight_quintals || 0), 0).toFixed(2)} Qtl</strong></span>
+          </div>
+        )}
+      </div>
+
       {/* Agency Purchase Table */}
       <div className="overflow-x-auto border-t border-gray-100">
         <table className="w-full text-left text-xs border-collapse">
           <thead>
             <tr className="bg-gray-50 text-gray-700 font-bold border-b border-gray-200">
               <th className="py-3 px-3">Date / Firm / Mandi</th>
-              <th className="py-3 px-3">Farmer & Father Name</th>
-              <th className="py-3 px-3">Billed To (ਜੇ-ਫਾਰਮ)</th>
-              <th className="py-3 px-3 text-right">Bags (N+O)</th>
-              <th className="py-3 px-3 text-right">Weight (Qtl)</th>
-              <th className="py-3 px-3 text-right">MSP Rate</th>
-              <th className="py-3 px-3 text-right">ਕੁੱਲ ਸਰਕਾਰੀ ਰਕਮ (MSP)</th>
-              <th className="py-3 px-3 text-right">ਨੈੱਟ ਅਦਾਇਗੀ</th>
-              <th className="py-3 px-3 text-center">Sheet Sync</th>
-              <th className="py-3 px-3 text-right">100% Edit / Actions</th>
+              <th className="py-3 px-3">ਕਿਸਾਨ ਦਾ ਨਾਮ ਤੇ ਵੇਰਵਾ (Farmer Name & Details)</th>
+              <th className="py-3 px-3 text-center">ਬਾਰਦਾਨਾ (N+O)</th>
+              <th className="py-3 px-3 text-right">ਕੁੱਲ ਗੱਟੇ</th>
+              <th className="py-3 px-3 text-right">ਵਜ਼ਨ (Qtl)</th>
+              <th className="py-3 px-3 text-right">MSP ਰੇਟ</th>
+              <th className="py-3 px-3 text-right">ਕੁੱਲ ਰਕਮ (MSP)</th>
+              <th className="py-3 px-3 text-center">ਸ਼ੀਟ ਸਿੰਕ</th>
+              <th className="py-3 px-3 text-right">100% ਸੋਧੋ / ਹਟਾਓ</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {filteredEntries.length === 0 ? (
               <tr>
-                <td colSpan={10} className="py-10 text-center text-gray-400 text-xs">
-                  ਕੋਈ ਸਰਕਾਰੀ ਖਰੀਦ ਐਂਟਰੀ ਨਹੀਂ ਮਿਲੀ। ਨਵੀਂ ਖਰੀਦ ਦਰਜ ਕਰਨ ਲਈ ਉੱਪਰ ਵਾਲੇ ਬਟਨ ਤੇ ਕਲਿੱਕ ਕਰੋ।
+                <td colSpan={9} className="py-10 text-center text-gray-400 text-xs">
+                  ਚੁਣੀ ਹੋਈ ਮਿਤੀ ਲਈ ਕੋਈ ਖਰੀਦ ਐਂਟਰੀ ਨਹੀਂ ਮਿਲੀ।
                 </td>
               </tr>
             ) : (
               filteredEntries.map((item) => {
+                // Show ONLY single selected farmer name
+                const displayedFarmerName = item.farmer_name || item.billed_to_name;
+
                 return (
                   <tr key={item.id} className="hover:bg-blue-50/20 transition-colors">
                     <td className="py-3 px-3">
@@ -667,29 +767,27 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
                       <div className="text-[10px] text-gray-500">{item.mandi_name || 'Mandi Kamalpur'}</div>
                     </td>
 
+                    {/* ONLY Single Selected Farmer's Name */}
                     <td className="py-3 px-3">
-                      <div className="font-bold text-gray-900">{item.farmer_name}</div>
-                      <div className="text-gray-500 text-[11px]">
-                        ਪਿਤਾ: {item.father_husband_name || '-'} • ਪਿੰਡ {item.address_village || item.village}
+                      <div className="font-bold text-gray-950 text-sm">{displayedFarmerName}</div>
+                      <div className="text-gray-500 text-xs">
+                        ਪਿਤਾ: {item.father_husband_name || '-'} • ਪਿੰਡ: {item.address_village || item.village || '-'}
+                        {item.mobile ? ` • ਮੋ: ${item.mobile}` : ''}
                       </div>
                     </td>
 
-                    <td className="py-3 px-3">
-                      <div className="font-semibold text-blue-900">{item.billed_to_name}</div>
-                      <div className="text-[10px] text-gray-500 font-medium">
-                        {item.relation_with_main || 'Self'}
-                      </div>
+                    <td className="py-3 px-3 text-center font-mono font-bold text-gray-800">
+                      <span className="inline-block px-2 py-0.5 rounded bg-gray-100 text-[11px]">
+                        {item.new_jute_bags || 0}N + {item.old_jute_bags || 0}O
+                      </span>
                     </td>
 
                     <td className="py-3 px-3 text-right font-mono font-bold text-gray-900">
-                      <div>{item.total_bags} Bags</div>
-                      <div className="text-[10px] text-gray-500 font-normal">
-                        {item.new_jute_bags || 0}N + {item.old_jute_bags || 0}O
-                      </div>
+                      {item.total_bags}
                     </td>
 
                     <td className="py-3 px-3 text-right font-mono font-bold text-emerald-950">
-                      {Number(item.weight_quintals || 0).toFixed(2)} Qtl
+                      {Number(item.weight_quintals || 0).toFixed(2)}
                     </td>
 
                     <td className="py-3 px-3 text-right font-mono font-bold text-blue-950">
@@ -698,10 +796,6 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
 
                     <td className="py-3 px-3 text-right font-mono font-bold text-gray-900">
                       ₹{Number(item.total_amount).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                    </td>
-
-                    <td className="py-3 px-3 text-right font-mono font-bold text-emerald-950">
-                      ₹{Number(item.net_payable || item.total_amount).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                     </td>
 
                     <td className="py-3 px-3 text-center">
@@ -732,20 +826,20 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
                         </button>
                         <button
                           onClick={() => setEditingEntry({ ...item })}
-                          title="100% Full Edit"
-                          className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer font-bold inline-flex items-center gap-1 text-[11px]"
+                          title="100% Full Entry Edit"
+                          className="px-2 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg transition-colors cursor-pointer font-bold inline-flex items-center gap-1 text-xs"
                         >
                           <Edit3 className="w-3.5 h-3.5" />
-                          <span>Edit</span>
+                          <span>ਸੋਧੋ (Edit)</span>
                         </button>
                         <button
                           onClick={() => {
-                            if (confirm(`ਕੀ ਤੁਸੀਂ ਖਰੀਦ ਐਂਟਰੀ ${item.id} ਨੂੰ ਹਟਾਉਣਾ ਚਾਹੁੰਦੇ ਹੋ?`)) {
+                            if (confirm(`ਕੀ ਤੁਸੀਂ ਕਿਸਾਨ ${displayedFarmerName} ਦੀ ਖਰੀਦ ਐਂਟਰੀ ਹਟਾਉਣੀ ਚਾਹੁੰਦੇ ਹੋ?`)) {
                               onDeleteEntry(item.id);
                             }
                           }}
                           className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                          title="Delete"
+                          title="Delete Entry"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -1421,7 +1515,17 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
             </div>
 
             <form onSubmit={handleUpdateSubmit} className="p-5 space-y-3.5 text-xs">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+                <div>
+                  <label className="block text-gray-600 font-semibold mb-1">ਖਰੀਦ ਮਿਤੀ (Date):</label>
+                  <input
+                    type="date"
+                    value={editingEntry.date}
+                    onChange={(e) => setEditingEntry({ ...editingEntry, date: e.target.value })}
+                    className="w-full p-2 bg-gray-50 border border-gray-300 rounded-xl font-bold font-mono text-gray-900"
+                    required
+                  />
+                </div>
                 <div>
                   <label className="block text-gray-600 font-semibold mb-1">ਆੜ੍ਹਤੀਆ ਫਰਮ (Firm):</label>
                   <select
@@ -1447,6 +1551,20 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
                     {MANDI_LOCATIONS.map((loc) => (
                       <option key={loc} value={loc}>{loc}</option>
                     ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-gray-600 font-semibold mb-1">ਖਰੀਦ ਏਜੰਸੀ (Agency):</label>
+                  <select
+                    value={editingEntry.purchasing_agency || 'Pungrain (ਪਨਗਰੇਨ)'}
+                    onChange={(e) => setEditingEntry({ ...editingEntry, purchasing_agency: e.target.value })}
+                    className="w-full p-2 bg-gray-50 border border-gray-300 rounded-xl font-bold text-gray-900"
+                  >
+                    <option value="Pungrain (ਪਨਗਰੇਨ)">Pungrain (ਪਨਗਰੇਨ)</option>
+                    <option value="Markfed (ਮਾਰਕਫੈੱਡ)">Markfed (ਮਾਰਕਫੈੱਡ)</option>
+                    <option value="Punsup (ਪਨਸਪ)">Punsup (ਪਨਸਪ)</option>
+                    <option value="PSWC (ਵੇਅਰਹਾਊਸ)">PSWC (ਵੇਅਰਹਾਊਸ)</option>
+                    <option value="FCI (ਭਾਰਤੀ ਖੁਰਾਕ ਨਿਗਮ)">FCI (ਭਾਰਤੀ ਖੁਰਾਕ ਨਿਗਮ)</option>
                   </select>
                 </div>
               </div>
@@ -1559,6 +1677,7 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
           entries={entries}
           initialFirmId={firmFilter !== 'All' ? firmFilter : selectedFirmId}
           initialMandi={mandiFilter !== 'All' ? mandiFilter : mandiName}
+          initialDate={selectedDateTab !== 'All' ? selectedDateTab : date}
         />
       )}
 

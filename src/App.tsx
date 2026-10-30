@@ -47,9 +47,13 @@ import {
   saveFarmerToCloud, 
   deleteFarmerFromCloud, 
   saveCropArrivalToCloud, 
+  deleteCropArrivalFromCloud,
   saveBardanaToCloud, 
+  deleteBardanaFromCloud,
   saveAgencyPurchaseToCloud, 
+  deleteAgencyPurchaseFromCloud,
   saveLiftingDispatchToCloud, 
+  deleteLiftingDispatchFromCloud,
   syncLocalDataToCloud, 
   subscribeToUserCloudData 
 } from './lib/firestore';
@@ -1290,6 +1294,9 @@ export default function App() {
             onDeleteEntry={(id) => {
               if (confirm('ਆਵਕ ਐਂਟਰੀ ਹਟਾਉਣੀ ਹੈ?')) {
                 setCropArrivals((prev) => prev.filter((e) => e.id !== id));
+                if (user) {
+                  deleteCropArrivalFromCloud(user.uid, id).catch(console.error);
+                }
                 showToast('info', 'ਆਵਕ ਐਂਟਰੀ ਹਟਾਈ ਗਈ।');
               }
             }}
@@ -1310,6 +1317,9 @@ export default function App() {
             onDeleteEntry={(id) => {
               if (confirm('ਬਾਰਦਾਨਾ ਐਂਟਰੀ ਹਟਾਉਣੀ ਹੈ?')) {
                 setBardanaEntries((prev) => prev.filter((e) => e.id !== id));
+                if (user) {
+                  deleteBardanaFromCloud(user.uid, id).catch(console.error);
+                }
                 showToast('info', 'ਬਾਰਦਾਨਾ ਐਂਟਰੀ ਹਟਾਈ ਗਈ।');
               }
             }}
@@ -1332,6 +1342,9 @@ export default function App() {
             onDeleteEntry={(id) => {
               if (confirm('ਖਰੀਦ ਐਂਟਰੀ ਹਟਾਉਣੀ ਹੈ?')) {
                 setAgencyPurchases((prev) => prev.filter((e) => e.id !== id));
+                if (user) {
+                  deleteAgencyPurchaseFromCloud(user.uid, id).catch(console.error);
+                }
                 showToast('info', 'ਖਰੀਦ ਐਂਟਰੀ ਹਟਾਈ ਗਈ।');
               }
             }}
@@ -1352,6 +1365,9 @@ export default function App() {
             onDeleteEntry={(id) => {
               if (confirm('ਲਿਫਟਿੰਗ ਚਲਾਨ ਹਟਾਉਣਾ ਹੈ?')) {
                 setLiftingDispatches((prev) => prev.filter((e) => e.id !== id));
+                if (user) {
+                  deleteLiftingDispatchFromCloud(user.uid, id).catch(console.error);
+                }
                 showToast('info', 'ਲਿਫਟਿੰਗ ਚਲਾਨ ਹਟਾਇਆ ਗਿਆ।');
               }
             }}

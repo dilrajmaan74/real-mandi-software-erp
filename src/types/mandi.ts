@@ -360,6 +360,9 @@ export interface LetterPadDocument {
   signatory2_title: string;
   show_watermark: boolean;
   notes_footer?: string;
+  selected_mandi_id?: string;
+  letter_mode?: 'typed' | 'blank_plain' | 'blank_lines';
+  footer_mandi_text?: string;
   created_at: string;
 }
 
