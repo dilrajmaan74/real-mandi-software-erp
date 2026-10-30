@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   CropArrivalEntry, 
   FarmerMaster, 
   GoogleSheetConfig, 
   MANDI_LOCATIONS, 
-  AgencyPurchaseEntry 
+  AgencyPurchaseEntry,
+  PADDY_VARIETIES 
 } from '../types/mandi';
 import { 
   Wheat, 
@@ -68,7 +69,7 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
   const [cropFilter, setCropFilter] = useState('All');
   const [isSyncing, setIsSyncing] = useState<string | null>(null);
 
-  // Form states for Single Entry
+  // Form states for Single Entry (Default Bags set to ZERO 0)
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [mandiName, setMandiName] = useState('Mandi Kamalpur (ਕਮਾਲਪੁਰ)');
   const [farmerId, setFarmerId] = useState('');
@@ -82,11 +83,11 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
   const [cropVariety, setCropVariety] = useState('PR-126');
   const [vehicleNo, setVehicleNo] = useState('');
   const [bagPackingKg, setBagPackingKg] = useState<number>(37.5);
-  const [newJuteBags, setNewJuteBags] = useState<number>(200);
-  const [oldJuteBags, setOldJuteBags] = useState<number>(200);
+  const [newJuteBags, setNewJuteBags] = useState<number>(0);
+  const [oldJuteBags, setOldJuteBags] = useState<number>(0);
   const totalBags = Number(newJuteBags || 0) + Number(oldJuteBags || 0);
-  const [looseWeightKg, setLooseWeightKg] = useState<number>(15);
-  const [weightQtl, setWeightQtl] = useState<number>(150.15);
+  const [looseWeightKg, setLooseWeightKg] = useState<number>(0);
+  const [weightQtl, setWeightQtl] = useState<number>(0);
   const [moisture, setMoisture] = useState<number>(16.5);
   const [parchiNo, setParchiNo] = useState(`PR-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
 
@@ -97,7 +98,7 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
   const [enableDoublePakha, setEnableDoublePakha] = useState<boolean>(false);
   const [doublePakhaRate, setDoublePakhaRate] = useState<number>(4);
 
-  // --- BATCH ENTRY MODE STATES ---
+  // --- BATCH ENTRY MODE STATES (Default Bags set to ZERO 0) ---
   const [batchDate, setBatchDate] = useState(new Date().toISOString().split('T')[0]);
   const [batchEntryDate, setBatchEntryDate] = useState(new Date().toISOString().split('T')[0]);
   const [batchMandi, setBatchMandi] = useState('Mandi Kamalpur (ਕਮਾਲਪੁਰ)');
@@ -105,6 +106,10 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
   
   // Staging Row Form states
   const [batchFarmerId, setBatchFarmerId] = useState('');
+  const [batchFarmerSearchText, setBatchFarmerSearchText] = useState('');
+  const [isFarmerSearchOpen, setIsFarmerSearchOpen] = useState(false);
+  const batchFarmerSearchRef = useRef<HTMLDivElement>(null);
+
   const [batchFarmerName, setBatchFarmerName] = useState('');
   const [batchFarmerNamePa, setBatchFarmerNamePa] = useState('');
   const [batchFatherName, setBatchFatherName] = useState('');
@@ -114,8 +119,8 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
   const [batchCropType, setBatchCropType] = useState('Paddy Grade A');
   const [batchCropVariety, setBatchCropVariety] = useState('PR-126');
   const [batchVehicleNo, setBatchVehicleNo] = useState('');
-  const [batchNewBags, setBatchNewBags] = useState<number>(200);
-  const [batchOldBags, setBatchOldBags] = useState<number>(200);
+  const [batchNewBags, setBatchNewBags] = useState<number>(0);
+  const [batchOldBags, setBatchOldBags] = useState<number>(0);
   const [batchLooseKg, setBatchLooseKg] = useState<number>(0);
   const [batchMoisture, setBatchMoisture] = useState<number>(17);
   const [batchParchiNo, setBatchParchiNo] = useState(`PR-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
@@ -133,6 +138,33 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
 
   // Dynamic Village Master List
   const [savedVillages, setSavedVillages] = useState<VillageItem[]>(() => getSavedVillages());
+
+  // Close search dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (batchFarmerSearchRef.current && !batchFarmerSearchRef.current.contains(e.target as Node)) {
+        setIsFarmerSearchOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Real-time farmer search filtering for Batch Mode
+  const filteredBatchFarmers = useMemo(() => {
+    const q = batchFarmerSearchText.trim().toLowerCase();
+    if (!q) return registeredFarmers.slice(0, 40);
+    return registeredFarmers.filter((f) => {
+      const matchNameEn = f.name_en.toLowerCase().includes(q);
+      const matchNamePa = (f.name_pa || '').toLowerCase().includes(q);
+      const matchFatherEn = (f.father_husband_name_en || '').toLowerCase().includes(q);
+      const matchFatherPa = (f.father_husband_name_pa || '').toLowerCase().includes(q);
+      const matchVillageEn = f.village_en.toLowerCase().includes(q);
+      const matchVillagePa = (f.village_pa || '').toLowerCase().includes(q);
+      const matchMobile = (f.mobile_number || '').includes(q);
+      return matchNameEn || matchNamePa || matchFatherEn || matchFatherPa || matchVillageEn || matchVillagePa || matchMobile;
+    });
+  }, [registeredFarmers, batchFarmerSearchText]);
 
   useEffect(() => {
     const handleVillageUpdate = () => {
@@ -206,11 +238,11 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
     setVillagePa('');
     setMobile('');
     setVehicleNo('');
-    setNewJuteBags(200);
-    setOldJuteBags(200);
-    setLooseWeightKg(15);
+    setNewJuteBags(0);
+    setOldJuteBags(0);
+    setLooseWeightKg(0);
     setBagPackingKg(37.5);
-    setWeightQtl(150.15);
+    setWeightQtl(0);
     setLaborRate(8);
     setEnableSukhiKiti(false);
     setSukhiKitiRate(5);
@@ -337,6 +369,7 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
 
     // Reset input row for next farmer (keep batchEntryDate for rapid entry)
     setBatchFarmerId('');
+    setBatchFarmerSearchText('');
     setBatchFarmerName('');
     setBatchFarmerNamePa('');
     setBatchFatherName('');
@@ -344,8 +377,8 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
     setBatchVillagePa('');
     setBatchMobile('');
     setBatchVehicleNo('');
-    setBatchNewBags(200);
-    setBatchOldBags(200);
+    setBatchNewBags(0);
+    setBatchOldBags(0);
     setBatchLooseKg(0);
     setBatchParchiNo(`PR-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
     setBatchEnableSukhiKiti(false);
@@ -1027,28 +1060,17 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
                 <label className="block text-xs font-bold text-gray-700 mb-1">
                   🏷️ ਕਿਸਮ (Crop Variety):
                 </label>
-                <input
-                  type="text"
+                <select
                   value={batchCropVariety}
                   onChange={(e) => setBatchCropVariety(e.target.value)}
-                  list="master-batch-variety-options"
-                  placeholder="e.g. PR-126 / PR-131 / 1509"
-                  className="w-full p-2 bg-white border border-gray-300 rounded-xl font-bold text-gray-900 text-xs"
-                />
-                <datalist id="master-batch-variety-options">
-                  <option value="PR-126" />
-                  <option value="PR-131" />
-                  <option value="PR-130" />
-                  <option value="PR-128" />
-                  <option value="Pusa 44" />
-                  <option value="1509 Basmati" />
-                  <option value="1121 Basmati" />
-                  <option value="1718 Basmati" />
-                  <option value="Hybrid" />
-                  <option value="PB-1" />
-                  <option value="HD-3086" />
-                  <option value="HD-2967" />
-                </datalist>
+                  className="w-full p-2 bg-white border border-gray-300 rounded-xl font-bold text-gray-900 text-xs focus:outline-none"
+                >
+                  {PADDY_VARIETIES.map((v) => (
+                    <option key={`master-batch-v-${v}`} value={v}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           </div>
@@ -1080,20 +1102,119 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
                 />
               </div>
 
-              <div>
-                <label className="block text-gray-700 font-bold mb-1">ਰਜਿਸਟਰਡ ਕਿਸਾਨ ਚੁਣੋ:</label>
-                <select
-                  value={batchFarmerId}
-                  onChange={(e) => handleBatchFarmerSelect(e.target.value)}
-                  className="w-full p-2 bg-white border border-emerald-300 rounded-lg text-gray-900 font-bold shadow-sm"
-                >
-                  <option value="">-- ਕਿਸਾਨ ਚੁਣੋ ਜਾਂ ਹੱਥੀਂ ਭਰੋ --</option>
-                  {registeredFarmers.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.name_en} {f.father_husband_name_en ? `(ਸ/ਓ ${f.father_husband_name_en})` : ''} - ਪਿੰਡ: {f.village_en}
-                    </option>
-                  ))}
-                </select>
+              {/* Real-time Search Box for Registered Farmer */}
+              <div ref={batchFarmerSearchRef} className="relative">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-gray-700 font-bold flex items-center gap-1">
+                    <Search className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>ਰਜਿਸਟਰਡ ਕਿਸਾਨ ਖੋਜੋ:</span>
+                  </label>
+                  {batchFarmerId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBatchFarmerId('');
+                        setBatchFarmerSearchText('');
+                        setBatchFarmerName('');
+                        setBatchFarmerNamePa('');
+                        setBatchFatherName('');
+                        setBatchVillage('');
+                        setBatchVillagePa('');
+                        setBatchMobile('');
+                      }}
+                      className="text-[10px] text-red-600 hover:text-red-800 font-bold cursor-pointer"
+                    >
+                      ✕ ਕਲੀਅਰ
+                    </button>
+                  )}
+                </div>
+
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-emerald-600 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={batchFarmerSearchText}
+                    onChange={(e) => {
+                      setBatchFarmerSearchText(e.target.value);
+                      setIsFarmerSearchOpen(true);
+                    }}
+                    onFocus={() => setIsFarmerSearchOpen(true)}
+                    placeholder="ਕਿਸਾਨ, ਪਿਤਾ ਦਾ ਨਾਮ ਜਾਂ ਪਿੰਡ..."
+                    className="w-full pl-8 pr-7 py-2 bg-white border-2 border-emerald-400 focus:border-emerald-700 rounded-lg text-gray-900 font-bold text-xs shadow-sm focus:outline-none"
+                  />
+                  {batchFarmerSearchText && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBatchFarmerSearchText('');
+                        setIsFarmerSearchOpen(true);
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 font-bold text-xs cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                {/* Instant Filtered Floating Dropdown */}
+                {isFarmerSearchOpen && (
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-white border-2 border-emerald-500 rounded-xl shadow-2xl z-50 max-h-64 overflow-y-auto divide-y divide-gray-100">
+                    <div className="bg-emerald-950 text-white px-3 py-1.5 text-[10px] font-bold flex items-center justify-between sticky top-0 z-10">
+                      <span>ਮਿਲੇ ਕਿਸਾਨ ({filteredBatchFarmers.length})</span>
+                      <button
+                        type="button"
+                        onClick={() => setIsFarmerSearchOpen(false)}
+                        className="text-emerald-300 hover:text-white cursor-pointer"
+                      >
+                        ਬੰਦ ਕਰੋ ✕
+                      </button>
+                    </div>
+
+                    {filteredBatchFarmers.length === 0 ? (
+                      <div className="p-3 text-center text-xs text-gray-500 space-y-1">
+                        <p className="font-semibold text-gray-700">ਕੋਈ ਰਜਿਸਟਰਡ ਕਿਸਾਨ ਨਹੀਂ ਮਿਲਿਆ।</p>
+                        <p className="text-[10px] text-gray-400">ਤੁਸੀਂ ਅਗਲੇ ਖਾਨਿਆਂ ਵਿੱਚ ਨਾਮ ਸਿੱਧਾ ਹੱਥੀਂ ਵੀ ਭਰ ਸਕਦੇ ਹੋ।</p>
+                      </div>
+                    ) : (
+                      filteredBatchFarmers.map((f) => {
+                        const isSelected = batchFarmerId === f.id;
+                        return (
+                          <button
+                            key={`batch-search-f-${f.id}`}
+                            type="button"
+                            onClick={() => {
+                              handleBatchFarmerSelect(f.id);
+                              setBatchFarmerSearchText(`${f.name_en} (${f.village_en})`);
+                              setIsFarmerSearchOpen(false);
+                            }}
+                            className={`w-full text-left p-2.5 transition-colors cursor-pointer flex items-center justify-between gap-2 hover:bg-emerald-50 ${
+                              isSelected ? 'bg-emerald-100/70 border-l-4 border-emerald-700 font-bold' : ''
+                            }`}
+                          >
+                            <div>
+                              <div className="font-bold text-xs text-gray-900 flex items-center gap-1.5">
+                                <span>{f.name_en}</span>
+                                {f.name_pa && <span className="text-emerald-800">({f.name_pa})</span>}
+                                {f.father_husband_name_en && (
+                                  <span className="text-[10px] text-amber-900 bg-amber-50 px-1 rounded border border-amber-200">
+                                    ਸ/ਓ {f.father_husband_name_en}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[11px] text-gray-600 flex items-center gap-2 mt-0.5">
+                                <span className="text-emerald-700 font-semibold">📍 {f.village_en}</span>
+                                {f.mobile_number && <span className="font-mono text-gray-500">📞 {f.mobile_number}</span>}
+                              </div>
+                            </div>
+                            <span className="px-2 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-[10px] font-bold shrink-0">
+                              ਚੁਣੋ →
+                            </span>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
               </div>
 
               <div>
@@ -1216,28 +1337,17 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
                 <label className="block text-gray-700 font-bold mb-1">
                   🏷️ ਕਿਸਮ (Variety):
                 </label>
-                <input
-                  type="text"
+                <select
                   value={batchCropVariety}
                   onChange={(e) => setBatchCropVariety(e.target.value)}
-                  list="row-variety-options"
-                  placeholder="PR-126 / PR-131 / 1509"
-                  className="w-full p-2 bg-white border border-emerald-300 rounded-lg font-bold text-gray-900"
-                />
-                <datalist id="row-variety-options">
-                  <option value="PR-126" />
-                  <option value="PR-131" />
-                  <option value="PR-130" />
-                  <option value="PR-128" />
-                  <option value="Pusa 44" />
-                  <option value="1509 Basmati" />
-                  <option value="1121 Basmati" />
-                  <option value="1718 Basmati" />
-                  <option value="Hybrid" />
-                  <option value="PB-1" />
-                  <option value="HD-3086" />
-                  <option value="HD-2967" />
-                </datalist>
+                  className="w-full p-2 bg-white border border-emerald-300 rounded-lg font-bold text-gray-900 shadow-sm"
+                >
+                  {PADDY_VARIETIES.map((v) => (
+                    <option key={`row-batch-v-${v}`} value={v}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -1247,7 +1357,7 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
                   value={batchMobile}
                   onChange={(e) => setBatchMobile(e.target.value)}
                   placeholder="9876543210"
-                  className="w-full p-2 bg-white border border-gray-300 rounded-lg font-mono text-gray-900"
+                  className="w-full p-2 bg-white border border-gray-300 rounded-lg font-mono text-gray-900 shadow-sm"
                 />
               </div>
 
@@ -1258,7 +1368,7 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
                   value={batchVehicleNo}
                   onChange={(e) => setBatchVehicleNo(e.target.value)}
                   placeholder="PB-19-TR-4021"
-                  className="w-full p-2 bg-white border border-gray-300 rounded-lg font-mono uppercase text-gray-900"
+                  className="w-full p-2 bg-white border border-gray-300 rounded-lg font-mono uppercase text-gray-900 shadow-sm"
                 />
               </div>
             </div>
@@ -1266,42 +1376,57 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
             {/* Row 3: Bags, Loose & Parchi */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
               <div>
-                <label className="block text-gray-600 font-semibold mb-1">ਨਵਾਂ ਜੂਟ (New Bags):</label>
+                <label className="block text-gray-700 font-bold mb-1 flex items-center justify-between">
+                  <span>ਨਵਾਂ ਜੂਟ (New Bags):</span>
+                  <span className="text-[10px] text-emerald-800 bg-emerald-100 px-1 rounded font-semibold">0 ਡਿਫਾਲਟ</span>
+                </label>
                 <input
                   type="number"
-                  value={batchNewBags}
-                  onChange={(e) => setBatchNewBags(Number(e.target.value))}
-                  className="w-full p-2 bg-white border border-emerald-300 rounded-lg font-mono font-bold text-emerald-900"
+                  min="0"
+                  value={batchNewBags === 0 ? '' : batchNewBags}
+                  onChange={(e) => setBatchNewBags(e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)))}
+                  placeholder="0"
+                  className="w-full p-2 bg-white border-2 border-emerald-300 focus:border-emerald-600 rounded-lg font-mono font-bold text-emerald-950 shadow-sm"
                 />
               </div>
 
               <div>
-                <label className="block text-gray-600 font-semibold mb-1">ਪੁਰਾਣਾ ਜੂਟ (Old Bags):</label>
+                <label className="block text-gray-700 font-bold mb-1 flex items-center justify-between">
+                  <span>ਪੁਰਾਣਾ ਜੂਟ (Old Bags):</span>
+                  <span className="text-[10px] text-amber-800 bg-amber-100 px-1 rounded font-semibold">0 ਡਿਫਾਲਟ</span>
+                </label>
                 <input
                   type="number"
-                  value={batchOldBags}
-                  onChange={(e) => setBatchOldBags(Number(e.target.value))}
-                  className="w-full p-2 bg-white border border-amber-300 rounded-lg font-mono font-bold text-amber-900"
+                  min="0"
+                  value={batchOldBags === 0 ? '' : batchOldBags}
+                  onChange={(e) => setBatchOldBags(e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)))}
+                  placeholder="0"
+                  className="w-full p-2 bg-white border-2 border-amber-300 focus:border-amber-600 rounded-lg font-mono font-bold text-amber-950 shadow-sm"
                 />
               </div>
 
               <div>
-                <label className="block text-gray-600 font-semibold mb-1">ਤੋਟਾ (Loose kg):</label>
+                <label className="block text-gray-700 font-bold mb-1 flex items-center justify-between">
+                  <span>ਤੋਟਾ (Loose kg):</span>
+                  <span className="text-[10px] text-purple-800 bg-purple-100 px-1 rounded font-semibold">0 ਕਿਲੋ</span>
+                </label>
                 <input
                   type="number"
-                  value={batchLooseKg}
-                  onChange={(e) => setBatchLooseKg(Number(e.target.value))}
-                  className="w-full p-2 bg-white border border-purple-300 rounded-lg font-mono font-bold text-purple-900"
+                  min="0"
+                  value={batchLooseKg === 0 ? '' : batchLooseKg}
+                  onChange={(e) => setBatchLooseKg(e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)))}
+                  placeholder="0"
+                  className="w-full p-2 bg-white border-2 border-purple-300 focus:border-purple-600 rounded-lg font-mono font-bold text-purple-950 shadow-sm"
                 />
               </div>
 
               <div>
-                <label className="block text-gray-600 font-semibold mb-1">ਪਰਚੀ ਨੰਬਰ (Parchi No):</label>
+                <label className="block text-gray-700 font-bold mb-1">ਪਰਚੀ ਨੰਬਰ (Parchi No):</label>
                 <input
                   type="text"
                   value={batchParchiNo}
                   onChange={(e) => setBatchParchiNo(e.target.value)}
-                  className="w-full p-2 bg-white border border-gray-300 rounded-lg font-mono font-bold text-gray-900"
+                  className="w-full p-2 bg-white border border-gray-300 rounded-lg font-mono font-bold text-gray-900 shadow-sm"
                 />
               </div>
             </div>
@@ -2003,14 +2128,18 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-gray-600 font-semibold mb-1">ਕਿਸਮ (Variety):</label>
-                  <input
-                    type="text"
+                  <label className="block text-gray-700 font-bold mb-1">ਕਿਸਮ (Variety):</label>
+                  <select
                     value={cropVariety}
                     onChange={(e) => setCropVariety(e.target.value)}
-                    placeholder="PR-126 / Grade A"
-                    className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-xl text-gray-900 font-semibold"
-                  />
+                    className="w-full p-2.5 bg-white border border-gray-300 rounded-xl font-bold text-gray-900 shadow-sm"
+                  >
+                    {PADDY_VARIETIES.map((v) => (
+                      <option key={`single-variety-opt-${v}`} value={v}>
+                        {v}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -2023,33 +2152,39 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
 
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
                   <div>
-                    <label className="block text-gray-600 font-semibold mb-1">ਨਵਾਂ ਜੂਟ (New):</label>
+                    <label className="block text-gray-700 font-bold mb-1">ਨਵਾਂ ਜੂਟ (New):</label>
                     <input
                       type="number"
-                      value={newJuteBags}
-                      onChange={(e) => handleBagsChange(Number(e.target.value), oldJuteBags)}
-                      className="w-full p-2 bg-white border border-emerald-300 rounded-lg font-mono font-bold text-emerald-900"
+                      min="0"
+                      value={newJuteBags === 0 ? '' : newJuteBags}
+                      onChange={(e) => handleBagsChange(e.target.value === '' ? 0 : Number(e.target.value), oldJuteBags)}
+                      placeholder="0"
+                      className="w-full p-2 bg-white border-2 border-emerald-300 rounded-lg font-mono font-bold text-emerald-950 shadow-sm"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-gray-600 font-semibold mb-1">ਪੁਰਾਣਾ ਜੂਟ (Old):</label>
+                    <label className="block text-gray-700 font-bold mb-1">ਪੁਰਾਣਾ ਜੂਟ (Old):</label>
                     <input
                       type="number"
-                      value={oldJuteBags}
-                      onChange={(e) => handleBagsChange(newJuteBags, Number(e.target.value))}
-                      className="w-full p-2 bg-white border border-amber-300 rounded-lg font-mono font-bold text-amber-900"
+                      min="0"
+                      value={oldJuteBags === 0 ? '' : oldJuteBags}
+                      onChange={(e) => handleBagsChange(newJuteBags, e.target.value === '' ? 0 : Number(e.target.value))}
+                      placeholder="0"
+                      className="w-full p-2 bg-white border-2 border-amber-300 rounded-lg font-mono font-bold text-amber-950 shadow-sm"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-gray-600 font-semibold mb-1">ਤੋਟਾ / Loose (Kg):</label>
+                    <label className="block text-gray-700 font-bold mb-1">ਤੋਟਾ / Loose (Kg):</label>
                     <input
                       type="number"
                       step="0.5"
-                      value={looseWeightKg}
-                      onChange={(e) => handleLooseWeightChange(Number(e.target.value))}
-                      className="w-full p-2 bg-white border border-purple-300 rounded-lg font-mono font-bold text-purple-900"
+                      min="0"
+                      value={looseWeightKg === 0 ? '' : looseWeightKg}
+                      onChange={(e) => handleLooseWeightChange(e.target.value === '' ? 0 : Number(e.target.value))}
+                      placeholder="0"
+                      className="w-full p-2 bg-white border-2 border-purple-300 rounded-lg font-mono font-bold text-purple-950 shadow-sm"
                     />
                   </div>
 

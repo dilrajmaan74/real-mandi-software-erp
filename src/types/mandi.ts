@@ -196,19 +196,20 @@ export interface AgencyPurchaseEntry {
 
 // 4. Lifting & Dispatch (ਮੰਡੀ ਲਿਫਟਿੰਗ ਤੇ ਚਲਾਨ)
 export const PADDY_VARIETIES: string[] = [
-  'PR-126 (ਪੀ.ਆਰ 126)',
-  'PR-131 (ਪੀ.ਆਰ 131)',
-  'PR-130 (ਪੀ.ਆਰ 130)',
-  'PR-128 (ਪੀ.ਆਰ 128)',
-  'PR-114 (ਪੀ.ਆਰ 114)',
-  'Pusa 44 (ਪੂਸਾ 44)',
-  '1509 Basmati (1509 ਬਾਸਮਤੀ)',
-  '1718 Basmati (1718 ਬਾਸਮਤੀ)',
-  '1121 Basmati (1121 ਬਾਸਮਤੀ)',
-  '1401 Basmati (1401 ਬਾਸਮਤੀ)',
-  'Paddy Grade A (ਜਨਰਲ ਗ੍ਰੇਡ-ਏ)',
-  'Hybrid (ਹਾਈਬ੍ਰਿਡ)',
-  'Sarbati (ਸਰਬਤੀ)',
+  'PR-126',
+  '110',
+  'Hybrid',
+  'PR-131',
+  'PR-130',
+  'PR-128',
+  'PR-114',
+  'Pusa 44',
+  '1509 Basmati',
+  '1718 Basmati',
+  '1121 Basmati',
+  '1401 Basmati',
+  'Paddy Grade A',
+  'Sarbati',
   'Other / ਹੋਰ ਕਿਸਮ',
 ];
 
