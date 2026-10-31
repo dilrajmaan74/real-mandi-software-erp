@@ -566,6 +566,52 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
     return { count: entries.length, bags, newB, oldB, wt, amt };
   }, [entries]);
 
+  // Both firms combined stats (JAMMU TRADING CO. + NEW JAMMU TRADING CO.) under active filters
+  const combinedBothFirmsStats = useMemo(() => {
+    const activeEntries = entries.filter((e) => {
+      const q = search.toLowerCase();
+      const matchSearch =
+        e.farmer_name.toLowerCase().includes(q) ||
+        (e.father_husband_name && e.father_husband_name.toLowerCase().includes(q)) ||
+        e.billed_to_name.toLowerCase().includes(q) ||
+        (e.address_village && e.address_village.toLowerCase().includes(q)) ||
+        (e.mandi_name && e.mandi_name.toLowerCase().includes(q)) ||
+        e.id.toLowerCase().includes(q);
+      const matchMandi = mandiFilter === 'All' || e.mandi_name?.includes(mandiFilter);
+      const matchAgency = agencyFilter === 'All' || e.purchasing_agency.includes(agencyFilter);
+      const matchDate = selectedDateTab === 'All' || e.date === selectedDateTab;
+      return matchSearch && matchMandi && matchAgency && matchDate;
+    });
+
+    const bags = activeEntries.reduce((s, e) => s + (e.total_bags || 0), 0);
+    const newB = activeEntries.reduce((s, e) => s + (e.new_jute_bags || 0), 0);
+    const oldB = activeEntries.reduce((s, e) => s + (e.old_jute_bags || 0), 0);
+    const wt = activeEntries.reduce((s, e) => s + (e.weight_quintals || 0), 0);
+    const amt = activeEntries.reduce((s, e) => s + (e.total_amount || 0), 0);
+
+    const jammuOnly = activeEntries.filter(
+      (e) => (e.firm_id === 'JAMMU TRADING CO.' || e.firm_name?.includes('JAMMU TRADING CO.')) && !e.firm_name?.includes('NEW')
+    );
+    const newJammuOnly = activeEntries.filter(
+      (e) => e.firm_id === 'NEW JAMMU TRADING CO.' || e.firm_name?.includes('NEW JAMMU')
+    );
+
+    return {
+      count: activeEntries.length,
+      bags,
+      newB,
+      oldB,
+      wt,
+      amt,
+      jammuCount: jammuOnly.length,
+      jammuBags: jammuOnly.reduce((s, e) => s + (e.total_bags || 0), 0),
+      jammuWt: jammuOnly.reduce((s, e) => s + (e.weight_quintals || 0), 0),
+      newJammuCount: newJammuOnly.length,
+      newJammuBags: newJammuOnly.reduce((s, e) => s + (e.total_bags || 0), 0),
+      newJammuWt: newJammuOnly.reduce((s, e) => s + (e.weight_quintals || 0), 0),
+    };
+  }, [entries, search, mandiFilter, agencyFilter, selectedDateTab]);
+
   const activeFirm = ARHTIA_FIRMS.find((f) => f.id === selectedFirmId) || ARHTIA_FIRMS[0];
 
   return (
@@ -612,6 +658,96 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
             <Plus className="w-4 h-4" />
             <span>+ ਨਵੀਂ ਸਰਕਾਰੀ ਖਰੀਦ (ਮਲਟੀ-ਕਿਸਾਨ ਬੈਚ)</span>
           </button>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 🌟 ਦੋਵੇਂ ਫਰਮਾਂ ਦਾ ਸਾਂਝਾ ਕੁੱਲ ਜੋੜ (BOTH FIRMS COMBINED TOTAL: BAGS & QUL) */}
+      {/* As requested: "DONO FRIM JAMMU AND NEW JAMMU DONO DA TOTAL IK JAGHA VE SHOW KARO BAGS QUL" */}
+      {/* ========================================================================= */}
+      <div className="px-5 pt-1">
+        <div className="bg-gradient-to-r from-blue-950 via-slate-900 to-indigo-950 text-white rounded-2xl p-4 sm:p-5 shadow-lg border-2 border-amber-400">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-gray-700/80 pb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2.5 bg-amber-500 rounded-xl text-blue-950 font-black shadow-md">
+                <Scale className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-base sm:text-lg font-black tracking-wide text-amber-300 uppercase">
+                    ਦੋਵੇਂ ਫਰਮਾਂ ਦਾ ਕੁੱਲ ਜੋੜ (JAMMU + NEW JAMMU COMBINED TOTAL)
+                  </span>
+                  <span className="px-2.5 py-0.5 bg-amber-400/20 text-amber-300 border border-amber-400/40 rounded-full text-[10px] font-bold">
+                    ਦੋਵੇਂ ਫਰਮਾਂ ਇਕੱਠੀਆਂ (Both Firms Total)
+                  </span>
+                </div>
+                <p className="text-xs text-blue-200 mt-0.5">
+                  JAMMU TRADING CO. + NEW JAMMU TRADING CO. • {selectedDateTab !== 'All' ? `ਮਿਤੀ: ${selectedDateTab.split('-').reverse().join('/')}` : 'ਸਮੂਹ ਮਿਤੀਆਂ ਦਾ ਸਾਂਝਾ ਰਿਕਾਰਡ'}
+                </p>
+              </div>
+            </div>
+
+            {/* Quick firm breakdown pills */}
+            <div className="flex items-center gap-2 flex-wrap text-xs">
+              <div className="bg-emerald-950/80 border border-emerald-500/50 rounded-xl px-3 py-1.5 text-emerald-200">
+                <span className="text-[10px] text-emerald-300 block font-semibold">1. JAMMU TRADING CO.</span>
+                <span className="font-mono font-black text-white text-xs">{combinedBothFirmsStats.jammuBags} Bags</span>
+                <span className="text-emerald-300 font-mono text-[11px] ml-1">({combinedBothFirmsStats.jammuWt.toFixed(2)} Qtl)</span>
+              </div>
+              <div className="bg-indigo-950/80 border border-indigo-500/50 rounded-xl px-3 py-1.5 text-indigo-200">
+                <span className="text-[10px] text-indigo-300 block font-semibold">2. NEW JAMMU TRADING CO.</span>
+                <span className="font-mono font-black text-white text-xs">{combinedBothFirmsStats.newJammuBags} Bags</span>
+                <span className="text-indigo-300 font-mono text-[11px] ml-1">({combinedBothFirmsStats.newJammuWt.toFixed(2)} Qtl)</span>
+              </div>
+            </div>
+          </div>
+
+          {/* 4 Big High-Visibility Counters for Both Firms Combined */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 pt-3.5">
+            {/* 1. ਕੁੱਲ ਬੋਰੀਆਂ / ਬਾਰਦਾਨਾ */}
+            <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-center">
+              <span className="text-gray-300 text-xs font-semibold block mb-0.5">ਕੁੱਲ ਬਾਰਦਾਨਾ / ਬੋਰੀਆਂ (TOTAL BAGS)</span>
+              <div className="text-2xl sm:text-3xl font-black font-mono text-amber-300 tracking-tight">
+                {combinedBothFirmsStats.bags} <span className="text-sm font-normal text-amber-200">Bags</span>
+              </div>
+              <span className="text-[11px] font-mono font-bold text-gray-300 block mt-1">
+                {combinedBothFirmsStats.newB} ਨਵਾਂ (A) + {combinedBothFirmsStats.oldB} ਪੁਰਾਣਾ (B)
+              </span>
+            </div>
+
+            {/* 2. ਕੁੱਲ ਵਜ਼ਨ ਕੁਇੰਟਲ */}
+            <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-center">
+              <span className="text-gray-300 text-xs font-semibold block mb-0.5">ਕੁੱਲ ਵਜ਼ਨ (TOTAL QUINTALS)</span>
+              <div className="text-2xl sm:text-3xl font-black font-mono text-emerald-400 tracking-tight">
+                {combinedBothFirmsStats.wt.toFixed(2)} <span className="text-sm font-normal text-emerald-200">ਕੁਇੰਟਲ</span>
+              </div>
+              <span className="text-[11px] font-mono text-gray-300 block mt-1">
+                37.5 Kg Standard Packing
+              </span>
+            </div>
+
+            {/* 3. ਕੁੱਲ ਸਰਕਾਰੀ MSP ਰਕਮ */}
+            <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-center">
+              <span className="text-gray-300 text-xs font-semibold block mb-0.5">ਕੁੱਲ MSP ਰਕਮ (TOTAL AMOUNT)</span>
+              <div className="text-xl sm:text-2xl font-black font-mono text-white tracking-tight">
+                ₹{combinedBothFirmsStats.amt.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+              </div>
+              <span className="text-[11px] font-mono text-gray-300 block mt-1">
+                @ ₹2461.00 / Qtl MSP Fix
+              </span>
+            </div>
+
+            {/* 4. ਕੁੱਲ ਕਿਸਾਨ ਐਂਟਰੀਆਂ */}
+            <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-center">
+              <span className="text-gray-300 text-xs font-semibold block mb-0.5">ਕੁੱਲ ਕਿਸਾਨ (TOTAL FARMERS)</span>
+              <div className="text-2xl sm:text-3xl font-black font-mono text-sky-300 tracking-tight">
+                {combinedBothFirmsStats.count} <span className="text-sm font-normal text-sky-200">ਕਿਸਾਨ</span>
+              </div>
+              <span className="text-[11px] text-gray-300 block mt-1">
+                ਮੁੱਖ ਅਤੇ ਲਿੰਕਡ ਕਿਸਾਨ
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1057,6 +1193,35 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
               })
             )}
           </tbody>
+          {filteredEntries.length > 0 && (
+            <tfoot className="bg-amber-50/80 border-t-2 border-amber-300 font-bold text-gray-900">
+              <tr>
+                <td colSpan={2} className="py-3 px-3 text-right text-xs font-black uppercase text-amber-950">
+                  ਕੁੱਲ ਜੋੜ (Grand Total - {filteredEntries.length} ਕਿਸਾਨ):
+                </td>
+                <td className="py-3 px-3 text-center font-mono font-bold text-gray-800">
+                  <span className="inline-block px-2 py-0.5 rounded bg-amber-100 text-[11px] font-black">
+                    {filteredEntries.reduce((s, e) => s + (e.new_jute_bags || 0), 0)}N + {filteredEntries.reduce((s, e) => s + (e.old_jute_bags || 0), 0)}O
+                  </span>
+                </td>
+                <td className="py-3 px-3 text-right font-mono font-black text-amber-950 text-sm">
+                  {filteredEntries.reduce((s, e) => s + (e.total_bags || 0), 0)}
+                </td>
+                <td className="py-3 px-3 text-right font-mono font-black text-emerald-950 text-sm">
+                  {filteredEntries.reduce((s, e) => s + (e.weight_quintals || 0), 0).toFixed(2)}
+                </td>
+                <td className="py-3 px-3 text-right font-mono font-bold text-blue-950 text-xs">
+                  ਔਸਤ ₹2461
+                </td>
+                <td className="py-3 px-3 text-right font-mono font-black text-blue-950 text-sm">
+                  ₹{filteredEntries.reduce((s, e) => s + (e.total_amount || 0), 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                </td>
+                <td colSpan={2} className="py-3 px-3 text-center text-[11px] text-gray-500 font-medium">
+                  {selectedFirmView === 'All' ? 'ਦੋਵੇਂ ਫਰਮਾਂ ਸ਼ਾਮਲ' : selectedFirmView}
+                </td>
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
 
