@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo } from 'react';
-import { AgencyPurchaseEntry, ArhtiaFirm, ARHTIA_FIRMS, MANDI_LOCATIONS } from '../types/mandi';
+import { AgencyPurchaseEntry, ArhtiaFirm, ARHTIA_FIRMS, MANDI_LOCATIONS, FarmerMaster } from '../types/mandi';
 import { 
   Printer, 
   X, 
@@ -16,10 +16,66 @@ import {
 import { toJpeg, toPng } from 'html-to-image';
 import jsPDF from 'jspdf';
 
+// Helper to guarantee Farmer Name is strictly in English for PDF
+const getEnglishFarmerName = (item: AgencyPurchaseEntry, farmersList?: FarmerMaster[]): string => {
+  const candidate = (item.billed_to_name || item.farmer_name || '').trim();
+  if (/[a-zA-Z]/.test(candidate)) {
+    const englishMatch = candidate.match(/[A-Za-z\s.'-]+/);
+    if (englishMatch && englishMatch[0].trim().length > 1) {
+      return englishMatch[0].trim();
+    }
+    return candidate;
+  }
+
+  if (farmersList && farmersList.length > 0) {
+    if (item.farmer_id) {
+      const match = farmersList.find((f) => f.id === item.farmer_id);
+      if (match) {
+        if (match.linked_farmers) {
+          const lf = match.linked_farmers.find(
+            (l) => l.id === item.farmer_id || l.name_pa === candidate || l.name_en === candidate
+          );
+          if (lf && lf.name_en) return lf.name_en;
+        }
+        if (match.name_en) return match.name_en;
+      }
+    }
+    const matchByPa = farmersList.find((f) => f.name_pa === candidate || f.name_en === candidate);
+    if (matchByPa && matchByPa.name_en) return matchByPa.name_en;
+  }
+
+  return candidate || 'Farmer';
+};
+
+const getEnglishFatherName = (item: AgencyPurchaseEntry, farmersList?: FarmerMaster[]): string => {
+  const fName = (item.father_husband_name || '').trim();
+  if (/[a-zA-Z]/.test(fName)) {
+    const englishMatch = fName.match(/[A-Za-z\s.'-]+/);
+    if (englishMatch && englishMatch[0].trim().length > 1) return englishMatch[0].trim();
+    return fName;
+  }
+  if (farmersList && item.farmer_id) {
+    const match = farmersList.find((f) => f.id === item.farmer_id);
+    if (match && match.father_husband_name_en) return match.father_husband_name_en;
+  }
+  return fName || '-';
+};
+
+const getEnglishVillage = (item: AgencyPurchaseEntry, farmersList?: FarmerMaster[]): string => {
+  const v = (item.address_village || item.village || '').trim();
+  if (/[a-zA-Z]/.test(v)) return v;
+  if (farmersList && item.farmer_id) {
+    const match = farmersList.find((f) => f.id === item.farmer_id);
+    if (match && match.village_en) return match.village_en;
+  }
+  return v || '-';
+};
+
 interface AllEntryPdfModalProps {
   isOpen: boolean;
   onClose: () => void;
   entries: AgencyPurchaseEntry[];
+  registeredFarmers?: FarmerMaster[];
   initialFirmId?: string;
   initialMandi?: string;
   initialDate?: string;
@@ -29,6 +85,7 @@ export const AllEntryPdfModal: React.FC<AllEntryPdfModalProps> = ({
   isOpen,
   onClose,
   entries,
+  registeredFarmers = [],
   initialFirmId,
   initialMandi,
   initialDate,
@@ -374,44 +431,44 @@ export const AllEntryPdfModal: React.FC<AllEntryPdfModalProps> = ({
         )}
 
         {/* ======================= PRINTABLE SHEET VIEWPORT ======================= */}
-        <div className="p-3 sm:p-6 bg-gray-200 print:bg-white flex justify-center">
+        <div className="p-2 sm:p-5 bg-gray-200 print:bg-white flex justify-center">
           
           <div
             id="agency-purchase-sheet"
             ref={sheetPrintRef}
-            className="w-full max-w-[210mm] min-h-[297mm] bg-white text-gray-900 p-6 sm:p-8 relative flex flex-col justify-between border border-gray-300 shadow-xl print:shadow-none print:border-none print:p-4"
+            className="w-full max-w-[210mm] min-h-[297mm] bg-white text-gray-900 p-3.5 sm:p-5 print:p-2.5 relative flex flex-col justify-between border border-gray-300 shadow-xl print:shadow-none print:border-none"
             style={{
               fontFamily: "'Noto Sans Gurmukhi', 'Gurmukhi MN', Georgia, serif",
             }}
           >
             
             {/* TOP HEADER SECTION */}
-            <div className="space-y-3">
+            <div className="space-y-1.5">
               
               {/* 1. Religious Inscription Top Center */}
-              <div className="text-center border-b border-gray-300 pb-1">
-                <span className="text-xs sm:text-sm font-bold tracking-widest text-gray-900">
+              <div className="text-center border-b border-gray-300 pb-0.5">
+                <span className="text-[11px] font-bold tracking-widest text-gray-900">
                   ॥ ੴ ਸ੍ਰੀ ਵਾਹਿਗੁਰੂ ਜੀ ਕੀ ਫ਼ਤਹਿ ॥
                 </span>
               </div>
 
               {/* 2. Main Firm Letterhead Header */}
-              <div className="text-center space-y-1 pb-2">
-                <div className="text-[10px] sm:text-xs font-bold tracking-widest text-blue-900 uppercase">
+              <div className="text-center space-y-0.5 pb-1">
+                <div className="text-[9.5px] font-bold tracking-widest text-blue-900 uppercase">
                   ਪੰਜਾਬ ਰਾਜ ਖੇਤੀਬਾੜੀ ਮੰਡੀਕਰਨ ਬੋਰਡ ਅਧੀਨ ਕਮਿਸ਼ਨ ਏਜੰਟ (ਆੜ੍ਹਤੀਆ)
                 </div>
 
-                <h1 className="text-2xl sm:text-3xl font-black text-gray-950 tracking-tight leading-tight uppercase">
+                <h1 className="text-xl sm:text-2xl font-black text-gray-950 tracking-tight leading-tight uppercase">
                   {currentFirm.name}
                 </h1>
 
-                <div className="text-xs sm:text-sm font-bold text-gray-800">
+                <div className="text-[11px] font-bold text-gray-800">
                   {currentFirm.name === 'JAMMU TRADING CO.' ? 'ਜੰਮੂ ਟਰੇਡਿੰਗ ਕੰਪਨੀ' : 'ਨਿਊ ਜੰਮੂ ਟਰੇਡਿੰਗ ਕੰਪਨੀ'} 
                   <span className="text-gray-500 font-normal"> (ਕਮਿਸ਼ਨ ਏਜੰਟ ਤੇ ਅਨਾਜ ਵਪਾਰੀ)</span>
                 </div>
 
                 {/* Firm Details Strip */}
-                <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-4 text-xs font-medium text-gray-800 pt-1">
+                <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-3 text-[10.5px] font-medium text-gray-800 pt-0.5">
                   <span><strong>ਮੰਡੀ:</strong> {selectedMandi === 'All' ? currentFirm.address : selectedMandi}</span>
                   <span>•</span>
                   <span><strong>ਲਾਈਸੰਸ ਨੰ:</strong> <span className="font-mono font-bold">{currentFirm.lic_number}</span></span>
@@ -429,35 +486,34 @@ export const AllEntryPdfModal: React.FC<AllEntryPdfModalProps> = ({
               </div>
 
               {/* 3. Document Title Bar */}
-              <div className="bg-gray-900 text-white py-1.5 px-3 rounded-lg text-center flex items-center justify-between flex-wrap gap-2 shadow-2xs">
-                <span className="text-xs sm:text-sm font-black tracking-wide">
+              <div className="bg-gray-900 text-white py-1 px-3 rounded-md text-center flex items-center justify-between flex-wrap gap-2 shadow-2xs">
+                <span className="text-[11px] sm:text-xs font-black tracking-wide">
                   ਰੋਜ਼ਾਨਾ ਸਰਕਾਰੀ ਖਰੀਦ ਵੇਰਵਾ ਸ਼ੀਟ (DAILY AGENCY PURCHASE SHEET)
                 </span>
-                <span className="text-[11px] font-mono font-bold text-amber-300">
+                <span className="text-[10.5px] font-mono font-bold text-amber-300">
                   ਮਿਤੀ: {dateFilterMode === 'daily' ? formattedDisplayDate : 'ਸਮੂਹ ਮਿਤੀਆਂ'}
                 </span>
               </div>
 
               {/* 4. Common Procurement Parameters (One Single Place for MSP Rate, Agency, and Crop) */}
-              {/* As explicitly requested: "Upar ik jagah MSP Rate and ik Jagah hi agency name" */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-blue-50/90 border border-blue-200 rounded-xl p-2.5 text-xs text-gray-900">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 bg-blue-50 border border-blue-200 rounded-lg p-1.5 text-[10.5px] text-gray-900">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-gray-600 font-bold">ਖਰੀਦ ਏਜੰਸੀ (Agency):</span>
-                  <span className="font-bold text-blue-950 bg-white px-2 py-0.5 rounded border border-blue-200 font-mono">
+                  <span className="text-gray-600 font-bold">ਖਰੀਦ ਏਜੰਸੀ:</span>
+                  <span className="font-bold text-blue-950 bg-white px-1.5 py-0.2 rounded border border-blue-200 font-mono">
                     {displayAgency}
                   </span>
                 </div>
 
                 <div className="flex items-center gap-1.5 justify-start sm:justify-center">
                   <span className="text-gray-600 font-bold">ਸਰਕਾਰੀ MSP ਰੇਟ:</span>
-                  <span className="font-black text-emerald-950 bg-white px-2 py-0.5 rounded border border-emerald-300 font-mono">
+                  <span className="font-black text-emerald-950 bg-white px-1.5 py-0.2 rounded border border-emerald-300 font-mono">
                     {displayRate} / ਕੁਇੰਟਲ
                   </span>
                 </div>
 
                 <div className="flex items-center gap-1.5 justify-start sm:justify-end">
-                  <span className="text-gray-600 font-bold">ਫਸਲ (Crop):</span>
-                  <span className="font-bold text-gray-950 bg-white px-2 py-0.5 rounded border border-gray-300">
+                  <span className="text-gray-600 font-bold">ਫਸਲ:</span>
+                  <span className="font-bold text-gray-950 bg-white px-1.5 py-0.2 rounded border border-gray-300">
                     {displayVariety}
                   </span>
                 </div>
@@ -465,83 +521,89 @@ export const AllEntryPdfModal: React.FC<AllEntryPdfModalProps> = ({
 
             </div>
 
-            {/* ======================= MAIN TABLE (CLEAN, SAFE, SIMPLE) ======================= */}
-            <div className="my-3 flex-1 overflow-x-auto">
-              <table className="w-full text-left text-xs border border-gray-900 border-collapse">
+            {/* ======================= MAIN TABLE (COMPACT 20 FARMERS FIT ON 1 PAGE) ======================= */}
+            <div className="my-1.5 flex-1 overflow-x-auto">
+              <table className="w-full text-left text-[11px] border border-gray-900 border-collapse">
                 <thead>
-                  <tr className="bg-gray-100 text-gray-950 font-bold border-b-2 border-gray-900 divide-x divide-gray-900">
-                    <th className="py-2.5 px-2 text-center w-10">ਲੜੀ (Sr)</th>
-                    <th className="py-2.5 px-3">ਕਿਸਾਨ ਦਾ ਨਾਮ, ਪਿਤਾ ਦਾ ਨਾਮ ਤੇ ਪਿੰਡ (Farmer Details)</th>
-                    <th className="py-2.5 px-2.5 text-center">
-                      ਬਾਰਦਾਨਾ ਵੇਰਵਾ (ਨਵਾਂ / ਪੁਰਾਣਾ)
-                      <span className="block text-[9px] font-normal text-gray-600">New (A) + Old (B)</span>
+                  <tr className="bg-gray-100 text-gray-950 font-bold border-b-2 border-gray-900 divide-x divide-gray-900 text-[10px]">
+                    <th className="py-1 px-1.5 text-center w-8">ਲੜੀ</th>
+                    <th className="py-1 px-2.5">ਕਿਸਾਨ ਦਾ ਨਾਮ (Farmer Name - English), ਪਿਤਾ, ਪਿੰਡ ਤੇ ਮੋਬਾਈਲ</th>
+                    <th className="py-1 px-2 text-center w-36">
+                      ਬਾਰਦਾਨਾ ਵੇਰਵਾ
+                      <span className="block text-[8.5px] font-normal text-gray-600">New (A) + Old (B)</span>
                     </th>
-                    <th className="py-2.5 px-2.5 text-right font-mono">ਕੁੱਲ ਗੱਟੇ (Bags)</th>
-                    <th className="py-2.5 px-2.5 text-right font-mono">ਵਜ਼ਨ (ਕੁਇੰਟਲ)</th>
+                    <th className="py-1 px-2 text-right font-mono w-20">ਕੁੱਲ ਗੱਟੇ</th>
+                    <th className="py-1 px-2 text-right font-mono w-24">ਵਜ਼ਨ (Qtl)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-300">
                   {filteredEntries.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="py-10 text-center text-gray-400 italic text-xs">
+                      <td colSpan={5} className="py-8 text-center text-gray-400 italic text-[11px]">
                         ਚੁਣੀ ਹੋਈ ਮਿਤੀ ({formattedDisplayDate}) ਅਤੇ ਫਰਮ ਲਈ ਕੋਈ ਖਰੀਦ ਐਂਟਰੀ ਨਹੀਂ ਮਿਲੀ।
                       </td>
                     </tr>
                   ) : (
                     filteredEntries.map((item, index) => {
-                      const fatherName = item.father_husband_name || '-';
-                      const village = item.address_village || item.village || '-';
                       const newB = Number(item.new_jute_bags) || 0;
                       const oldB = Number(item.old_jute_bags) || 0;
                       const totB = Number(item.total_bags) || (newB + oldB);
                       const weightQtl = Number(item.weight_quintals) || 0;
                       
-                      // Only show the single selected farmer's name
-                      const displayedFarmerName = item.billed_to_name || item.farmer_name;
+                      // Strictly English Farmer Name
+                      const englishFarmerName = getEnglishFarmerName(item, registeredFarmers);
+                      const englishFatherName = getEnglishFatherName(item, registeredFarmers);
+                      const englishVillage = getEnglishVillage(item, registeredFarmers);
 
-                      // Format Bardana string as requested: "Jive Himmat singh 200 old 300 new bags and Total bags 500 eda"
+                      // Format Bardana string
                       let bardanaStr = '';
                       if (newB > 0 && oldB > 0) {
-                        bardanaStr = `${newB} ਨਵਾਂ (A) + ${oldB} ਪੁਰਾਣਾ (B)`;
+                        bardanaStr = `${newB} ਨਵਾਂ + ${oldB} ਪੁਰਾਣਾ`;
                       } else if (newB > 0) {
-                        bardanaStr = `${newB} ਨਵਾਂ (A-Class)`;
+                        bardanaStr = `${newB} ਨਵਾਂ (A)`;
                       } else if (oldB > 0) {
-                        bardanaStr = `${oldB} ਪੁਰਾਣਾ (B-Class)`;
+                        bardanaStr = `${oldB} ਪੁਰਾਣਾ (B)`;
                       } else {
                         bardanaStr = `${totB} ਗੱਟੇ`;
                       }
 
                       return (
-                        <tr key={item.id} className="divide-x divide-gray-300 text-gray-900 hover:bg-gray-50/50">
+                        <tr key={item.id} className="divide-x divide-gray-300 text-gray-900 hover:bg-gray-50/50 print:hover:bg-transparent">
                           {/* 1. Sr No */}
-                          <td className="py-2.5 px-2 text-center font-mono font-bold text-gray-800">
+                          <td className="py-1 px-1.5 text-center font-mono font-bold text-gray-800 text-[10.5px]">
                             {index + 1}
                           </td>
 
-                          {/* 2. Farmer Name & Details (Only single selected farmer) */}
-                          <td className="py-2.5 px-3">
-                            <div className="font-bold text-gray-950 text-xs">
-                              {displayedFarmerName}
+                          {/* 2. Farmer Name ALL IN ENGLISH + Father + Village + Mobile Number */}
+                          <td className="py-1 px-2.5">
+                            <div className="font-black text-gray-950 text-[11.5px] uppercase tracking-tight leading-tight">
+                              {englishFarmerName}
                             </div>
-                            <div className="text-[11px] text-gray-600 font-medium">
-                              ਪਿਤਾ: ਸ. {fatherName} &bull; ਪਿੰਡ: {village}
+                            <div className="text-[9.5px] text-gray-700 font-medium leading-tight flex items-center gap-1.5 flex-wrap pt-0.5">
+                              {item.father_husband_name && (
+                                <span>S/O {englishFatherName}</span>
+                              )}
+                              <span>&bull; Village: {englishVillage}</span>
+                              <span className="font-mono font-bold text-gray-950 bg-gray-100 px-1 py-0.2 rounded border border-gray-300">
+                                📞 Mob: {item.mobile || '-'}
+                              </span>
                             </div>
                           </td>
 
                           {/* 3. Bardana Breakdown (New + Old) */}
-                          <td className="py-2.5 px-2.5 text-center font-medium text-xs">
-                            <span className="inline-block px-2.5 py-0.5 rounded bg-gray-100 border border-gray-200 text-gray-900 font-mono">
+                          <td className="py-1 px-2 text-center font-medium text-[10px]">
+                            <span className="inline-block px-1.5 py-0.2 rounded bg-gray-100 border border-gray-200 text-gray-900 font-mono">
                               {bardanaStr}
                             </span>
                           </td>
 
                           {/* 4. Total Bags */}
-                          <td className="py-2.5 px-2.5 text-right font-mono font-bold text-gray-950 text-xs">
+                          <td className="py-1 px-2 text-right font-mono font-bold text-gray-950 text-[11px]">
                             {totB}
                           </td>
 
                           {/* 5. Weight (Qtl) */}
-                          <td className="py-2.5 px-2.5 text-right font-mono font-bold text-gray-950 text-xs">
+                          <td className="py-1 px-2 text-right font-mono font-black text-gray-950 text-[11px]">
                             {weightQtl.toFixed(2)}
                           </td>
                         </tr>
@@ -553,21 +615,21 @@ export const AllEntryPdfModal: React.FC<AllEntryPdfModalProps> = ({
                 {/* ======================= GRAND TOTAL ROW ======================= */}
                 {filteredEntries.length > 0 && (
                   <tfoot>
-                    <tr className="bg-gray-100 font-bold border-t-2 border-gray-900 divide-x divide-gray-900 text-gray-950">
-                      <td colSpan={2} className="py-2.5 px-3 text-right uppercase tracking-wider text-xs">
+                    <tr className="bg-gray-100 font-bold border-t-2 border-gray-900 divide-x divide-gray-900 text-gray-950 text-[10.5px]">
+                      <td colSpan={2} className="py-1 px-2.5 text-right uppercase tracking-wider">
                         ਕੁੱਲ ਜੋੜ (Grand Total - {filteredEntries.length} ਕਿਸਾਨ):
                       </td>
-                      <td className="py-2.5 px-2 text-center text-xs font-mono">
+                      <td className="py-1 px-2 text-center font-mono">
                         {totalNewBags > 0 || totalOldBags > 0 ? (
                           <span>ਨਵਾਂ: <strong>{totalNewBags}</strong> | ਪੁਰਾਣਾ: <strong>{totalOldBags}</strong></span>
                         ) : (
                           <span>-</span>
                         )}
                       </td>
-                      <td className="py-2.5 px-2.5 text-right font-mono text-xs font-black">
+                      <td className="py-1 px-2 text-right font-mono font-black">
                         {totalBags} ਗੱਟੇ
                       </td>
-                      <td className="py-2.5 px-2.5 text-right font-mono text-xs font-black">
+                      <td className="py-1 px-2 text-right font-mono font-black text-emerald-950">
                         {totalWeight.toFixed(2)} ਕੁਇੰਟਲ
                       </td>
                     </tr>
@@ -577,85 +639,74 @@ export const AllEntryPdfModal: React.FC<AllEntryPdfModalProps> = ({
             </div>
 
             {/* ======================= FOOTER: FIRM OFFICIAL STAMP (MOHAR) & SIGNATURES ======================= */}
-            {/* As explicitly requested: "ik Friam di Mohar ve ve Friam agency Purchase di enty karde time select kite c and Bilkul normal Shot Size ve Sing jiss ve Frim nu select kita ode Pro de" */}
-            <div className="pt-4 border-t-2 border-gray-900 space-y-4">
+            <div className="pt-2 border-t border-gray-900 space-y-1">
               
-              <div className="grid grid-cols-12 gap-4 items-end">
+              <div className="grid grid-cols-12 gap-2 items-end">
                 
                 {/* 1. Left: Farmer / Representative Sign */}
-                <div className="col-span-4 text-center space-y-1">
-                  <div className="h-12 flex items-end justify-center">
-                    <div className="border-b border-dashed border-gray-400 w-36 pb-1 text-[10px] text-gray-400 italic">
+                <div className="col-span-4 text-center space-y-0.5">
+                  <div className="h-8 flex items-end justify-center">
+                    <div className="border-b border-dashed border-gray-400 w-32 pb-0.5 text-[9px] text-gray-400 italic">
                       (ਕਿਸਾਨ / ਮੁਖਤਿਆਰ)
                     </div>
                   </div>
-                  <div className="text-xs font-bold text-gray-800">
+                  <div className="text-[10.5px] font-bold text-gray-800">
                     ਕਿਸਾਨ ਦੇ ਦਸਤਖਤ / ਅੰਗੂਠਾ
                   </div>
-                  <div className="text-[10px] text-gray-500">
+                  <div className="text-[9px] text-gray-500">
                     Farmer's Signature
                   </div>
                 </div>
 
                 {/* 2. Center: Procurement Inspector Sign */}
-                <div className="col-span-4 text-center space-y-1">
-                  <div className="h-12 flex items-end justify-center">
-                    <div className="border-b border-dashed border-gray-400 w-40 pb-1 text-[10px] text-gray-400 italic">
+                <div className="col-span-4 text-center space-y-0.5">
+                  <div className="h-8 flex items-end justify-center">
+                    <div className="border-b border-dashed border-gray-400 w-36 pb-0.5 text-[9px] text-gray-400 italic">
                       (ਮੋਹਰ ਤੇ ਦਸਤਖ਼ਤ)
                     </div>
                   </div>
-                  <div className="text-xs font-bold text-gray-800">
+                  <div className="text-[10.5px] font-bold text-gray-800">
                     ਖਰੀਦ ਇੰਸਪੈਕਟਰ ({displayAgency.split(' ')[0]})
                   </div>
-                  <div className="text-[10px] text-gray-500">
+                  <div className="text-[9px] text-gray-500">
                     Procurement Inspector Sign
                   </div>
                 </div>
 
                 {/* 3. Right: Official Firm Rubber Stamp (ਮੋਹਰ) & Short Proprietor Signature */}
-                <div className="col-span-4 flex flex-col items-center justify-end text-center space-y-1.5">
+                <div className="col-span-4 flex flex-col items-center justify-end text-center space-y-1">
                   
                   {/* Official Firm Rubber Stamp (ਮੋਹਰ) */}
-                  <div className="relative inline-flex items-center justify-center p-2 rounded-2xl border-2 border-dashed border-indigo-900/80 bg-indigo-50/40 text-indigo-950 shadow-2xs rotate-[-1deg]">
-                    <div className="border border-indigo-900/60 rounded-xl px-3 py-1.5 text-center">
-                      <div className="text-[9px] font-black tracking-tight text-indigo-900 uppercase">
+                  <div className="relative inline-flex items-center justify-center p-1.5 rounded-xl border border-dashed border-indigo-900/80 bg-indigo-50/40 text-indigo-950 shadow-2xs rotate-[-1deg]">
+                    <div className="border border-indigo-900/60 rounded-lg px-2.5 py-1 text-center">
+                      <div className="text-[8.5px] font-black tracking-tight text-indigo-900 uppercase">
                         ★ {currentFirm.name} ★
                       </div>
-                      <div className="text-[8px] font-bold font-mono text-indigo-800">
+                      <div className="text-[7.5px] font-bold font-mono text-indigo-800">
                         LIC NO: {currentFirm.lic_number}
                       </div>
-                      <div className="text-[7.5px] font-bold text-indigo-900 uppercase tracking-tighter">
+                      <div className="text-[7px] font-bold text-indigo-900 uppercase tracking-tighter">
                         COMMISSION AGENT • DANA MANDI
                       </div>
                     </div>
                   </div>
 
                   {/* Short Signature Line */}
-                  <div className="w-full pt-1">
-                    <div className="border-b border-gray-700 w-36 mx-auto pb-0.5"></div>
-                    <div className="text-xs font-black text-gray-950 mt-1">
+                  <div className="w-full">
+                    <div className="border-b border-gray-700 w-32 mx-auto pb-0.5"></div>
+                    <div className="text-[10.5px] font-black text-gray-950 mt-0.5">
                       {currentFirm.proprietor || 'PROPRIETOR'}
                     </div>
-                    <div className="text-[10px] font-bold text-blue-950">
+                    <div className="text-[9.5px] font-bold text-blue-950">
                       ਵਾਸਤੇ: {currentFirm.name}
                     </div>
-                    <div className="text-[9px] text-gray-500">
+                    <div className="text-[8.5px] text-gray-500">
                       (ਅਧਿਕਾਰਤ ਹਸਤਾਖਰ / Authorized Signatory)
                     </div>
                   </div>
 
                 </div>
 
-              </div>
-
-              {/* Bottom Copyright and Verification Note */}
-              <div className="pt-2 border-t border-gray-200 text-center flex items-center justify-between text-[9px] text-gray-500">
-                <span>
-                  ਰਿਕਾਰਡ ਤਿਆਰ ਕੀਤਾ ਗਿਆ KisanMitra ERP ਦੁਆਰਾ &bull; ਮਿਤੀ: {new Date().toLocaleDateString('en-IN')}
-                </span>
-                <span>
-                  ਫਰਮ: {currentFirm.name} (ਲਾਈਸੰਸ: {currentFirm.lic_number}) &bull; ਦਾਣਾ ਮੰਡੀ
-                </span>
               </div>
 
             </div>

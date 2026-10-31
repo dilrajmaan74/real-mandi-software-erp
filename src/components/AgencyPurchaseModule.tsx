@@ -25,7 +25,8 @@ import {
   Sparkles,
   ArrowRight,
   UserCheck,
-  Calendar
+  Calendar,
+  Layers
 } from 'lucide-react';
 import { appendAgencyPurchaseToSheets } from '../lib/sheets';
 import { AllEntryPdfModal } from './AllEntryPdfModal';
@@ -86,6 +87,7 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<AgencyPurchaseEntry | null>(null);
   const [search, setSearch] = useState('');
+  const [selectedFirmView, setSelectedFirmView] = useState<'All' | 'JAMMU TRADING CO.' | 'NEW JAMMU TRADING CO.'>('All');
   const [firmFilter, setFirmFilter] = useState('All');
   const [mandiFilter, setMandiFilter] = useState('All');
   const [agencyFilter, setAgencyFilter] = useState('All');
@@ -160,9 +162,10 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
 
   // Multi-Farmer Batch State
   const [farmerSearch, setFarmerSearch] = useState('');
+  const [selectedDropdownFarmerKey, setSelectedDropdownFarmerKey] = useState('');
   const [batchRows, setBatchRows] = useState<BatchFarmerRow[]>([]);
-  const [quickNewBags, setQuickNewBags] = useState<number>(200);
-  const [quickOldBags, setQuickOldBags] = useState<number>(200);
+  const [quickNewBags, setQuickNewBags] = useState<number>(0);
+  const [quickOldBags, setQuickOldBags] = useState<number>(0);
 
   // Filtered farmers in selection modal
   const filteredFarmerChoices = useMemo(() => {
@@ -179,56 +182,48 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
     );
   }, [allSelectableFarmers, farmerSearch]);
 
-  // Toggle selection of a farmer in the batch
-  const handleToggleFarmer = (item: SelectableFarmerItem) => {
+  // Add farmer to batch with unique row ID (supports selecting same farmer MULTIPLE TIMES!)
+  const handleAddFarmerToBatch = (item: SelectableFarmerItem) => {
+    const rowId = `${item.uniqueKey}_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+    const nBags = quickNewBags || 0;
+    const oBags = quickOldBags || 0;
+    const tot = nBags + oBags;
+    const wt = Number(((tot * bagPackingKg) / 100).toFixed(2));
+    const amt = Number((wt * ratePerQtl).toFixed(2));
+    const newRow: BatchFarmerRow = {
+      uniqueKey: rowId,
+      farmerItem: item,
+      newJuteBags: nBags,
+      oldJuteBags: oBags,
+      totalBags: tot,
+      weightQtl: wt,
+      grossAmount: amt,
+      lotGatePass: `LOT-${Math.floor(1000 + Math.random() * 9000)}`,
+    };
+    setBatchRows((prev) => [...prev, newRow]);
+  };
+
+  // Select all currently filtered farmers
+  const handleSelectAllFiltered = () => {
     setBatchRows((prev) => {
-      const exists = prev.find((r) => r.uniqueKey === item.uniqueKey);
-      if (exists) {
-        return prev.filter((r) => r.uniqueKey !== item.uniqueKey);
-      } else {
-        const nBags = quickNewBags || 200;
-        const oBags = quickOldBags || 200;
+      const additions: BatchFarmerRow[] = [];
+      filteredFarmerChoices.forEach((item) => {
+        const rowId = `${item.uniqueKey}_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+        const nBags = quickNewBags || 0;
+        const oBags = quickOldBags || 0;
         const tot = nBags + oBags;
         const wt = Number(((tot * bagPackingKg) / 100).toFixed(2));
         const amt = Number((wt * ratePerQtl).toFixed(2));
-        const newRow: BatchFarmerRow = {
-          uniqueKey: item.uniqueKey,
+        additions.push({
+          uniqueKey: rowId,
           farmerItem: item,
           newJuteBags: nBags,
           oldJuteBags: oBags,
           totalBags: tot,
           weightQtl: wt,
           grossAmount: amt,
-          lotGatePass: `LOT-${Date.now().toString().slice(-4)}`,
-        };
-        return [...prev, newRow];
-      }
-    });
-  };
-
-  // Select all currently filtered farmers
-  const handleSelectAllFiltered = () => {
-    setBatchRows((prev) => {
-      const existingKeys = new Set(prev.map((r) => r.uniqueKey));
-      const additions: BatchFarmerRow[] = [];
-      filteredFarmerChoices.forEach((item) => {
-        if (!existingKeys.has(item.uniqueKey)) {
-          const nBags = quickNewBags || 200;
-          const oBags = quickOldBags || 200;
-          const tot = nBags + oBags;
-          const wt = Number(((tot * bagPackingKg) / 100).toFixed(2));
-          const amt = Number((wt * ratePerQtl).toFixed(2));
-          additions.push({
-            uniqueKey: item.uniqueKey,
-            farmerItem: item,
-            newJuteBags: nBags,
-            oldJuteBags: oBags,
-            totalBags: tot,
-            weightQtl: wt,
-            grossAmount: amt,
-            lotGatePass: `LOT-${Math.floor(1000 + Math.random() * 9000)}`,
-          });
-        }
+          lotGatePass: `LOT-${Math.floor(1000 + Math.random() * 9000)}`,
+        });
       });
       return [...prev, ...additions];
     });
@@ -319,8 +314,8 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
       const item = row.farmerItem;
       const uniqueSuffix = (Date.now() + index).toString().slice(-6);
 
-      // Strictly use ONLY the selected farmer's name (whether linked or main)
-      const selectedFarmerName = item.namePa || item.nameEn;
+      // Strictly use English farmer name for records & PDF as requested
+      const selectedFarmerName = item.nameEn || item.displayName;
 
       return {
         id: `AUC-${uniqueSuffix}`,
@@ -518,16 +513,58 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
       (e.address_village && e.address_village.toLowerCase().includes(q)) ||
       (e.mandi_name && e.mandi_name.toLowerCase().includes(q)) ||
       e.id.toLowerCase().includes(q);
-    const matchFirm = firmFilter === 'All' || e.firm_id === firmFilter || e.firm_name === firmFilter;
+    const matchFirm =
+      selectedFirmView === 'All'
+        ? (firmFilter === 'All' || e.firm_id === firmFilter || e.firm_name === firmFilter)
+        : selectedFirmView === 'JAMMU TRADING CO.'
+        ? ((e.firm_id === 'JAMMU TRADING CO.' || e.firm_name?.includes('JAMMU TRADING CO.')) && !e.firm_name?.includes('NEW'))
+        : (e.firm_id === 'NEW JAMMU TRADING CO.' || e.firm_name?.includes('NEW JAMMU'));
+
     const matchMandi = mandiFilter === 'All' || e.mandi_name?.includes(mandiFilter);
     const matchAgency = agencyFilter === 'All' || e.purchasing_agency.includes(agencyFilter);
     const matchDate = selectedDateTab === 'All' || e.date === selectedDateTab;
     return matchSearch && matchFirm && matchMandi && matchAgency && matchDate;
   });
 
-  const totalProcuredAmount = entries.reduce((acc, curr) => acc + (curr.total_amount || 0), 0);
-  const totalBagsProcured = entries.reduce((acc, curr) => acc + (curr.total_bags || 0), 0);
-  const totalWeightProcured = entries.reduce((acc, curr) => acc + (curr.weight_quintals || 0), 0);
+  // Analytical Charts by Firm
+  const jammuEntries = useMemo(() => {
+    return entries.filter(
+      (e) => (e.firm_id === 'JAMMU TRADING CO.' || e.firm_name?.includes('JAMMU TRADING CO.')) && !e.firm_name?.includes('NEW')
+    );
+  }, [entries]);
+
+  const newJammuEntries = useMemo(() => {
+    return entries.filter(
+      (e) => e.firm_id === 'NEW JAMMU TRADING CO.' || e.firm_name?.includes('NEW JAMMU')
+    );
+  }, [entries]);
+
+  const jammuStats = useMemo(() => {
+    const bags = jammuEntries.reduce((s, e) => s + (e.total_bags || 0), 0);
+    const newB = jammuEntries.reduce((s, e) => s + (e.new_jute_bags || 0), 0);
+    const oldB = jammuEntries.reduce((s, e) => s + (e.old_jute_bags || 0), 0);
+    const wt = jammuEntries.reduce((s, e) => s + (e.weight_quintals || 0), 0);
+    const amt = jammuEntries.reduce((s, e) => s + (e.total_amount || 0), 0);
+    return { count: jammuEntries.length, bags, newB, oldB, wt, amt };
+  }, [jammuEntries]);
+
+  const newJammuStats = useMemo(() => {
+    const bags = newJammuEntries.reduce((s, e) => s + (e.total_bags || 0), 0);
+    const newB = newJammuEntries.reduce((s, e) => s + (e.new_jute_bags || 0), 0);
+    const oldB = newJammuEntries.reduce((s, e) => s + (e.old_jute_bags || 0), 0);
+    const wt = newJammuEntries.reduce((s, e) => s + (e.weight_quintals || 0), 0);
+    const amt = newJammuEntries.reduce((s, e) => s + (e.total_amount || 0), 0);
+    return { count: newJammuEntries.length, bags, newB, oldB, wt, amt };
+  }, [newJammuEntries]);
+
+  const allStats = useMemo(() => {
+    const bags = entries.reduce((s, e) => s + (e.total_bags || 0), 0);
+    const newB = entries.reduce((s, e) => s + (e.new_jute_bags || 0), 0);
+    const oldB = entries.reduce((s, e) => s + (e.old_jute_bags || 0), 0);
+    const wt = entries.reduce((s, e) => s + (e.weight_quintals || 0), 0);
+    const amt = entries.reduce((s, e) => s + (e.total_amount || 0), 0);
+    return { count: entries.length, bags, newB, oldB, wt, amt };
+  }, [entries]);
 
   const activeFirm = ARHTIA_FIRMS.find((f) => f.id === selectedFirmId) || ARHTIA_FIRMS[0];
 
@@ -546,7 +583,7 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
                 ਸਰਕਾਰੀ ਖਰੀਦ, ਬੋਲੀ ਤੇ ਜੇ-ਫਾਰਮ (Agency Purchase & J-Form)
               </h2>
               <p className="text-xs text-blue-200">
-                JAMMU TRADING CO. & NEW JAMMU TRADING CO. • ਮਲਟੀ-ਕਿਸਾਨ ਬੈਚ ਐਂਟਰੀ (10-20 ਕਿਸਾਨ) • ਲਿੰਕਡ ਕਿਸਾਨ ਸੂਚੀ • ਰੇਟ ₹2461/Qtl
+                JAMMU TRADING CO. & NEW JAMMU TRADING CO. • ਮਲਟੀ-ਕਿਸਾਨ ਬੈਚ ਐਂਟਰੀ • ਰੇਟ ₹2461/Qtl
               </p>
             </div>
           </div>
@@ -578,24 +615,193 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
         </div>
       </div>
 
-      {/* KPI Stats */}
-      <div className="px-5 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
-          <span className="text-gray-500 block text-[11px]">ਕੁੱਲ ਖਰੀਦ ਰਕਮ (Gross MSP Value)</span>
-          <div className="text-lg font-bold font-mono text-blue-950">₹{totalProcuredAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</div>
+      {/* 3 Dedicated Firm View Tabs with Analytical Charts as requested: "LIST VCH JAMMU TRADING CO AND NEW JAMMU TRADING DA ALG ALG CHART SHOW HOVE AND IK JAGHA ALL ENRTY" */}
+      <div className="px-5 pt-1 space-y-3">
+        {/* Tab Buttons */}
+        <div className="flex items-center gap-2 p-1 bg-gray-100 rounded-2xl border border-gray-200">
+          <button
+            type="button"
+            onClick={() => setSelectedFirmView('All')}
+            className={`flex-1 py-2.5 px-3 rounded-xl font-bold text-xs transition cursor-pointer flex items-center justify-center gap-2 ${
+              selectedFirmView === 'All'
+                ? 'bg-blue-900 text-white shadow-md'
+                : 'text-gray-700 hover:bg-white hover:shadow-xs'
+            }`}
+          >
+            <Layers className="w-4 h-4" />
+            <span>🏛️ ਸਾਰੀਆਂ ਐਂਟਰੀਆਂ (All Entries)</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+              selectedFirmView === 'All' ? 'bg-amber-400 text-blue-950' : 'bg-gray-200 text-gray-700'
+            }`}>
+              {allStats.count}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSelectedFirmView('JAMMU TRADING CO.')}
+            className={`flex-1 py-2.5 px-3 rounded-xl font-bold text-xs transition cursor-pointer flex items-center justify-center gap-2 ${
+              selectedFirmView === 'JAMMU TRADING CO.'
+                ? 'bg-emerald-800 text-white shadow-md'
+                : 'text-gray-700 hover:bg-white hover:shadow-xs'
+            }`}
+          >
+            <Building2 className="w-4 h-4" />
+            <span>🏢 JAMMU TRADING CO. (ਜੰਮੂ ਟਰੇਡਿੰਗ)</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+              selectedFirmView === 'JAMMU TRADING CO.' ? 'bg-amber-300 text-emerald-950' : 'bg-gray-200 text-gray-700'
+            }`}>
+              {jammuStats.count}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSelectedFirmView('NEW JAMMU TRADING CO.')}
+            className={`flex-1 py-2.5 px-3 rounded-xl font-bold text-xs transition cursor-pointer flex items-center justify-center gap-2 ${
+              selectedFirmView === 'NEW JAMMU TRADING CO.'
+                ? 'bg-indigo-800 text-white shadow-md'
+                : 'text-gray-700 hover:bg-white hover:shadow-xs'
+            }`}
+          >
+            <Building2 className="w-4 h-4" />
+            <span>🏢 NEW JAMMU TRADING CO. (ਨਿਊ ਜੰਮੂ ਟਰੇਡਿੰਗ)</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+              selectedFirmView === 'NEW JAMMU TRADING CO.' ? 'bg-amber-300 text-indigo-950' : 'bg-gray-200 text-gray-700'
+            }`}>
+              {newJammuStats.count}
+            </span>
+          </button>
         </div>
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
-          <span className="text-gray-500 block text-[11px]">ਕੁੱਲ ਵਜ਼ਨ (Total Weight)</span>
-          <div className="text-lg font-bold font-mono text-emerald-900">{totalWeightProcured.toFixed(2)} Qtl</div>
-        </div>
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
-          <span className="text-gray-500 block text-[11px]">ਕੁੱਲ ਬੋਰੀਆਂ (Total Bags)</span>
-          <div className="text-lg font-bold font-mono text-amber-950">{totalBagsProcured} Bags</div>
-        </div>
-        <div className="bg-purple-50 border border-purple-200 rounded-xl p-3">
-          <span className="text-gray-500 block text-[11px]">ਫਿਕਸ ਸਰਕਾਰੀ ਐੱਮ.ਐੱਸ.ਪੀ. (MSP)</span>
-          <div className="text-sm font-bold font-mono text-purple-900 mt-0.5">₹2461.00 / Qtl</div>
-        </div>
+
+        {/* Dynamic Analytical Comparison Charts */}
+        {selectedFirmView === 'All' ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Jammu Trading Co. Card Chart */}
+            <div className="p-3.5 bg-gradient-to-br from-emerald-50 to-teal-50/60 border-2 border-emerald-300 rounded-2xl space-y-2">
+              <div className="flex items-center justify-between border-b border-emerald-200 pb-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                  <span className="font-black text-xs text-emerald-950 uppercase">
+                    JAMMU TRADING CO.
+                  </span>
+                  <span className="text-[10px] text-emerald-800 font-mono font-bold bg-white px-1.5 py-0.2 rounded border border-emerald-200">
+                    LIC: JAL/LKH/133
+                  </span>
+                </div>
+                <span className="text-xs font-bold font-mono text-emerald-900">
+                  {jammuStats.count} ਕਿਸਾਨ ਐਂਟਰੀਆਂ
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                <div className="bg-white p-2 rounded-xl border border-emerald-100">
+                  <span className="text-[10px] text-gray-500 block">ਕੁੱਲ ਬੋਰੀਆਂ</span>
+                  <span className="font-bold font-mono text-emerald-950 text-sm">{jammuStats.bags} Bags</span>
+                  <span className="text-[9px] text-emerald-700 block font-mono">{jammuStats.newB}N + {jammuStats.oldB}O</span>
+                </div>
+                <div className="bg-white p-2 rounded-xl border border-emerald-100">
+                  <span className="text-[10px] text-gray-500 block">ਕੁੱਲ ਵਜ਼ਨ</span>
+                  <span className="font-bold font-mono text-emerald-950 text-sm">{jammuStats.wt.toFixed(2)} Qtl</span>
+                </div>
+                <div className="bg-white p-2 rounded-xl border border-emerald-100">
+                  <span className="text-[10px] text-gray-500 block">MSP ਰਕਮ</span>
+                  <span className="font-black font-mono text-emerald-900 text-xs">₹{jammuStats.amt.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* New Jammu Trading Co. Card Chart */}
+            <div className="p-3.5 bg-gradient-to-br from-indigo-50 to-blue-50/60 border-2 border-indigo-300 rounded-2xl space-y-2">
+              <div className="flex items-center justify-between border-b border-indigo-200 pb-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 animate-pulse"></span>
+                  <span className="font-black text-xs text-indigo-950 uppercase">
+                    NEW JAMMU TRADING CO.
+                  </span>
+                  <span className="text-[10px] text-indigo-800 font-mono font-bold bg-white px-1.5 py-0.2 rounded border border-indigo-200">
+                    LIC: JAL/LKH/134
+                  </span>
+                </div>
+                <span className="text-xs font-bold font-mono text-indigo-900">
+                  {newJammuStats.count} ਕਿਸਾਨ ਐਂਟਰੀਆਂ
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                <div className="bg-white p-2 rounded-xl border border-indigo-100">
+                  <span className="text-[10px] text-gray-500 block">ਕੁੱਲ ਬੋਰੀਆਂ</span>
+                  <span className="font-bold font-mono text-indigo-950 text-sm">{newJammuStats.bags} Bags</span>
+                  <span className="text-[9px] text-indigo-700 block font-mono">{newJammuStats.newB}N + {newJammuStats.oldB}O</span>
+                </div>
+                <div className="bg-white p-2 rounded-xl border border-indigo-100">
+                  <span className="text-[10px] text-gray-500 block">ਕੁੱਲ ਵਜ਼ਨ</span>
+                  <span className="font-bold font-mono text-indigo-950 text-sm">{newJammuStats.wt.toFixed(2)} Qtl</span>
+                </div>
+                <div className="bg-white p-2 rounded-xl border border-indigo-100">
+                  <span className="text-[10px] text-gray-500 block">MSP ਰਕਮ</span>
+                  <span className="font-black font-mono text-indigo-900 text-xs">₹{newJammuStats.amt.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : selectedFirmView === 'JAMMU TRADING CO.' ? (
+          <div className="p-4 bg-emerald-50/80 border-2 border-emerald-400 rounded-2xl flex flex-wrap items-center justify-between gap-4 text-xs">
+            <div>
+              <div className="flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-emerald-800" />
+                <span className="font-black text-sm text-emerald-950">JAMMU TRADING CO. - ਵਿਸ਼ੇਸ਼ ਚਾਰਟ</span>
+                <span className="px-2 py-0.5 bg-emerald-800 text-white rounded text-[10px] font-bold">ਐਕਟਿਵ ਫਰਮ</span>
+              </div>
+              <p className="text-[11px] text-emerald-800 mt-0.5">ਲਾਈਸੰਸ: JAL/LKH/133 • ਦਾਣਾ ਮੰਡੀ ਕਮਾਲਪੁਰ / ਮਹਿਰਾਜਵਾਲਾ / ਕੰਗ ਖੁਰਦ</p>
+            </div>
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="bg-white px-3 py-1.5 rounded-xl border border-emerald-200">
+                <span className="text-[10px] text-gray-500 block">ਕੁੱਲ ਕਿਸਾਨ</span>
+                <span className="font-bold font-mono text-emerald-950 text-sm">{jammuStats.count}</span>
+              </div>
+              <div className="bg-white px-3 py-1.5 rounded-xl border border-emerald-200">
+                <span className="text-[10px] text-gray-500 block">ਬੋਰੀਆਂ (ਨਵਾਂ+ਪੁਰਾਣਾ)</span>
+                <span className="font-bold font-mono text-emerald-950 text-sm">{jammuStats.bags} ({jammuStats.newB}N + {jammuStats.oldB}O)</span>
+              </div>
+              <div className="bg-white px-3 py-1.5 rounded-xl border border-emerald-200">
+                <span className="text-[10px] text-gray-500 block">ਕੁੱਲ ਵਜ਼ਨ</span>
+                <span className="font-bold font-mono text-emerald-950 text-sm">{jammuStats.wt.toFixed(2)} Qtl</span>
+              </div>
+              <div className="bg-white px-3 py-1.5 rounded-xl border border-emerald-200">
+                <span className="text-[10px] text-gray-500 block">ਕੁੱਲ ਰਕਮ</span>
+                <span className="font-black font-mono text-emerald-900 text-sm">₹{jammuStats.amt.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="p-4 bg-indigo-50/80 border-2 border-indigo-400 rounded-2xl flex flex-wrap items-center justify-between gap-4 text-xs">
+            <div>
+              <div className="flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-indigo-800" />
+                <span className="font-black text-sm text-indigo-950">NEW JAMMU TRADING CO. - ਵਿਸ਼ੇਸ਼ ਚਾਰਟ</span>
+                <span className="px-2 py-0.5 bg-indigo-800 text-white rounded text-[10px] font-bold">ਐਕਟਿਵ ਫਰਮ</span>
+              </div>
+              <p className="text-[11px] text-indigo-800 mt-0.5">ਲਾਈਸੰਸ: JAL/LKH/134 • ਦਾਣਾ ਮੰਡੀ ਕਮਾਲਪੁਰ / ਮਹਿਰਾਜਵਾਲਾ / ਕੰਗ ਖੁਰਦ</p>
+            </div>
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="bg-white px-3 py-1.5 rounded-xl border border-indigo-200">
+                <span className="text-[10px] text-gray-500 block">ਕੁੱਲ ਕਿਸਾਨ</span>
+                <span className="font-bold font-mono text-indigo-950 text-sm">{newJammuStats.count}</span>
+              </div>
+              <div className="bg-white px-3 py-1.5 rounded-xl border border-indigo-200">
+                <span className="text-[10px] text-gray-500 block">ਬੋਰੀਆਂ (ਨਵਾਂ+ਪੁਰਾਣਾ)</span>
+                <span className="font-bold font-mono text-indigo-950 text-sm">{newJammuStats.bags} ({newJammuStats.newB}N + {newJammuStats.oldB}O)</span>
+              </div>
+              <div className="bg-white px-3 py-1.5 rounded-xl border border-indigo-200">
+                <span className="text-[10px] text-gray-500 block">ਕੁੱਲ ਵਜ਼ਨ</span>
+                <span className="font-bold font-mono text-indigo-950 text-sm">{newJammuStats.wt.toFixed(2)} Qtl</span>
+              </div>
+              <div className="bg-white px-3 py-1.5 rounded-xl border border-indigo-200">
+                <span className="text-[10px] text-gray-500 block">ਕੁੱਲ ਰਕਮ</span>
+                <span className="font-black font-mono text-indigo-900 text-sm">₹{newJammuStats.amt.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Filters Bar */}
@@ -1038,14 +1244,56 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
                   
                   {/* Farmer Selector Box with Linked Farmers */}
                   <div className="p-3.5 bg-emerald-50/70 border border-emerald-300 rounded-xl space-y-3">
+                    
+                    {/* PRIMARY: Farmer Dropdown with Multi-time Selection */}
+                    <div className="bg-white p-3 border-2 border-emerald-400 rounded-xl space-y-2 shadow-xs">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-gray-900 font-black text-xs flex items-center gap-1.5">
+                          <Users className="w-4 h-4 text-emerald-700" />
+                          <span>ਕਿਸਾਨ ਡ੍ਰੌਪਡਾਊਨ ਲਿਸਟ (Select Farmer Dropdown):</span>
+                        </label>
+                        <span className="text-[10px] text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded font-bold">
+                          ਇੱਕੋ ਕਿਸਾਨ ਨੂੰ ਵਾਰ-ਵਾਰ (Multi-time) ਜੋੜਨ ਦੀ ਖੁੱਲ੍ਹ
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                        <select
+                          value={selectedDropdownFarmerKey}
+                          onChange={(e) => setSelectedDropdownFarmerKey(e.target.value)}
+                          className="w-full p-2.5 bg-emerald-50/70 border-2 border-emerald-400 focus:border-emerald-700 rounded-xl text-gray-900 font-bold text-xs focus:outline-none"
+                        >
+                          <option value="">-- ਕਿਸਾਨ ਚੁਣੋ (Select Farmer to Add) --</option>
+                          {allSelectableFarmers.map((f) => (
+                            <option key={`dd-${f.uniqueKey}`} value={f.uniqueKey}>
+                              {f.nameEn} {f.namePa ? `(${f.namePa})` : ''} [{f.relation}] • ਪਿੰਡ: {f.village} • ਮੋ: {f.mobile}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          disabled={!selectedDropdownFarmerKey}
+                          onClick={() => {
+                            const found = allSelectableFarmers.find((f) => f.uniqueKey === selectedDropdownFarmerKey);
+                            if (found) {
+                              handleAddFarmerToBatch(found);
+                            }
+                          }}
+                          className="px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl font-bold text-xs shrink-0 transition shadow-sm cursor-pointer flex items-center gap-1.5"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>+ ਕਿਸਾਨ ਜੋੜੋ (Add)</span>
+                        </button>
+                      </div>
+                    </div>
+
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-emerald-200 pb-2">
                       <div className="flex items-center gap-2">
-                        <Users className="w-4 h-4 text-emerald-700" />
-                        <span className="font-bold text-emerald-950">
-                          ਕਿਸਾਨ ਚੋਣ ਸੂਚੀ - ਮੁੱਖ ਅਤੇ ਲਿੰਕਡ ਕਿਸਾਨ (Select Farmers for {date}):
+                        <span className="font-bold text-emerald-950 text-xs">
+                          ਜਾਂ ਹੇਠਾਂ ਕਿਸਾਨ ਕਾਰਡ ਤੋਂ ਸਿੱਧਾ ਜੋੜੋ (Quick Add Cards):
                         </span>
                         <span className="bg-emerald-800 text-amber-300 px-2 py-0.5 rounded-full text-[11px] font-bold font-mono">
-                          {batchRows.length} ਚੁਣੇ ਗਏ
+                          {batchRows.length} ਲਿਸਟ ਵਿੱਚ ਹਨ
                         </span>
                       </div>
 
@@ -1062,7 +1310,7 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
                           onClick={handleClearBatch}
                           className="px-2.5 py-1 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
                         >
-                          ਚੋਣ ਹਟਾਓ (Clear)
+                          ਸਭ ਹਟਾਓ (Clear All)
                         </button>
                       </div>
                     </div>
@@ -1075,47 +1323,39 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
                         value={farmerSearch}
                         onChange={(e) => setFarmerSearch(e.target.value)}
                         placeholder="ਕਿਸਾਨ ਦਾ ਨਾਮ, ਲਿੰਕਡ ਮੈਂਬਰ, ਪਿੰਡ ਜਾਂ ਮੋਬਾਈਲ ਨੰਬਰ ਖੋਜੋ..."
-                        className="w-full pl-9 pr-3 py-2 bg-white border border-emerald-300 rounded-xl text-gray-900 focus:outline-none focus:border-emerald-600"
+                        className="w-full pl-9 pr-3 py-2 bg-white border border-emerald-300 rounded-xl text-gray-900 focus:outline-none focus:border-emerald-600 text-xs"
                       />
                     </div>
 
                     {/* Scrollable Farmers Multi-Select Grid */}
                     <div className="max-h-48 overflow-y-auto p-2 bg-white border border-emerald-200 rounded-xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                       {filteredFarmerChoices.length === 0 ? (
-                        <div className="col-span-full py-4 text-center text-gray-400">
+                        <div className="col-span-full py-4 text-center text-gray-400 text-xs">
                           ਕੋਈ ਕਿਸਾਨ ਨਹੀਂ ਮਿਲਿਆ। Farmer Register ਵਿੱਚ ਨਵਾਂ ਕਿਸਾਨ ਜੋੜੋ।
                         </div>
                       ) : (
                         filteredFarmerChoices.map((item) => {
-                          const isSelected = batchRows.some((r) => r.uniqueKey === item.uniqueKey);
+                          const count = batchRows.filter((r) => r.farmerItem.uniqueKey === item.uniqueKey).length;
                           return (
                             <div
-                              key={item.uniqueKey}
-                              onClick={() => handleToggleFarmer(item)}
-                              className={`p-2 rounded-lg border flex items-start gap-2.5 cursor-pointer transition-all ${
-                                isSelected
-                                  ? 'bg-emerald-100/90 border-emerald-500 shadow-xs'
-                                  : 'bg-gray-50/70 border-gray-200 hover:bg-emerald-50/50'
+                              key={`choice-${item.uniqueKey}`}
+                              className={`p-2 rounded-lg border flex items-center justify-between gap-2 transition-all ${
+                                count > 0
+                                  ? 'bg-emerald-50/90 border-emerald-400 shadow-2xs'
+                                  : 'bg-gray-50/70 border-gray-200 hover:bg-emerald-50/40'
                               }`}
                             >
-                              <div className="pt-0.5">
-                                {isSelected ? (
-                                  <CheckSquare className="w-4 h-4 text-emerald-700" />
-                                ) : (
-                                  <Square className="w-4 h-4 text-gray-400" />
-                                )}
-                              </div>
                               <div className="min-w-0 flex-1">
-                                <div className="font-bold text-gray-900 truncate">
+                                <div className="font-bold text-gray-900 text-xs truncate">
                                   {item.displayName}
                                 </div>
                                 <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
                                   {item.isLinked ? (
-                                    <span className="px-1.5 py-0.2 bg-purple-100 text-purple-800 rounded font-bold text-[10px]">
+                                    <span className="px-1.5 py-0.2 bg-purple-100 text-purple-800 rounded font-bold text-[9.5px]">
                                       {item.relation} (ਲਿੰਕਡ: {item.mainFarmerName})
                                     </span>
                                   ) : (
-                                    <span className="px-1.5 py-0.2 bg-blue-100 text-blue-800 rounded font-bold text-[10px]">
+                                    <span className="px-1.5 py-0.2 bg-blue-100 text-blue-800 rounded font-bold text-[9.5px]">
                                       ਮੁੱਖ ਕਿਸਾਨ
                                     </span>
                                   )}
@@ -1123,6 +1363,23 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
                                     {item.village} • {item.mobile}
                                   </span>
                                 </div>
+                              </div>
+
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {count > 0 && (
+                                  <span className="px-1.5 py-0.5 bg-amber-200 text-amber-950 font-black text-[10px] rounded-md font-mono">
+                                    {count}x
+                                  </span>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleAddFarmerToBatch(item)}
+                                  className="px-2 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded-md text-[10.5px] font-bold transition cursor-pointer flex items-center gap-1"
+                                  title="ਇਸ ਕਿਸਾਨ ਨੂੰ ਜੋੜੋ (ਵਾਰ-ਵਾਰ ਵੀ ਜੋੜ ਸਕਦੇ ਹੋ)"
+                                >
+                                  <Plus className="w-3 h-3" />
+                                  <span>ਜੋੜੋ</span>
+                                </button>
                               </div>
                             </div>
                           );
@@ -1676,7 +1933,8 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
           isOpen={isPdfModalOpen}
           onClose={() => setIsPdfModalOpen(false)}
           entries={entries}
-          initialFirmId={firmFilter !== 'All' ? firmFilter : selectedFirmId}
+          registeredFarmers={registeredFarmers}
+          initialFirmId={selectedFirmView !== 'All' ? selectedFirmView : (firmFilter !== 'All' ? firmFilter : selectedFirmId)}
           initialMandi={mandiFilter !== 'All' ? mandiFilter : mandiName}
           initialDate={selectedDateTab !== 'All' ? selectedDateTab : date}
         />
