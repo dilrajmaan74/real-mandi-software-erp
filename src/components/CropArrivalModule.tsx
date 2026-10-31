@@ -29,7 +29,13 @@ import {
   Users,
   Check,
   ListPlus,
-  MapPin
+  MapPin,
+  ShieldAlert,
+  AlertTriangle,
+  ChevronDown,
+  ChevronUp,
+  Info,
+  TrendingUp
 } from 'lucide-react';
 import { appendCropArrivalToSheets } from '../lib/sheets';
 import { getSavedVillages, registerVillage, VillageItem } from '../lib/villages';
@@ -134,7 +140,15 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
 
   // Comparison Tab Search & Filter
   const [compSearch, setCompSearch] = useState('');
-  const [compStatusFilter, setCompStatusFilter] = useState<'All' | 'Pending' | 'Completed'>('All');
+  const [compStatusFilter, setCompStatusFilter] = useState<'All' | 'Pending' | 'Completed' | 'Over' | 'Linked' | 'Duplicate'>('All');
+  const [expandedFarmerKeys, setExpandedFarmerKeys] = useState<Record<string, boolean>>({});
+
+  const toggleFarmerExpand = (key: string) => {
+    setExpandedFarmerKeys((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
 
   // Dynamic Village Master List
   const [savedVillages, setSavedVillages] = useState<VillageItem[]>(() => getSavedVillages());
@@ -514,133 +528,513 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
 
   // --- FARMER ARRIVAL VS PURCHASE COMPARISON DATA ---
   // Calculates for each farmer: Arrived bags, Own purchased bags, Linked family member purchased bags, and remaining balance bags
+  // 100% collision-free, distinguishes duplicate names by father/husband name & village, and properly attributes linked farmer purchases
   const comparisonData = useMemo(() => {
-    // Unique list of farmers from registered farmers plus any unique names in arrival
+    const cleanStr = (s?: string) => (s || '').toLowerCase().trim().replace(/\s+/g, ' ');
+
+    // 1. Identify all duplicate names across registered farmers
+    const regNameCounts = new Map<string, number>();
+    registeredFarmers.forEach((rf) => {
+      const n = cleanStr(rf.name_en);
+      if (n) regNameCounts.set(n, (regNameCounts.get(n) || 0) + 1);
+    });
+
+    // 2. Seed farmer map with registered farmers keyed by their UNIQUE ID
     const farmerMap = new Map<string, {
+      uniqueKey: string;
       farmer_id?: string;
       name_en: string;
       name_pa: string;
-      village: string;
+      father_husband_name_en: string;
+      father_husband_name_pa?: string;
+      village_en: string;
+      village_pa?: string;
       mobile: string;
-      linked_farmers: { id: string; name_en: string; name_pa: string; relation: string; bags: number }[];
+      aadhaar?: string;
+      isRegistered: boolean;
+      isDuplicateName: boolean;
       arrived_bags: number;
+      arrived_new_bags: number;
+      arrived_old_bags: number;
       arrived_quintals: number;
+      arrivals: {
+        id: string;
+        date: string;
+        parchi_no?: string;
+        trolley_no?: string;
+        bags: number;
+        new_bags: number;
+        old_bags: number;
+        quintals: number;
+        variety: string;
+      }[];
       own_purchased_bags: number;
+      own_purchased_quintals: number;
+      linked_farmers: {
+        id: string;
+        name_en: string;
+        name_pa: string;
+        relation: string;
+        mobile: string;
+        bags: number;
+        quintals: number;
+        purchases: {
+          id: string;
+          date: string;
+          agency: string;
+          firm_name: string;
+          bags: number;
+          quintals: number;
+          rate: number;
+          amount: number;
+        }[];
+      }[];
+      linked_purchased_bags: number;
+      linked_purchased_quintals: number;
       total_purchased_bags: number;
+      total_purchased_quintals: number;
       balance_bags: number;
+      balance_quintals: number;
+      purchases: {
+        id: string;
+        date: string;
+        agency: string;
+        firm_name: string;
+        billed_to_name: string;
+        relation: string;
+        is_linked: boolean;
+        bags: number;
+        quintals: number;
+        rate: number;
+        amount: number;
+      }[];
     }>();
 
-    // 1. Seed from registered farmers
     registeredFarmers.forEach((rf) => {
-      farmerMap.set(rf.name_en.toLowerCase().trim(), {
+      const isDup = (regNameCounts.get(cleanStr(rf.name_en)) || 0) > 1;
+      farmerMap.set(rf.id, {
+        uniqueKey: rf.id,
         farmer_id: rf.id,
         name_en: rf.name_en,
-        name_pa: rf.name_pa,
-        village: rf.village_en,
-        mobile: rf.mobile_number,
+        name_pa: rf.name_pa || rf.name_en,
+        father_husband_name_en: rf.father_husband_name_en || '',
+        father_husband_name_pa: rf.father_husband_name_pa || '',
+        village_en: rf.village_en || '',
+        village_pa: rf.village_pa || '',
+        mobile: rf.mobile_number || '',
+        aadhaar: rf.aadhaar_number || '',
+        isRegistered: true,
+        isDuplicateName: isDup,
+        arrived_bags: 0,
+        arrived_new_bags: 0,
+        arrived_old_bags: 0,
+        arrived_quintals: 0,
+        arrivals: [],
+        own_purchased_bags: 0,
+        own_purchased_quintals: 0,
         linked_farmers: (rf.linked_farmers || []).map((lf) => ({
           id: lf.id,
           name_en: lf.name_en,
-          name_pa: lf.name_pa,
-          relation: lf.relation,
+          name_pa: lf.name_pa || lf.name_en,
+          relation: lf.relation || 'Linked Member',
+          mobile: lf.mobile_number || '',
           bags: 0,
+          quintals: 0,
+          purchases: [],
         })),
-        arrived_bags: 0,
-        arrived_quintals: 0,
-        own_purchased_bags: 0,
+        linked_purchased_bags: 0,
+        linked_purchased_quintals: 0,
         total_purchased_bags: 0,
+        total_purchased_quintals: 0,
         balance_bags: 0,
+        balance_quintals: 0,
+        purchases: [],
       });
     });
 
-    // 2. Add Arrival totals
-    entries.forEach((arr) => {
-      const key = arr.farmer_name.toLowerCase().trim();
-      let record = farmerMap.get(key);
-      if (!record) {
-        record = {
-          farmer_id: arr.farmer_id,
-          name_en: arr.farmer_name,
-          name_pa: arr.farmer_name_pa || arr.farmer_name,
-          village: arr.village,
-          mobile: arr.mobile,
-          linked_farmers: [],
-          arrived_bags: 0,
-          arrived_quintals: 0,
-          own_purchased_bags: 0,
-          total_purchased_bags: 0,
-          balance_bags: 0,
-        };
-        farmerMap.set(key, record);
+    // Helper: find registered farmer by composite matching
+    const findRegisteredFarmer = (
+      fid?: string,
+      name?: string,
+      father?: string,
+      village?: string,
+      mobile?: string
+    ) => {
+      if (fid && farmerMap.has(fid)) {
+        return farmerMap.get(fid);
       }
-      record.arrived_bags += Number(arr.total_bags_arrived || 0);
-      record.arrived_quintals += Number(arr.weight_quintals || 0);
+      const cName = cleanStr(name);
+      if (!cName) return undefined;
+
+      const cFather = cleanStr(father);
+      const cVillage = cleanStr(village);
+      const cMobile = cleanStr(mobile);
+
+      const candidates = Array.from(farmerMap.values()).filter((r) => {
+        return (
+          cleanStr(r.name_en) === cName ||
+          cleanStr(r.name_pa) === cName
+        );
+      });
+
+      if (candidates.length === 1) {
+        return candidates[0];
+      }
+
+      if (candidates.length > 1) {
+        if (cFather) {
+          const matchFather = candidates.find(
+            (c) =>
+              cleanStr(c.father_husband_name_en) === cFather ||
+              cleanStr(c.father_husband_name_pa) === cFather
+          );
+          if (matchFather) return matchFather;
+        }
+        if (cVillage) {
+          const matchVillage = candidates.find(
+            (c) =>
+              cleanStr(c.village_en) === cVillage ||
+              cleanStr(c.village_pa) === cVillage
+          );
+          if (matchVillage) return matchVillage;
+        }
+        if (cMobile) {
+          const matchMobile = candidates.find((c) => cleanStr(c.mobile) === cMobile);
+          if (matchMobile) return matchMobile;
+        }
+        return candidates[0];
+      }
+
+      return undefined;
+    };
+
+    // 3. Process Arrivals
+    entries.forEach((arr) => {
+      let rec = findRegisteredFarmer(
+        arr.farmer_id,
+        arr.farmer_name,
+        arr.father_husband_name,
+        arr.village,
+        arr.mobile
+      );
+
+      if (!rec) {
+        // Create an unregistered farmer record with unique composite key
+        const unregKey = `UNREG_${cleanStr(arr.farmer_name)}_${cleanStr(arr.father_husband_name || '')}_${cleanStr(arr.village || '')}`;
+        rec = farmerMap.get(unregKey);
+        if (!rec) {
+          rec = {
+            uniqueKey: unregKey,
+            farmer_id: arr.farmer_id,
+            name_en: arr.farmer_name,
+            name_pa: arr.farmer_name_pa || arr.farmer_name,
+            father_husband_name_en: arr.father_husband_name || '',
+            father_husband_name_pa: arr.father_husband_name_pa || '',
+            village_en: arr.village || '',
+            village_pa: arr.village_pa || '',
+            mobile: arr.mobile || '',
+            isRegistered: false,
+            isDuplicateName: false,
+            arrived_bags: 0,
+            arrived_new_bags: 0,
+            arrived_old_bags: 0,
+            arrived_quintals: 0,
+            arrivals: [],
+            own_purchased_bags: 0,
+            own_purchased_quintals: 0,
+            linked_farmers: [],
+            linked_purchased_bags: 0,
+            linked_purchased_quintals: 0,
+            total_purchased_bags: 0,
+            total_purchased_quintals: 0,
+            balance_bags: 0,
+            balance_quintals: 0,
+            purchases: [],
+          };
+          farmerMap.set(unregKey, rec);
+        }
+      }
+
+      const arrBags = Number(arr.total_bags_arrived || 0);
+      const arrWt = Number(arr.weight_quintals || 0);
+      rec.arrived_bags += arrBags;
+      rec.arrived_new_bags += Number(arr.new_jute_bags || 0);
+      rec.arrived_old_bags += Number(arr.old_jute_bags || 0);
+      rec.arrived_quintals = Number((rec.arrived_quintals + arrWt).toFixed(2));
+      rec.arrivals.push({
+        id: arr.id,
+        date: arr.date,
+        parchi_no: arr.parchi_no || arr.gate_pass_no,
+        trolley_no: arr.vehicle_trolley_no,
+        bags: arrBags,
+        new_bags: Number(arr.new_jute_bags || 0),
+        old_bags: Number(arr.old_jute_bags || 0),
+        quintals: arrWt,
+        variety: arr.crop_variety || arr.crop_type || 'PR-126',
+      });
     });
 
-    // 3. Match purchases (Own name vs Linked members)
+    // 4. Process Agency Purchases (Both Main Farmer & Linked Farmer purchases)
     agencyPurchases.forEach((pur) => {
-      const mainFarmerKey = pur.farmer_name.toLowerCase().trim();
-      const record = farmerMap.get(mainFarmerKey);
-      const billedToKey = (pur.billed_to_name || '').toLowerCase().trim();
       const purBags = Number(pur.total_bags || 0);
+      const purWt = Number(pur.weight_quintals || 0);
+      const purAmt = Number(pur.total_amount || 0);
+      const purRate = Number(pur.rate_per_quintal || 2461);
+      const cPurFarmer = cleanStr(pur.farmer_name);
+      const cBilledTo = cleanStr(pur.billed_to_name);
 
-      if (record) {
-        // Is it billed to the farmer himself?
-        const isSelf = billedToKey === mainFarmerKey || 
-                       billedToKey === (record.name_pa || '').toLowerCase().trim() ||
-                       billedToKey === 'self' || 
-                       billedToKey === '';
+      // Check A: Is this purchase for a LINKED FARMER of a registered farmer?
+      let linkedOwner: ReturnType<typeof farmerMap.get> | undefined;
+      let matchedLinkedMember: (typeof farmerMap extends Map<any, infer V> ? V : never)['linked_farmers'][0] | undefined;
 
-        if (isSelf) {
-          record.own_purchased_bags += purBags;
-        } else {
-          // Check if matches one of the linked family members
-          const linkedMatch = record.linked_farmers.find((lf) => 
-            lf.name_en.toLowerCase().trim() === billedToKey || 
-            lf.name_pa.toLowerCase().trim() === billedToKey
+      // Method 1: If pur has farmer_id of the main registered farmer
+      if (pur.farmer_id && farmerMap.has(pur.farmer_id)) {
+        const potentialOwner = farmerMap.get(pur.farmer_id)!;
+        const foundLf = potentialOwner.linked_farmers.find(
+          (lf) =>
+            cleanStr(lf.name_en) === cPurFarmer ||
+            cleanStr(lf.name_pa) === cPurFarmer ||
+            cleanStr(lf.name_en) === cBilledTo ||
+            cleanStr(lf.name_pa) === cBilledTo
+        );
+        if (foundLf || (pur.relation_with_main && pur.relation_with_main !== 'Self')) {
+          linkedOwner = potentialOwner;
+          matchedLinkedMember = foundLf;
+        }
+      }
+
+      // Method 2: If not found yet, check all registered farmers for matching linked member
+      if (!linkedOwner) {
+        for (const rfRec of farmerMap.values()) {
+          const foundLf = rfRec.linked_farmers.find(
+            (lf) =>
+              cleanStr(lf.name_en) === cPurFarmer ||
+              cleanStr(lf.name_pa) === cPurFarmer ||
+              cleanStr(lf.name_en) === cBilledTo ||
+              cleanStr(lf.name_pa) === cBilledTo
           );
-
-          if (linkedMatch) {
-            linkedMatch.bags += purBags;
-          } else {
-            // Unregistered linked person or alternate family name
-            record.linked_farmers.push({
-              id: `LF-AUTO-${Date.now().toString().slice(-4)}`,
-              name_en: pur.billed_to_name,
-              name_pa: pur.billed_to_name,
-              relation: pur.relation_with_main || 'Family Member',
-              bags: purBags,
-            });
+          if (foundLf) {
+            linkedOwner = rfRec;
+            matchedLinkedMember = foundLf;
+            break;
           }
         }
       }
+
+      // If matched as a Linked Farmer Purchase:
+      if (linkedOwner) {
+        linkedOwner.linked_purchased_bags += purBags;
+        linkedOwner.linked_purchased_quintals = Number((linkedOwner.linked_purchased_quintals + purWt).toFixed(2));
+
+        if (!matchedLinkedMember) {
+          const dynName = pur.billed_to_name || pur.farmer_name;
+          matchedLinkedMember = {
+            id: `LF-DYN-${Date.now().toString().slice(-4)}`,
+            name_en: dynName,
+            name_pa: dynName,
+            relation: pur.relation_with_main || 'Family Member',
+            mobile: pur.mobile || '',
+            bags: 0,
+            quintals: 0,
+            purchases: [],
+          };
+          linkedOwner.linked_farmers.push(matchedLinkedMember);
+        }
+
+        matchedLinkedMember.bags += purBags;
+        matchedLinkedMember.quintals = Number((matchedLinkedMember.quintals + purWt).toFixed(2));
+        matchedLinkedMember.purchases.push({
+          id: pur.id,
+          date: pur.date,
+          agency: pur.purchasing_agency,
+          firm_name: pur.firm_name,
+          bags: purBags,
+          quintals: purWt,
+          rate: purRate,
+          amount: purAmt,
+        });
+
+        linkedOwner.purchases.push({
+          id: pur.id,
+          date: pur.date,
+          agency: pur.purchasing_agency,
+          firm_name: pur.firm_name,
+          billed_to_name: pur.billed_to_name || pur.farmer_name,
+          relation: pur.relation_with_main || matchedLinkedMember.relation || 'Linked Member',
+          is_linked: true,
+          bags: purBags,
+          quintals: purWt,
+          rate: purRate,
+          amount: purAmt,
+        });
+        return;
+      }
+
+      // Check B: It is an OWN PURCHASE of a Main Farmer
+      let mainRec = findRegisteredFarmer(
+        pur.farmer_id,
+        pur.farmer_name,
+        pur.father_husband_name,
+        pur.village || pur.address_village,
+        pur.mobile
+      );
+
+      if (!mainRec) {
+        // Try unregistered
+        const unregKey = `UNREG_${cleanStr(pur.farmer_name)}_${cleanStr(pur.father_husband_name || '')}_${cleanStr(pur.village || pur.address_village || '')}`;
+        mainRec = farmerMap.get(unregKey);
+        if (!mainRec) {
+          mainRec = {
+            uniqueKey: unregKey,
+            farmer_id: pur.farmer_id,
+            name_en: pur.farmer_name,
+            name_pa: pur.farmer_name,
+            father_husband_name_en: pur.father_husband_name || '',
+            village_en: pur.village || pur.address_village || '',
+            mobile: pur.mobile || '',
+            isRegistered: false,
+            isDuplicateName: false,
+            arrived_bags: 0,
+            arrived_new_bags: 0,
+            arrived_old_bags: 0,
+            arrived_quintals: 0,
+            arrivals: [],
+            own_purchased_bags: 0,
+            own_purchased_quintals: 0,
+            linked_farmers: [],
+            linked_purchased_bags: 0,
+            linked_purchased_quintals: 0,
+            total_purchased_bags: 0,
+            total_purchased_quintals: 0,
+            balance_bags: 0,
+            balance_quintals: 0,
+            purchases: [],
+          };
+          farmerMap.set(unregKey, mainRec);
+        }
+      }
+
+      mainRec.own_purchased_bags += purBags;
+      mainRec.own_purchased_quintals = Number((mainRec.own_purchased_quintals + purWt).toFixed(2));
+      mainRec.purchases.push({
+        id: pur.id,
+        date: pur.date,
+        agency: pur.purchasing_agency,
+        firm_name: pur.firm_name,
+        billed_to_name: pur.farmer_name,
+        relation: 'Self (ਖੁਦ)',
+        is_linked: false,
+        bags: purBags,
+        quintals: purWt,
+        rate: purRate,
+        amount: purAmt,
+      });
     });
 
-    // 4. Compute totals and balances
-    const list = Array.from(farmerMap.values()).map((rec) => {
-      const linkedTotal = rec.linked_farmers.reduce((sum, lf) => sum + lf.bags, 0);
-      const totalPurchased = rec.own_purchased_bags + linkedTotal;
-      const balance = rec.arrived_bags - totalPurchased;
+    // 5. Compute Balances and Check Duplicate Names across the active records
+    const allRecords = Array.from(farmerMap.values());
+    const finalNameCounts = new Map<string, number>();
+    allRecords.forEach((r) => {
+      const n = cleanStr(r.name_en);
+      if (n) finalNameCounts.set(n, (finalNameCounts.get(n) || 0) + 1);
+    });
+
+    const list = allRecords.map((rec) => {
+      const isDup = (finalNameCounts.get(cleanStr(rec.name_en)) || 0) > 1;
+      const totalPurchased = rec.own_purchased_bags + rec.linked_purchased_bags;
+      const totalPurchasedWt = Number((rec.own_purchased_quintals + rec.linked_purchased_quintals).toFixed(2));
+      const balBags = rec.arrived_bags - totalPurchased;
+      const balWt = Number((rec.arrived_quintals - totalPurchasedWt).toFixed(2));
 
       return {
         ...rec,
+        isDuplicateName: isDup,
         total_purchased_bags: totalPurchased,
-        balance_bags: balance,
+        total_purchased_quintals: totalPurchasedWt,
+        balance_bags: balBags,
+        balance_quintals: balWt,
       };
     });
 
-    // Filter to only those with arrival or purchases
+    // Filter to only those with arrival OR purchase history
     return list.filter((r) => r.arrived_bags > 0 || r.total_purchased_bags > 0);
   }, [registeredFarmers, entries, agencyPurchases]);
 
+  // Grand summary totals across all farmers in the Arrival vs Purchase Ledger
+  const comparisonGrandTotals = useMemo(() => {
+    let totalArrivalBags = 0;
+    let totalArrivalQtl = 0;
+    let totalOwnBags = 0;
+    let totalOwnQtl = 0;
+    let totalLinkedBags = 0;
+    let totalLinkedQtl = 0;
+    let totalPurchasedBags = 0;
+    let totalPurchasedQtl = 0;
+    let totalBalanceBags = 0;
+    let totalBalanceQtl = 0;
+
+    let clearedCount = 0;
+    let pendingCount = 0;
+    let overPurchasedCount = 0;
+    let duplicateCount = 0;
+    let linkedActiveCount = 0;
+
+    comparisonData.forEach((rec) => {
+      totalArrivalBags += rec.arrived_bags;
+      totalArrivalQtl += rec.arrived_quintals;
+      totalOwnBags += rec.own_purchased_bags;
+      totalOwnQtl += rec.own_purchased_quintals;
+      totalLinkedBags += rec.linked_purchased_bags;
+      totalLinkedQtl += rec.linked_purchased_quintals;
+      totalPurchasedBags += rec.total_purchased_bags;
+      totalPurchasedQtl += rec.total_purchased_quintals;
+      totalBalanceBags += rec.balance_bags;
+      totalBalanceQtl += rec.balance_quintals;
+
+      if (rec.balance_bags === 0) clearedCount++;
+      else if (rec.balance_bags > 0) pendingCount++;
+      else overPurchasedCount++;
+
+      if (rec.isDuplicateName) duplicateCount++;
+      if (rec.linked_purchased_bags > 0) linkedActiveCount++;
+    });
+
+    return {
+      totalArrivalBags,
+      totalArrivalQtl: Number(totalArrivalQtl.toFixed(2)),
+      totalOwnBags,
+      totalOwnQtl: Number(totalOwnQtl.toFixed(2)),
+      totalLinkedBags,
+      totalLinkedQtl: Number(totalLinkedQtl.toFixed(2)),
+      totalPurchasedBags,
+      totalPurchasedQtl: Number(totalPurchasedQtl.toFixed(2)),
+      totalBalanceBags,
+      totalBalanceQtl: Number(totalBalanceQtl.toFixed(2)),
+      totalFarmers: comparisonData.length,
+      clearedCount,
+      pendingCount,
+      overPurchasedCount,
+      duplicateCount,
+      linkedActiveCount,
+    };
+  }, [comparisonData]);
+
   const filteredComparison = useMemo(() => {
-    const q = compSearch.toLowerCase();
+    const q = compSearch.toLowerCase().trim();
     return comparisonData.filter((r) => {
       const matchSearch =
+        !q ||
         r.name_en.toLowerCase().includes(q) ||
         r.name_pa.toLowerCase().includes(q) ||
-        r.village.toLowerCase().includes(q) ||
-        r.mobile.includes(q);
+        r.father_husband_name_en.toLowerCase().includes(q) ||
+        r.village_en.toLowerCase().includes(q) ||
+        r.mobile.includes(q) ||
+        r.arrivals.some((a) => (a.parchi_no || '').toLowerCase().includes(q)) ||
+        r.linked_farmers.some(
+          (lf) =>
+            lf.name_en.toLowerCase().includes(q) ||
+            lf.name_pa.toLowerCase().includes(q)
+        );
 
       if (!matchSearch) return false;
 
@@ -648,7 +1042,16 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
         return r.balance_bags > 0;
       }
       if (compStatusFilter === 'Completed') {
-        return r.balance_bags <= 0;
+        return r.balance_bags === 0;
+      }
+      if (compStatusFilter === 'Over') {
+        return r.balance_bags < 0;
+      }
+      if (compStatusFilter === 'Linked') {
+        return r.linked_purchased_bags > 0;
+      }
+      if (compStatusFilter === 'Duplicate') {
+        return r.isDuplicateName;
       }
       return true;
     });
@@ -1737,36 +2140,184 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
       {/* TAB 3: FARMER ARRIVAL VS PURCHASE COMPARISON CHART / LEDGER   */}
       {/* ============================================================== */}
       {activeTab === 'comparison' && (
-        <div className="p-5 space-y-4">
-          <div className="bg-blue-50/70 border border-blue-200 rounded-2xl p-4">
-            <h3 className="font-bold text-blue-950 flex items-center gap-2 text-sm">
-              <BarChart3 className="w-5 h-5 text-blue-700" />
-              <span>ਕਿਸਾਨ ਆਵਕ ਬਨਾਮ ਖਰੀਦ ਚਾਰਟ ਤੇ ਲਿੰਕ ਕਿਸਾਨ ਹਿਸਾਬ (Farmer Arrival vs Purchase Breakdown)</span>
-            </h3>
-            <p className="text-xs text-blue-900 mt-1">
-              ਇਹ ਚਾਰਟ ਦਿਖਾਉਂਦਾ ਹੈ ਕਿ ਕਿਸਾਨ ਮੰਡੀ ਵਿੱਚ ਕਿੰਨੇ ਗੱਟੇ ਲੈ ਕੇ ਆਇਆ, ਕਿੰਨੇ ਗੱਟਿਆਂ ਦੀ ਖਰੀਦ ਉਸਨੇ ਆਪਣੇ ਨਾਮ ਕਰਵਾਈ ਅਤੇ ਕਿੰਨੇ ਗੱਟੇ ਉਸਦੇ ਨਾਲ ਲਿੰਕ ਪਰਿਵਾਰਕ ਮੈਂਬਰਾਂ ਦੇ ਨਾਮ 'ਤੇ ਪਾਸ ਹੋਏ ਅਤੇ ਮੰਡੀ ਯਾਰਡ ਵਿੱਚ ਕਿੰਨੇ ਬੈਗ ਬਕਾਇਆ ਹਨ।
-            </p>
+        <div className="p-4 sm:p-6 space-y-5">
+          {/* Top Informational Header */}
+          <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white rounded-2xl p-4 sm:p-5 shadow-sm space-y-2">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <div>
+                <h3 className="font-black text-white flex items-center gap-2 text-base sm:text-lg">
+                  <BarChart3 className="w-5 h-5 text-amber-300" />
+                  <span>ਕਿਸਾਨ ਆਵਕ ਬਨਾਮ ਖਰੀਦ ਚਾਰਟ ਤੇ ਲਿੰਕ ਕਿਸਾਨ ਹਿਸਾਬ (Arrival vs Purchase Ledger)</span>
+                </h3>
+                <p className="text-xs text-blue-200 mt-1 max-w-3xl">
+                  ਸਰਕਾਰੀ ਖਰੀਦ ਪਾਉਣ ਤੋਂ ਪਹਿਲਾਂ ਇੱਥੇ ਚੈੱਕ ਕਰੋ: ਕਿਸਾਨ ਦੇ ਮੰਡੀ ਵਿੱਚ ਕੁੱਲ ਕਿੰਨੇ ਗੱਟੇ ਆਏ, ਮੁੱਖ ਕਿਸਾਨ ਦੇ ਨਾਮ ਕਿੰਨੇ ਪਾਸ ਹੋਏ, ਲਿੰਕਡ ਮੈਂਬਰਾਂ ਦੇ ਨਾਮ ਕਿੰਨੇ ਕੱਟੇ ਗਏ ਅਤੇ ਯਾਰਡ ਵਿੱਚ ਕਿੰਨੇ ਬੈਗ ਬਕਾਇਆ ਹਨ।
+                </p>
+              </div>
+              <div className="flex items-center gap-2 text-xs bg-white/10 px-3 py-1.5 rounded-xl border border-white/15 shrink-0">
+                <ShieldAlert className="w-4 h-4 text-amber-300" />
+                <span className="font-bold text-amber-200">100% ਸੁਰੱਖਿਅਤ ਖਰੀਦ ਕੰਟਰੋਲ</span>
+              </div>
+            </div>
           </div>
 
-          {/* Search & Status Filters */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="relative w-full sm:w-80">
+          {/* 🌟 TOP GRAND TOTAL SUMMARY PANEL (ਕੁੱਲ ਆਵਕ, ਮੁੱਖ ਖਰੀਦ, ਲਿੰਕਡ ਖਰੀਦ ਤੇ ਬਾਕੀ ਬਕਾਇਆ) */}
+          <div className="bg-slate-50 border-2 border-indigo-200 rounded-2xl p-4 sm:p-5 space-y-4 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-indigo-100 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full bg-indigo-600 animate-pulse"></span>
+                <span className="font-black text-sm text-indigo-950 uppercase tracking-wide">
+                  ਮੰਡੀ ਯਾਰਡ ਦਾ ਕੁੱਲ ਸਾਂਝਾ ਹਿਸਾਬ (MANDI YARD GRAND SUMMARY)
+                </span>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap text-xs font-mono font-bold">
+                <span className="bg-white px-2.5 py-1 rounded-lg border border-gray-200 text-gray-700">
+                  ਕੁੱਲ ਖਾਤੇ: <strong>{comparisonGrandTotals.totalFarmers} ਕਿਸਾਨ</strong>
+                </span>
+                <span className="bg-amber-100 px-2.5 py-1 rounded-lg border border-amber-300 text-amber-950">
+                  ⏳ ਬਕਾਇਆ: <strong>{comparisonGrandTotals.pendingCount} ਕਿਸਾਨ</strong>
+                </span>
+                <span className="bg-emerald-100 px-2.5 py-1 rounded-lg border border-emerald-300 text-emerald-950">
+                  ✅ ਮੁਕੰਮਲ: <strong>{comparisonGrandTotals.clearedCount} ਕਿਸਾਨ</strong>
+                </span>
+                {comparisonGrandTotals.overPurchasedCount > 0 && (
+                  <span className="bg-red-100 px-2.5 py-1 rounded-lg border border-red-300 text-red-900 animate-pulse">
+                    🚨 ਵਾਧੂ ਖਰੀਦ: <strong>{comparisonGrandTotals.overPurchasedCount} ਕਿਸਾਨ</strong>
+                  </span>
+                )}
+                {comparisonGrandTotals.duplicateCount > 0 && (
+                  <span className="bg-purple-100 px-2.5 py-1 rounded-lg border border-purple-300 text-purple-900">
+                    ⚠️ ਇੱਕੋ ਨਾਮ ਵਾਲੇ: <strong>{comparisonGrandTotals.duplicateCount} ਕਿਸਾਨ</strong>
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* 5 Big Stat Boxes for Yard Summary */}
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+              {/* 1. ਕੁੱਲ ਆਵਕ ਬੋਰੀਆਂ */}
+              <div className="bg-white p-3.5 rounded-xl border-2 border-blue-200 shadow-xs">
+                <span className="text-[11px] font-bold text-blue-900 block mb-0.5 flex items-center gap-1">
+                  <Wheat className="w-3.5 h-3.5 text-blue-600" />
+                  1. ਕੁੱਲ ਆਵਕ (Arrival)
+                </span>
+                <div className="text-xl sm:text-2xl font-black font-mono text-blue-950">
+                  {comparisonGrandTotals.totalArrivalBags} <span className="text-xs font-normal text-blue-800">Bags</span>
+                </div>
+                <span className="text-xs font-mono font-bold text-blue-700 block mt-0.5">
+                  {comparisonGrandTotals.totalArrivalQtl.toFixed(2)} Qtl
+                </span>
+                <span className="text-[10px] text-gray-500 block mt-1">ਮੰਡੀ ਵਿੱਚ ਆਈ ਫਸਲ</span>
+              </div>
+
+              {/* 2. ਮੁੱਖ ਕਿਸਾਨ ਖਰੀਦ */}
+              <div className="bg-white p-3.5 rounded-xl border-2 border-emerald-200 shadow-xs">
+                <span className="text-[11px] font-bold text-emerald-900 block mb-0.5 flex items-center gap-1">
+                  <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
+                  2. ਮੁੱਖ ਕਿਸਾਨ ਖਰੀਦ (Own)
+                </span>
+                <div className="text-xl sm:text-2xl font-black font-mono text-emerald-950">
+                  {comparisonGrandTotals.totalOwnBags} <span className="text-xs font-normal text-emerald-800">Bags</span>
+                </div>
+                <span className="text-xs font-mono font-bold text-emerald-700 block mt-0.5">
+                  {comparisonGrandTotals.totalOwnQtl.toFixed(2)} Qtl
+                </span>
+                <span className="text-[10px] text-gray-500 block mt-1">ਆਪਣੇ ਨਾਮ 'ਤੇ ਪਾਸ</span>
+              </div>
+
+              {/* 3. ਲਿੰਕਡ ਕਿਸਾਨ ਖਰੀਦ */}
+              <div className="bg-white p-3.5 rounded-xl border-2 border-purple-200 shadow-xs">
+                <span className="text-[11px] font-bold text-purple-900 block mb-0.5 flex items-center gap-1">
+                  <Users className="w-3.5 h-3.5 text-purple-600" />
+                  3. ਲਿੰਕਡ ਖਰੀਦ (Linked)
+                </span>
+                <div className="text-xl sm:text-2xl font-black font-mono text-purple-950">
+                  {comparisonGrandTotals.totalLinkedBags} <span className="text-xs font-normal text-purple-800">Bags</span>
+                </div>
+                <span className="text-xs font-mono font-bold text-purple-700 block mt-0.5">
+                  {comparisonGrandTotals.totalLinkedQtl.toFixed(2)} Qtl
+                </span>
+                <span className="text-[10px] text-purple-700 font-semibold block mt-1">ਪਰਿਵਾਰਕ ਮੈਂਬਰਾਂ ਦੇ ਨਾਮ</span>
+              </div>
+
+              {/* 4. ਕੁੱਲ ਖਰੀਦ ਜੋੜ (ਮੁੱਖ + ਲਿੰਕਡ) */}
+              <div className="bg-white p-3.5 rounded-xl border-2 border-cyan-200 shadow-xs">
+                <span className="text-[11px] font-bold text-cyan-950 block mb-0.5 flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-cyan-700" />
+                  4. ਕੁੱਲ ਖਰੀਦ (Total Pass)
+                </span>
+                <div className="text-xl sm:text-2xl font-black font-mono text-cyan-950">
+                  {comparisonGrandTotals.totalPurchasedBags} <span className="text-xs font-normal text-cyan-800">Bags</span>
+                </div>
+                <span className="text-xs font-mono font-bold text-cyan-800 block mt-0.5">
+                  {comparisonGrandTotals.totalPurchasedQtl.toFixed(2)} Qtl
+                </span>
+                <span className="text-[10px] text-gray-500 block mt-1">ਮੁੱਖ + ਲਿੰਕਡ ਦੋਵੇਂ ਸ਼ਾਮਲ</span>
+              </div>
+
+              {/* 5. ਮੰਡੀ ਵਿੱਚ ਬਾਕੀ ਬਕਾਇਆ */}
+              <div className={`p-3.5 rounded-xl border-2 shadow-xs ${
+                comparisonGrandTotals.totalBalanceBags > 0
+                  ? 'bg-amber-50/90 border-amber-400'
+                  : comparisonGrandTotals.totalBalanceBags === 0
+                  ? 'bg-emerald-50 border-emerald-400'
+                  : 'bg-red-50 border-red-400'
+              }`}>
+                <span className={`text-[11px] font-black block mb-0.5 flex items-center gap-1 ${
+                  comparisonGrandTotals.totalBalanceBags > 0 ? 'text-amber-950' : 'text-emerald-950'
+                }`}>
+                  <Clock className="w-3.5 h-3.5 text-amber-700" />
+                  5. ਬਾਕੀ ਬਕਾਇਆ (Balance)
+                </span>
+                <div className={`text-xl sm:text-2xl font-black font-mono ${
+                  comparisonGrandTotals.totalBalanceBags > 0
+                    ? 'text-amber-950'
+                    : comparisonGrandTotals.totalBalanceBags === 0
+                    ? 'text-emerald-900'
+                    : 'text-red-900'
+                }`}>
+                  {comparisonGrandTotals.totalBalanceBags} <span className="text-xs font-normal text-gray-700">Bags</span>
+                </div>
+                <span className="text-xs font-mono font-black text-amber-900 block mt-0.5">
+                  {comparisonGrandTotals.totalBalanceQtl.toFixed(2)} Qtl
+                </span>
+                <span className="text-[10px] font-bold text-amber-900 block mt-1">
+                  {comparisonGrandTotals.totalBalanceBags > 0 ? 'ਖਰੀਦਣ ਲਈ ਬਕਾਇਆ' : 'ਸਾਰੀ ਆਵਕ ਨਿੱਬੜੀ'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Search Bar & Status Filter Tabs */}
+          <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+            <div className="relative flex-1 max-w-md">
               <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={compSearch}
                 onChange={(e) => setCompSearch(e.target.value)}
-                placeholder="ਕਿਸਾਨ ਜਾਂ ਪਿੰਡ ਖੋਜੋ..."
-                className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-900 focus:outline-none focus:border-blue-600 focus:bg-white"
+                placeholder="ਕਿਸਾਨ, ਪਿਤਾ/ਪਤੀ ਦਾ ਨਾਮ, ਪਿੰਡ, ਮੋਬਾਈਲ ਜਾਂ ਪਰਚੀ ਨੰਬਰ ਖੋਜੋ..."
+                className="w-full pl-9 pr-3 py-2.5 bg-gray-50 border border-gray-300 rounded-xl text-xs text-gray-900 focus:outline-none focus:border-indigo-600 focus:bg-white"
               />
+              {compSearch && (
+                <button
+                  type="button"
+                  onClick={() => setCompSearch('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs font-bold"
+                >
+                  ✕
+                </button>
+              )}
             </div>
 
-            <div className="flex items-center gap-2 self-end sm:self-auto">
+            {/* Quick Status Buttons */}
+            <div className="flex items-center gap-1.5 flex-wrap">
               <button
                 type="button"
                 onClick={() => setCompStatusFilter('All')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  compStatusFilter === 'All' ? 'bg-blue-800 text-white' : 'bg-gray-100 text-gray-700'
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  compStatusFilter === 'All'
+                    ? 'bg-indigo-900 text-white shadow-xs'
+                    : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-100'
                 }`}
               >
                 ਸਾਰੇ ({comparisonData.length})
@@ -1774,144 +2325,431 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
               <button
                 type="button"
                 onClick={() => setCompStatusFilter('Pending')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  compStatusFilter === 'Pending' ? 'bg-amber-600 text-white' : 'bg-amber-50 text-amber-900 border border-amber-200'
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                  compStatusFilter === 'Pending'
+                    ? 'bg-amber-600 text-white shadow-xs'
+                    : 'bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100'
                 }`}
               >
-                ਬਾਕੀ ਬੈਗ (Pending Balance)
+                <Clock className="w-3.5 h-3.5" />
+                <span>ਬਾਕੀ ਬੈਗ ({comparisonGrandTotals.pendingCount})</span>
               </button>
               <button
                 type="button"
                 onClick={() => setCompStatusFilter('Completed')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  compStatusFilter === 'Completed' ? 'bg-emerald-700 text-white' : 'bg-emerald-50 text-emerald-900 border border-emerald-200'
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                  compStatusFilter === 'Completed'
+                    ? 'bg-emerald-700 text-white shadow-xs'
+                    : 'bg-emerald-50 text-emerald-900 border border-emerald-300 hover:bg-emerald-100'
                 }`}
               >
-                ਮੁਕੰਮਲ (Fully Purchased)
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>ਮੁਕੰਮਲ ({comparisonGrandTotals.clearedCount})</span>
               </button>
+              <button
+                type="button"
+                onClick={() => setCompStatusFilter('Linked')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                  compStatusFilter === 'Linked'
+                    ? 'bg-purple-700 text-white shadow-xs'
+                    : 'bg-purple-50 text-purple-900 border border-purple-200 hover:bg-purple-100'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>ਲਿੰਕਡ ਖਰੀਦ ਵਾਲੇ ({comparisonGrandTotals.linkedActiveCount})</span>
+              </button>
+              {comparisonGrandTotals.overPurchasedCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setCompStatusFilter('Over')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                    compStatusFilter === 'Over'
+                      ? 'bg-red-700 text-white shadow-xs'
+                      : 'bg-red-50 text-red-900 border border-red-300 hover:bg-red-100'
+                  }`}
+                >
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  <span>ਵਾਧੂ ਖਰੀਦ ({comparisonGrandTotals.overPurchasedCount})</span>
+                </button>
+              )}
+              {comparisonGrandTotals.duplicateCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setCompStatusFilter('Duplicate')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                    compStatusFilter === 'Duplicate'
+                      ? 'bg-amber-900 text-white shadow-xs'
+                      : 'bg-yellow-50 text-yellow-950 border border-yellow-300 hover:bg-yellow-100'
+                  }`}
+                >
+                  <ShieldAlert className="w-3.5 h-3.5 text-amber-700" />
+                  <span>ਇੱਕੋ ਨਾਮ ਵਾਲੇ ({comparisonGrandTotals.duplicateCount})</span>
+                </button>
+              )}
             </div>
           </div>
 
-          {/* Comparison Cards / Table */}
-          <div className="space-y-3">
+          {/* Comparison Cards / Ledger Rows */}
+          <div className="space-y-3.5">
             {filteredComparison.length === 0 ? (
-              <div className="p-12 text-center text-gray-400 border border-gray-200 rounded-2xl bg-white">
-                ਕੋਈ ਕਿਸਾਨ ਹਿਸਾਬ ਨਹੀਂ ਮਿਲਿਆ।
+              <div className="p-12 text-center text-gray-500 border-2 border-dashed border-gray-200 rounded-2xl bg-white space-y-2">
+                <BarChart3 className="w-8 h-8 text-gray-400 mx-auto" />
+                <p className="font-bold text-sm text-gray-700">ਕੋਈ ਕਿਸਾਨ ਹਿਸਾਬ ਨਹੀਂ ਮਿਲਿਆ</p>
+                <p className="text-xs text-gray-400">ਖੋਜ ਜਾਂ ਫਿਲਟਰ ਬਦਲ ਕੇ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।</p>
               </div>
             ) : (
               filteredComparison.map((rec) => {
                 const isCleared = rec.balance_bags === 0;
                 const isOver = rec.balance_bags < 0;
+                const isExpanded = !!expandedFarmerKeys[rec.uniqueKey];
 
                 return (
                   <div 
-                    key={rec.name_en}
-                    className="border border-gray-200 hover:border-blue-300 rounded-2xl p-4 bg-white shadow-xs transition-all space-y-3"
+                    key={rec.uniqueKey}
+                    className={`border-2 rounded-2xl p-4 bg-white shadow-xs transition-all space-y-3.5 ${
+                      rec.isDuplicateName
+                        ? 'border-amber-300 bg-amber-50/20'
+                        : isOver
+                        ? 'border-red-300 bg-red-50/20'
+                        : isCleared
+                        ? 'border-emerald-200 hover:border-emerald-300'
+                        : 'border-blue-200 hover:border-blue-400'
+                    }`}
                   >
-                    {/* Header Row */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-2.5 border-gray-100">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-800 font-bold flex items-center justify-center text-xs">
+                    {/* Header: Farmer Details + Disambiguation Badge + Safe Status */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3 border-gray-100">
+                      <div className="flex items-start gap-3">
+                        <div className={`w-10 h-10 rounded-xl font-black flex items-center justify-center text-sm shrink-0 shadow-xs ${
+                          rec.isDuplicateName
+                            ? 'bg-amber-200 text-amber-950 border border-amber-400'
+                            : 'bg-indigo-100 text-indigo-900 border border-indigo-200'
+                        }`}>
                           {rec.name_en.slice(0, 2).toUpperCase()}
                         </div>
-                        <div>
-                          <div className="font-bold text-gray-900 text-sm flex items-center gap-2">
+                        <div className="space-y-1">
+                          <div className="font-black text-gray-950 text-sm sm:text-base flex items-center gap-2 flex-wrap">
                             <span>{rec.name_en}</span>
-                            <span className="text-gray-500 font-normal">({rec.name_pa})</span>
+                            {rec.name_pa && (
+                              <span className="text-gray-600 font-semibold text-xs sm:text-sm">({rec.name_pa})</span>
+                            )}
+                            {rec.isRegistered ? (
+                              <span className="text-[10px] bg-emerald-100 text-emerald-900 font-bold px-2 py-0.5 rounded-full">
+                                ਰਜਿਸਟਰਡ ਖਾਤਾ
+                              </span>
+                            ) : (
+                              <span className="text-[10px] bg-gray-100 text-gray-700 font-bold px-2 py-0.5 rounded-full">
+                                ਸਿੱਧੀ ਆਵਕ
+                              </span>
+                            )}
                           </div>
-                          <div className="text-xs text-gray-500">
-                            ਪਿੰਡ: {rec.village} {rec.mobile && `• 📞 ${rec.mobile}`}
+
+                          {/* Identification details: Father/Husband Name, Village, Mobile */}
+                          <div className="flex items-center gap-2.5 text-xs text-gray-700 flex-wrap">
+                            <span className="font-semibold text-gray-900 bg-gray-100 px-2 py-0.5 rounded-md">
+                              ਪਿਤਾ/ਪਤੀ: <strong>{rec.father_husband_name_en || rec.father_husband_name_pa || 'ਦਰਜ ਨਹੀਂ'}</strong>
+                            </span>
+                            <span className="font-semibold text-gray-900 bg-gray-100 px-2 py-0.5 rounded-md">
+                              ਪਿੰਡ: <strong>{rec.village_en || rec.village_pa || 'ਦਰਜ ਨਹੀਂ'}</strong>
+                            </span>
+                            {rec.mobile && (
+                              <span className="text-gray-600 font-mono">📞 {rec.mobile}</span>
+                            )}
                           </div>
+
+                          {/* ⚠️ DUPLICATE NAME SAFEGUARD BADGE */}
+                          {rec.isDuplicateName && (
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-100 border border-amber-300 text-amber-950 text-xs font-bold">
+                              <ShieldAlert className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                              <span>ਇੱਕੋ ਨਾਮ ਵਾਲਾ ਵੱਖਰਾ ਖਾਤਾ: ਪਿਤਾ {rec.father_husband_name_en || 'N/A'} • ਪਿੰਡ {rec.village_en || 'N/A'}</span>
+                            </div>
+                          )}
                         </div>
                       </div>
 
-                      {/* Status Badge */}
-                      <div>
+                      {/* Right Status Badge */}
+                      <div className="shrink-0 sm:self-start">
                         {isCleared ? (
-                          <span className="inline-flex items-center gap-1 text-xs font-bold bg-emerald-100 text-emerald-900 px-3 py-1 rounded-full">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                            ਸਾਰੀ ਫਸਲ ਪਾਸ (Fully Purchased)
+                          <span className="inline-flex items-center gap-1.5 text-xs font-black bg-emerald-100 text-emerald-950 px-3.5 py-1.5 rounded-full border border-emerald-300">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                            ਸਾਰੀ ਫਸਲ ਪਾਸ (0 ਬੈਗ ਬਾਕੀ)
                           </span>
                         ) : isOver ? (
-                          <span className="inline-flex items-center gap-1 text-xs font-bold bg-purple-100 text-purple-900 px-3 py-1 rounded-full">
+                          <span className="inline-flex items-center gap-1.5 text-xs font-black bg-red-100 text-red-950 px-3.5 py-1.5 rounded-full border border-red-300 animate-pulse">
+                            <AlertTriangle className="w-4 h-4 text-red-600" />
                             ਵਾਧੂ ਖਰੀਦ (+{Math.abs(rec.balance_bags)} ਬੈਗ ਵੱਧ)
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-xs font-bold bg-amber-100 text-amber-950 px-3 py-1 rounded-full border border-amber-300 animate-pulse">
-                            <Clock className="w-3.5 h-3.5 text-amber-700" />
+                          <span className="inline-flex items-center gap-1.5 text-xs font-black bg-amber-100 text-amber-950 px-3.5 py-1.5 rounded-full border-2 border-amber-400 shadow-xs">
+                            <Clock className="w-4 h-4 text-amber-700 animate-spin" />
                             {rec.balance_bags} ਬੈਗ ਮੰਡੀ ਵਿੱਚ ਬਾਕੀ (Pending)
                           </span>
                         )}
                       </div>
                     </div>
 
-                    {/* Numeric Metric Bars */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                      {/* Box 1: Arrived */}
-                      <div className="p-2.5 bg-gray-50 rounded-xl border border-gray-200">
-                        <span className="text-gray-500 block text-[11px]">1. ਕੁੱਲ ਆਏ ਗੱਟੇ (Arrival):</span>
-                        <div className="text-base font-bold font-mono text-gray-900 mt-0.5">
-                          {rec.arrived_bags} Bags
+                    {/* SAFE PURCHASE FINANCIAL PROTECTION NOTICE */}
+                    {rec.balance_bags > 0 ? (
+                      <div className="p-2.5 bg-amber-50/80 border border-amber-300 rounded-xl text-xs flex items-center justify-between gap-3 text-amber-950">
+                        <div className="flex items-center gap-2">
+                          <Info className="w-4 h-4 text-amber-700 shrink-0" />
+                          <span>
+                            <strong>ਫਰਮ ਸੁਰੱਖਿਆ ਚੇਤਾਵਨੀ:</strong> ਇਸ ਕਿਸਾਨ ਦੇ ਖਾਤੇ ਵਿੱਚ ਵੱਧ ਤੋਂ ਵੱਧ <strong>{rec.balance_bags} ਬੋਰੀਆਂ ({rec.balance_quintals.toFixed(2)} Qtl)</strong> ਦੀ ਹੀ ਖਰੀਦ ਪਾਈ ਜਾ ਸਕਦੀ ਹੈ।
+                          </span>
                         </div>
-                        <div className="text-[10px] text-gray-500">{rec.arrived_quintals.toFixed(2)} Qtl</div>
+                        <span className="font-mono font-black text-amber-900 shrink-0 bg-white px-2 py-0.5 rounded border border-amber-200">
+                          ਸੁਰੱਖਿਅਤ ਹੱਦ: {rec.balance_bags} Bags
+                        </span>
+                      </div>
+                    ) : isOver ? (
+                      <div className="p-2.5 bg-red-100 border border-red-300 rounded-xl text-xs flex items-center gap-2 text-red-950 font-bold">
+                        <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                        <span>
+                          ਨੁਕਸਾਨ ਦਾ ਖਤਰਾ! ਇਸ ਕਿਸਾਨ ਦੇ ਖਾਤੇ ਵਿੱਚ ਆਵਕ ਨਾਲੋਂ {Math.abs(rec.balance_bags)} ਬੈਗ ({Math.abs(rec.balance_quintals).toFixed(2)} Qtl) ਵੱਧ ਖਰੀਦ ਪੈ ਚੁੱਕੀ ਹੈ। ਕਿਰਪਾ ਕਰਕੇ ਖਰੀਦ ਐਂਟਰੀ ਚੈੱਕ ਕਰੋ।
+                        </span>
+                      </div>
+                    ) : null}
+
+                    {/* Numeric Metric Bars (4 Cards) */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+                      {/* Box 1: Arrived */}
+                      <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-200">
+                        <span className="text-blue-900 block text-[11px] font-bold">1. ਕੁੱਲ ਆਏ ਗੱਟੇ (Arrival):</span>
+                        <div className="text-base sm:text-lg font-black font-mono text-blue-950 mt-0.5">
+                          {rec.arrived_bags} <span className="text-xs font-normal text-blue-800">Bags</span>
+                        </div>
+                        <div className="text-[11px] font-mono font-bold text-blue-800 mt-0.5">
+                          {rec.arrived_quintals.toFixed(2)} Qtl
+                        </div>
+                        <span className="text-[10px] text-gray-500 block mt-1">
+                          {rec.arrivals.length} ਆਵਕ ਪਰਚੀਆਂ / ਟਰਾਲੀਆਂ
+                        </span>
                       </div>
 
                       {/* Box 2: Own Name Purchase */}
-                      <div className="p-2.5 bg-emerald-50 rounded-xl border border-emerald-200">
-                        <span className="text-emerald-800 block text-[11px]">2. ਆਪਣੇ ਨਾਮ ਖਰੀਦ (Own):</span>
-                        <div className="text-base font-bold font-mono text-emerald-950 mt-0.5">
-                          {rec.own_purchased_bags} Bags
+                      <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-200">
+                        <span className="text-emerald-900 block text-[11px] font-bold">2. ਮੁੱਖ ਕਿਸਾਨ ਖਰੀਦ (Own):</span>
+                        <div className="text-base sm:text-lg font-black font-mono text-emerald-950 mt-0.5">
+                          {rec.own_purchased_bags} <span className="text-xs font-normal text-emerald-800">Bags</span>
                         </div>
-                        <div className="text-[10px] text-emerald-700">ਮੁੱਖ ਕਿਸਾਨ ਦੇ ਨਾਮ</div>
+                        <div className="text-[11px] font-mono font-bold text-emerald-800 mt-0.5">
+                          {rec.own_purchased_quintals.toFixed(2)} Qtl
+                        </div>
+                        <span className="text-[10px] text-emerald-700 block mt-1">
+                          ਖੁਦ ਆਪਣੇ ਨਾਮ 'ਤੇ
+                        </span>
                       </div>
 
                       {/* Box 3: Linked Farmers Total */}
-                      <div className="p-2.5 bg-blue-50 rounded-xl border border-blue-200">
-                        <span className="text-blue-800 block text-[11px]">3. ਲਿੰਕ ਕਿਸਾਨ ਖਰੀਦ (Linked):</span>
-                        <div className="text-base font-bold font-mono text-blue-950 mt-0.5">
-                          {rec.total_purchased_bags - rec.own_purchased_bags} Bags
+                      <div className="p-3 bg-purple-50/60 rounded-xl border border-purple-200">
+                        <span className="text-purple-900 block text-[11px] font-bold">3. ਲਿੰਕਡ ਖਰੀਦ (Linked):</span>
+                        <div className="text-base sm:text-lg font-black font-mono text-purple-950 mt-0.5">
+                          {rec.linked_purchased_bags} <span className="text-xs font-normal text-purple-800">Bags</span>
                         </div>
-                        <div className="text-[10px] text-blue-700">{rec.linked_farmers.length} ਲਿੰਕ ਮੈਂਬਰ</div>
+                        <div className="text-[11px] font-mono font-bold text-purple-800 mt-0.5">
+                          {rec.linked_purchased_quintals.toFixed(2)} Qtl
+                        </div>
+                        <span className="text-[10px] text-purple-700 block mt-1">
+                          {rec.linked_farmers.filter((lf) => lf.bags > 0).length} ਮੈਂਬਰਾਂ ਦੇ ਨਾਮ 'ਤੇ
+                        </span>
                       </div>
 
                       {/* Box 4: Balance Remaining */}
-                      <div className={`p-2.5 rounded-xl border ${
-                        rec.balance_bags > 0 ? 'bg-amber-50 border-amber-300' : 'bg-gray-50 border-gray-200'
+                      <div className={`p-3 rounded-xl border-2 ${
+                        rec.balance_bags > 0 
+                          ? 'bg-amber-50 border-amber-300' 
+                          : isCleared
+                          ? 'bg-emerald-50/70 border-emerald-300'
+                          : 'bg-red-50 border-red-300'
                       }`}>
-                        <span className="text-gray-600 block text-[11px]">4. ਮੰਡੀ ਵਿੱਚ ਬਕਾਇਆ (Balance):</span>
-                        <div className={`text-base font-bold font-mono mt-0.5 ${
-                          rec.balance_bags > 0 ? 'text-amber-950 font-black' : 'text-gray-800'
+                        <span className="text-gray-800 block text-[11px] font-black">4. ਮੰਡੀ ਵਿੱਚ ਬਕਾਇਆ (Balance):</span>
+                        <div className={`text-base sm:text-lg font-black font-mono mt-0.5 ${
+                          rec.balance_bags > 0 ? 'text-amber-950' : isCleared ? 'text-emerald-950' : 'text-red-950'
                         }`}>
-                          {rec.balance_bags} Bags
+                          {rec.balance_bags} <span className="text-xs font-normal text-gray-700">Bags</span>
                         </div>
-                        <div className="text-[10px] text-gray-500">
-                          {rec.balance_bags > 0 ? 'ਯਾਰਡ ਵਿੱਚ ਪਏ ਹਨ' : 'ਸਾਰੇ ਪਾਸ'}
+                        <div className="text-[11px] font-mono font-black text-amber-900 mt-0.5">
+                          {rec.balance_quintals.toFixed(2)} Qtl
                         </div>
+                        <span className="text-[10px] font-bold text-gray-600 block mt-1">
+                          {rec.balance_bags > 0 ? 'ਯਾਰਡ ਵਿੱਚ ਪਏ ਹਨ' : isCleared ? 'ਪੂਰਾ ਹਿਸਾਬ ਨਿੱਬੜਿਆ' : 'ਵਾਧੂ ਕਟੌਤੀ'}
+                        </span>
                       </div>
                     </div>
 
-                    {/* Linked Family Members Breakdown Drawer */}
+                    {/* LINKED FAMILY MEMBERS BREAKDOWN DRAWER */}
                     {rec.linked_farmers && rec.linked_farmers.length > 0 && (
-                      <div className="pt-2 border-t border-gray-100">
-                        <div className="text-[11px] font-bold text-gray-700 mb-1 flex items-center gap-1.5">
-                          <Users className="w-3.5 h-3.5 text-blue-600" />
-                          <span>ਲਿੰਕ ਕੀਤੇ ਪਰਿਵਾਰਕ ਮੈਂਬਰਾਂ ਦੇ ਨਾਮ 'ਤੇ ਖਰੀਦ ਵੇਰਵਾ (Linked Breakdown):</span>
+                      <div className="p-3 bg-indigo-50/40 border border-indigo-100 rounded-xl space-y-2">
+                        <div className="text-xs font-bold text-indigo-950 flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <Users className="w-4 h-4 text-indigo-700" />
+                            <span>ਲਿੰਕ ਕੀਤੇ ਪਰਿਵਾਰਕ ਮੈਂਬਰਾਂ ਦੇ ਨਾਮ 'ਤੇ ਖਰੀਦ ਵੇਰਵਾ (Linked Members Breakdown):</span>
+                          </div>
+                          <span className="text-[11px] font-mono text-indigo-800 font-bold">
+                            ਕੁੱਲ ਲਿੰਕਡ: {rec.linked_purchased_bags} Bags ({rec.linked_purchased_quintals.toFixed(2)} Qtl)
+                          </span>
                         </div>
-                        <div className="flex flex-wrap gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
                           {rec.linked_farmers.map((lf) => (
                             <div 
                               key={lf.id || lf.name_en}
-                              className="px-2.5 py-1 bg-gray-50 border border-gray-200 rounded-lg text-xs flex items-center gap-2"
+                              className={`p-2.5 rounded-lg border text-xs flex items-center justify-between gap-2 ${
+                                lf.bags > 0
+                                  ? 'bg-purple-100/70 border-purple-300 text-purple-950 font-bold'
+                                  : 'bg-white border-gray-200 text-gray-600'
+                              }`}
                             >
-                              <span className="font-semibold text-gray-800">{lf.name_en} ({lf.name_pa || lf.relation}):</span>
-                              <span className="font-bold font-mono text-blue-800 bg-blue-100 px-1.5 py-0.5 rounded text-[11px]">
-                                {lf.bags} ਬੈਗ
-                              </span>
+                              <div>
+                                <span className="font-bold text-gray-950 block">{lf.name_en}</span>
+                                <span className="text-[10px] text-gray-500 block">
+                                  {lf.relation} {lf.mobile && `• 📞 ${lf.mobile}`}
+                                </span>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <span className={`font-mono font-black text-xs px-2 py-0.5 rounded-md ${
+                                  lf.bags > 0 ? 'bg-purple-800 text-white' : 'bg-gray-100 text-gray-500'
+                                }`}>
+                                  {lf.bags} Bags
+                                </span>
+                                {lf.bags > 0 && (
+                                  <span className="block text-[10px] font-mono text-purple-900 mt-0.5">
+                                    {lf.quintals.toFixed(2)} Qtl
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           ))}
                         </div>
                       </div>
                     )}
+
+                    {/* EXPANDABLE ACCORDION FOR COMPLETE ARRIVAL & PURCHASE HISTORY */}
+                    <div className="pt-1">
+                      <button
+                        type="button"
+                        onClick={() => toggleFarmerExpand(rec.uniqueKey)}
+                        className="w-full flex items-center justify-between p-2.5 bg-gray-50 hover:bg-gray-100 rounded-xl text-xs font-bold text-gray-800 border border-gray-200 transition-colors cursor-pointer"
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <FileText className="w-3.5 h-3.5 text-indigo-600" />
+                          <span>
+                            ਆਵਕ ਪਰਚੀਆਂ ({rec.arrivals.length}) ਅਤੇ ਸਰਕਾਰੀ ਖਰੀਦ ਸਲਿੱਪਾਂ ({rec.purchases.length}) ਦਾ ਪੂਰਾ ਹਿਸਾਬ ਦੇਖੋ
+                          </span>
+                        </span>
+                        <span className="flex items-center gap-1 text-[11px] text-indigo-700 font-bold">
+                          {isExpanded ? (
+                            <>
+                              <span>ਵੇਰਵੇ ਬੰਦ ਕਰੋ</span>
+                              <ChevronUp className="w-3.5 h-3.5" />
+                            </>
+                          ) : (
+                            <>
+                              <span>ਪੂਰੇ ਵੇਰਵੇ ਖੋਲ੍ਹੋ</span>
+                              <ChevronDown className="w-3.5 h-3.5" />
+                            </>
+                          )}
+                        </span>
+                      </button>
+
+                      {/* Expanded View */}
+                      {isExpanded && (
+                        <div className="mt-2.5 p-3.5 bg-white border border-gray-200 rounded-xl space-y-4 animate-in fade-in duration-150">
+                          {/* 1. Arrival Entries Table */}
+                          <div>
+                            <div className="text-xs font-bold text-blue-950 mb-1.5 flex items-center gap-1">
+                              <Wheat className="w-3.5 h-3.5 text-blue-600" />
+                              <span>ਆਵਕ ਪਰਚੀਆਂ ਦਾ ਵੇਰਵਾ (Crop Arrival Inward Records):</span>
+                            </div>
+                            {rec.arrivals.length === 0 ? (
+                              <p className="text-[11px] text-gray-400 italic">ਕੋਈ ਆਵਕ ਪਰਚੀ ਨਹੀਂ ਮਿਲੀ।</p>
+                            ) : (
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-left text-xs border border-gray-200 rounded-lg overflow-hidden">
+                                  <thead className="bg-blue-50 text-blue-950 font-bold text-[11px]">
+                                    <tr>
+                                      <th className="p-2">ਮਿਤੀ (Date)</th>
+                                      <th className="p-2">ਪਰਚੀ ਨੰਬਰ</th>
+                                      <th className="p-2">ਟਰਾਲੀ / ਗੱਡੀ</th>
+                                      <th className="p-2 text-right">ਬਾਰਦਾਨਾ (N+O)</th>
+                                      <th className="p-2 text-right">ਕੁੱਲ ਬੋਰੀਆਂ</th>
+                                      <th className="p-2 text-right">ਵਜ਼ਨ (Qtl)</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-gray-100">
+                                    {rec.arrivals.map((a) => (
+                                      <tr key={a.id} className="hover:bg-gray-50 text-[11px]">
+                                        <td className="p-2 font-mono">{a.date.split('-').reverse().join('/')}</td>
+                                        <td className="p-2 font-mono font-bold text-indigo-900">{a.parchi_no || '-'}</td>
+                                        <td className="p-2 font-mono text-gray-700">{a.trolley_no || '-'}</td>
+                                        <td className="p-2 text-right font-mono text-gray-600">{a.new_bags}N + {a.old_bags}O</td>
+                                        <td className="p-2 text-right font-mono font-bold text-gray-900">{a.bags} Bags</td>
+                                        <td className="p-2 text-right font-mono font-bold text-emerald-900">{a.quintals.toFixed(2)} Qtl</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* 2. Purchase Entries Table */}
+                          <div>
+                            <div className="text-xs font-bold text-emerald-950 mb-1.5 flex items-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>ਸਰਕਾਰੀ ਖਰੀਦਾਂ / ਬੋਲੀਆਂ ਦਾ ਵੇਰਵਾ (Agency Purchases & Auctions):</span>
+                            </div>
+                            {rec.purchases.length === 0 ? (
+                              <p className="text-[11px] text-gray-400 italic">ਕੋਈ ਖਰੀਦ ਐਂਟਰੀ ਨਹੀਂ ਹੋਈ।</p>
+                            ) : (
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-left text-xs border border-gray-200 rounded-lg overflow-hidden">
+                                  <thead className="bg-emerald-50 text-emerald-950 font-bold text-[11px]">
+                                    <tr>
+                                      <th className="p-2">ਮਿਤੀ (Date)</th>
+                                      <th className="p-2">ਸਰਕਾਰੀ ਏਜੰਸੀ</th>
+                                      <th className="p-2">ਫਰਮ (Firm)</th>
+                                      <th className="p-2">ਜਿਸਦੇ ਨਾਮ ਪਾਸ ਹੋਈ</th>
+                                      <th className="p-2 text-center">ਕਿਸਮ</th>
+                                      <th className="p-2 text-right">ਬੋਰੀਆਂ (Bags)</th>
+                                      <th className="p-2 text-right">ਵਜ਼ਨ (Qtl)</th>
+                                      <th className="p-2 text-right">ਰਕਮ (MSP)</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-gray-100">
+                                    {rec.purchases.map((p) => (
+                                      <tr key={p.id} className="hover:bg-gray-50 text-[11px]">
+                                        <td className="p-2 font-mono">{p.date.split('-').reverse().join('/')}</td>
+                                        <td className="p-2 font-bold text-gray-900">{p.agency}</td>
+                                        <td className="p-2 text-[10px] text-gray-600">{p.firm_name}</td>
+                                        <td className="p-2 font-bold text-indigo-950">
+                                          {p.billed_to_name}
+                                          {p.relation && p.relation !== 'Self (ਖੁਦ)' && (
+                                            <span className="block text-[10px] text-purple-700 font-normal">
+                                              ({p.relation})
+                                            </span>
+                                          )}
+                                        </td>
+                                        <td className="p-2 text-center">
+                                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                            p.is_linked ? 'bg-purple-100 text-purple-900' : 'bg-emerald-100 text-emerald-900'
+                                          }`}>
+                                            {p.is_linked ? 'ਲਿੰਕਡ ਖਰੀਦ' : 'ਮੁੱਖ ਖਰੀਦ'}
+                                          </span>
+                                        </td>
+                                        <td className="p-2 text-right font-mono font-bold text-gray-900">{p.bags} Bags</td>
+                                        <td className="p-2 text-right font-mono font-bold text-emerald-900">{p.quintals.toFixed(2)} Qtl</td>
+                                        <td className="p-2 text-right font-mono font-bold text-blue-950">
+                                          ₹{p.amount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               })
