@@ -82,7 +82,6 @@ export const CropArrivalPdfModal: React.FC<CropArrivalPdfModalProps> = ({
       }
       return true;
     }).sort((a, b) => {
-      // Sort primarily by Date (descending) then by Parchi No
       if (a.date !== b.date) return b.date.localeCompare(a.date);
       return (a.parchi_no || '').localeCompare(b.parchi_no || '');
     });
@@ -95,6 +94,17 @@ export const CropArrivalPdfModal: React.FC<CropArrivalPdfModalProps> = ({
   const totalBags = filteredEntries.reduce((sum, e) => sum + (e.total_bags_arrived || 0), 0);
   const totalQuintals = filteredEntries.reduce((sum, e) => sum + (e.weight_quintals || 0), 0);
 
+  // Pagination: 16 entries per page so that each row is 100% full and NEVER cut across pages!
+  const ROWS_PER_PAGE = 16;
+  const pages = useMemo(() => {
+    if (filteredEntries.length === 0) return [[] as CropArrivalEntry[]];
+    const chunks: CropArrivalEntry[][] = [];
+    for (let i = 0; i < filteredEntries.length; i += ROWS_PER_PAGE) {
+      chunks.push(filteredEntries.slice(i, i + ROWS_PER_PAGE));
+    }
+    return chunks;
+  }, [filteredEntries]);
+
   if (!isOpen) return null;
 
   // Print Handler
@@ -102,18 +112,14 @@ export const CropArrivalPdfModal: React.FC<CropArrivalPdfModalProps> = ({
     window.print();
   };
 
-  // PDF Download Handler
+  // High-Resolution PDF Download: Captures each page individually so NO farmer name or line is EVER cut!
   const handleDownloadPdf = async () => {
     if (!sheetPrintRef.current) return;
     setIsGeneratingPdf(true);
 
     try {
-      // Clean high-res raster capture
-      const dataUrl = await toJpeg(sheetPrintRef.current, {
-        quality: 0.95,
-        backgroundColor: '#ffffff',
-        pixelRatio: 2,
-      });
+      const pageElements = sheetPrintRef.current.querySelectorAll('.pdf-page-container');
+      if (pageElements.length === 0) return;
 
       const pdf = new jsPDF({
         orientation: 'landscape',
@@ -121,22 +127,22 @@ export const CropArrivalPdfModal: React.FC<CropArrivalPdfModalProps> = ({
         format: 'a4',
       });
 
-      const imgProps = pdf.getImageProperties(dataUrl);
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-      const pageHeight = pdf.internal.pageSize.getHeight();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
 
-      let heightLeft = pdfHeight;
-      let position = 0;
+      for (let i = 0; i < pageElements.length; i++) {
+        const el = pageElements[i] as HTMLElement;
+        const dataUrl = await toJpeg(el, {
+          quality: 0.98,
+          backgroundColor: '#ffffff',
+          pixelRatio: 2.2,
+        });
 
-      pdf.addImage(dataUrl, 'JPEG', 0, position, pdfWidth, pdfHeight);
-      heightLeft -= pageHeight;
-
-      while (heightLeft > 0) {
-        position = heightLeft - pdfHeight;
-        pdf.addPage();
-        pdf.addImage(dataUrl, 'JPEG', 0, position, pdfWidth, pdfHeight);
-        heightLeft -= pageHeight;
+        if (i > 0) {
+          pdf.addPage();
+        }
+        // Map exactly 1 page to 1 A4 page (no vertical pixel slicing!)
+        pdf.addImage(dataUrl, 'JPEG', 0, 0, pdfWidth, pdfHeight);
       }
 
       const dateStr = selectedDate !== 'All' ? selectedDate : new Date().toISOString().split('T')[0];
@@ -151,6 +157,44 @@ export const CropArrivalPdfModal: React.FC<CropArrivalPdfModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+      
+      {/* Strict Print CSS for Zero Cutoff / Zero Row Splitting */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        @media print {
+          @page {
+            size: A4 landscape;
+            margin: 6mm 8mm;
+          }
+          body {
+            background: #ffffff !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .pdf-page-container {
+            page-break-after: always !important;
+            break-after: page !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            height: auto !important;
+            min-height: auto !important;
+            margin: 0 !important;
+            padding: 4mm !important;
+            box-shadow: none !important;
+            border: none !important;
+            width: 100% !important;
+            max-width: 100% !important;
+          }
+          .pdf-page-container:last-child {
+            page-break-after: auto !important;
+            break-after: auto !important;
+          }
+          tr {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+        }
+      `}} />
+
       <div 
         className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl border border-gray-300 overflow-hidden my-auto max-h-[96vh] flex flex-col animate-in fade-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
@@ -168,9 +212,12 @@ export const CropArrivalPdfModal: React.FC<CropArrivalPdfModalProps> = ({
                 <span className="text-xs bg-amber-400 text-emerald-950 px-2 py-0.5 rounded-full font-mono font-bold">
                   PDF & Print
                 </span>
+                <span className="text-xs bg-emerald-800 text-emerald-200 px-2 py-0.5 rounded-full font-mono">
+                  {pages.length} {pages.length === 1 ? 'ਪੰਨਾ' : 'ਪੰਨੇ (No Cutoff)'}
+                </span>
               </h3>
               <p className="text-xs text-emerald-200 mt-0.5">
-                ਪਰਚੀ ਨੰਬਰ, ਕਿਸਾਨ, ਪਿੰਡ, ਮੋਬਾਈਲ, ਬੋਰੀਆਂ, ਵਜ਼ਨ ਤੇ ਨਮੀ ਦੀ ਸਾਫ਼-ਸੁਥਰੀ ਰਿਪੋਰਟ
+                ਪਰਚੀ ਨੰਬਰ, ਕਿਸਾਨ, ਪਿੰਡ, ਮੋਬਾਈਲ, ਬੋਰੀਆਂ, ਵਜ਼ਨ ਤੇ ਨਮੀ — ਹਰ ਪੰਨੇ 'ਤੇ ਕਿਸਾਨ ਦਾ ਪੂਰਾ ਨਾਮ ਬਿਨਾਂ ਕੱਟੇ
               </p>
             </div>
           </div>
@@ -297,212 +344,260 @@ export const CropArrivalPdfModal: React.FC<CropArrivalPdfModalProps> = ({
               </span>
             </div>
 
-            <span className="text-[11px] text-gray-500 font-sans italic">
-              A4 Landscape ਪ੍ਰਿੰਟ ਲਈ ਅਨੁਕੂਲ
+            <span className="text-[11px] text-gray-600 font-sans font-semibold">
+              ਕੁੱਲ {pages.length} ਪੰਨੇ • ਪ੍ਰਤੀ ਪੰਨਾ {ROWS_PER_PAGE} ਐਂਟਰੀਆਂ (ਬਿਨਾਂ ਲਾਈਨ ਕੱਟੇ)
             </span>
           </div>
         </div>
 
-        {/* Scrollable Printable Document Area */}
-        <div className="flex-1 overflow-y-auto p-3 sm:p-6 bg-slate-200 print:bg-white print:p-0 print:overflow-visible">
-          <div 
-            ref={sheetPrintRef}
-            className="bg-white text-black p-6 sm:p-8 rounded-xl shadow-lg border border-gray-300 mx-auto max-w-5xl print:shadow-none print:border-none print:p-2 print:max-w-none print:rounded-none"
-            style={{ minHeight: '600px' }}
-          >
-            {/* Printable Document Official Header */}
-            <div className="border-b-2 border-black pb-3 mb-3">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h1 className="text-xl sm:text-2xl font-black uppercase tracking-wide text-black">
-                    PUNJABI MANDI SOFTWARE
-                  </h1>
-                  <p className="text-xs font-bold text-gray-800">
-                    JAMMU TRADING CO. (LIC: JAL/LKH/133) & NEW JAMMU TRADING CO. (LIC: JAL/LKH/134)
-                  </p>
-                  <p className="text-[11px] text-gray-700">
-                    ਦਾਣਾ ਮੰਡੀ ਕਮਾਲਪੁਰ / ਮਹਿਰਾਜਵਾਲਾ / ਕੰਗ ਖੁਰਦ • ਮੋਬਾਈਲ: 98150-00000, 98720-00000
-                  </p>
-                </div>
+        {/* Scrollable Printable Document Area with Exact Multi-Page Containers */}
+        <div className="flex-1 overflow-y-auto p-3 sm:p-6 bg-slate-200 print:bg-white print:p-0 print:overflow-visible space-y-6 print:space-y-0" ref={sheetPrintRef}>
+          {pages.map((pageRows, pageIndex) => {
+            const isFirstPage = pageIndex === 0;
+            const isLastPage = pageIndex === pages.length - 1;
+            const pageNumber = pageIndex + 1;
+            const totalPageCount = pages.length;
 
-                <div className="text-right">
-                  <div className="inline-block border-2 border-black px-3 py-1 text-center bg-gray-50">
-                    <span className="text-[11px] font-bold block uppercase tracking-wider">ਰੋਜ਼ਾਨਾ ਫਸਲ ਆਵਕ ਰਜਿਸਟਰ</span>
-                    <span className="text-sm font-black">CROP ARRIVAL INWARD</span>
-                  </div>
-                  <p className="text-[10px] text-gray-600 mt-1 font-mono">
-                    ਤਾਰੀਖ: {selectedDate !== 'All' ? selectedDate.split('-').reverse().join('/') : 'ਸਮੂਹ ਮਿਤੀਆਂ (All Dates)'}
-                  </p>
-                </div>
-              </div>
-
-              {/* Sub-header info bar */}
-              <div className="mt-2 pt-2 border-t border-gray-300 flex items-center justify-between text-[11px] font-mono">
+            return (
+              <div 
+                key={`arrival-page-${pageIndex}`}
+                className="pdf-page-container print-page bg-white text-black p-6 sm:p-8 rounded-xl shadow-lg border border-gray-300 mx-auto max-w-5xl print:shadow-none print:border-none print:p-2 print:max-w-none print:rounded-none relative flex flex-col justify-between"
+                style={{ 
+                  width: '297mm',
+                  minHeight: '200mm',
+                  maxHeight: '210mm',
+                  boxSizing: 'border-box'
+                }}
+              >
                 <div>
-                  <strong>ਦਾਣਾ ਮੰਡੀ:</strong> {selectedMandi !== 'All' ? selectedMandi : 'ਸਾਰੀਆਂ ਮੰਡੀਆਂ'}
-                  <span className="mx-2">•</span>
-                  <strong>ਫਸਲ/ਕਿਸਮ:</strong> {selectedVariety !== 'All' ? selectedVariety : 'ਝੋਨਾ (ਸਾਰੀਆਂ ਕਿਸਮਾਂ)'}
-                </div>
-                <div>
-                  <strong>ਕੁੱਲ ਪਰਚੀਆਂ:</strong> {totalParchis} | <strong>ਕੁੱਲ ਗੱਟੇ:</strong> {totalBags} | <strong>ਕੁੱਲ ਵਜ਼ਨ:</strong> {totalQuintals.toFixed(2)} Qtl
-                </div>
-              </div>
-            </div>
+                  {/* Page Header */}
+                  {isFirstPage ? (
+                    <div className="border-b-2 border-black pb-2 mb-2">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h1 className="text-xl sm:text-2xl font-black uppercase tracking-wide text-black leading-tight">
+                            PUNJABI MANDI SOFTWARE
+                          </h1>
+                          <p className="text-xs font-bold text-gray-800">
+                            JAMMU TRADING CO. (LIC: JAL/LKH/133) & NEW JAMMU TRADING CO. (LIC: JAL/LKH/134)
+                          </p>
+                          <p className="text-[11px] text-gray-700">
+                            ਦਾਣਾ ਮੰਡੀ ਕਮਾਲਪੁਰ / ਮਹਿਰਾਜਵਾਲਾ / ਕੰਗ ਖੁਰਦ • ਮੋਬਾਈਲ: 98150-00000, 98720-00000
+                          </p>
+                        </div>
 
-            {/* Arrival Entries Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-[11px] border-collapse border border-black">
-                <thead>
-                  <tr className="bg-gray-100 text-black font-black border-b-2 border-black">
-                    <th className="border border-black p-1.5 text-center w-8">ਲੜੀ</th>
-                    <th className="border border-black p-1.5 text-center w-20">ਮਿਤੀ</th>
-                    <th className="border border-black p-1.5 w-24">ਪਰਚੀ ਨੰਬਰ</th>
-                    <th className="border border-black p-1.5">ਕਿਸਾਨ ਦਾ ਨਾਮ (Farmer)</th>
-                    <th className="border border-black p-1.5">ਪਿਤਾ/ਪਤੀ ਦਾ ਨਾਮ</th>
-                    <th className="border border-black p-1.5">ਪਿੰਡ (Village)</th>
-                    <th className="border border-black p-1.5 w-24">ਮੋਬਾਈਲ</th>
-                    <th className="border border-black p-1.5 text-center w-16">ਕਿਸਮ</th>
-                    <th className="border border-black p-1.5 w-20">ਟਰਾਲੀ ਨੰ.</th>
-                    <th className="border border-black p-1.5 text-center w-12">ਨਵਾਂ</th>
-                    <th className="border border-black p-1.5 text-center w-12">ਪੁਰਾਣਾ</th>
-                    <th className="border border-black p-1.5 text-right w-16">ਕੁੱਲ ਗੱਟੇ</th>
-                    <th className="border border-black p-1.5 text-right w-20">ਵਜ਼ਨ (Qtl)</th>
-                    <th className="border border-black p-1.5 text-center w-12">ਨਮੀ%</th>
-                    <th className="border border-black p-1.5 text-center w-16 print:table-cell">ਦਸਤਖਤ</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredEntries.length === 0 ? (
-                    <tr>
-                      <td colSpan={15} className="border border-black p-6 text-center text-gray-500 italic">
-                        ਕੋਈ ਆਵਕ ਐਂਟਰੀ ਨਹੀਂ ਮਿਲੀ।
-                      </td>
-                    </tr>
+                        <div className="text-right">
+                          <div className="inline-block border-2 border-black px-3 py-1 text-center bg-gray-50">
+                            <span className="text-[11px] font-bold block uppercase tracking-wider">ਰੋਜ਼ਾਨਾ ਫਸਲ ਆਵਕ ਰਜਿਸਟਰ</span>
+                            <span className="text-sm font-black">CROP ARRIVAL INWARD</span>
+                          </div>
+                          <p className="text-[10px] text-gray-600 mt-1 font-mono">
+                            ਤਾਰੀਖ: {selectedDate !== 'All' ? selectedDate.split('-').reverse().join('/') : 'ਸਮੂਹ ਮਿਤੀਆਂ (All Dates)'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Sub-header info bar */}
+                      <div className="mt-1.5 pt-1.5 border-t border-gray-300 flex items-center justify-between text-[11px] font-mono">
+                        <div>
+                          <strong>ਦਾਣਾ ਮੰਡੀ:</strong> {selectedMandi !== 'All' ? selectedMandi : 'ਸਾਰੀਆਂ ਮੰਡੀਆਂ'}
+                          <span className="mx-2">•</span>
+                          <strong>ਫਸਲ/ਕਿਸਮ:</strong> {selectedVariety !== 'All' ? selectedVariety : 'ਝੋਨਾ (ਸਾਰੀਆਂ ਕਿਸਮਾਂ)'}
+                        </div>
+                        <div>
+                          <strong>ਕੁੱਲ ਪਰਚੀਆਂ:</strong> {totalParchis} | <strong>ਕੁੱਲ ਗੱਟੇ:</strong> {totalBags} | <strong>ਕੁੱਲ ਵਜ਼ਨ:</strong> {totalQuintals.toFixed(2)} Qtl
+                        </div>
+                      </div>
+                    </div>
                   ) : (
-                    filteredEntries.map((item, index) => {
-                      const totBags = item.total_bags_arrived;
-                      const newB = item.new_jute_bags ?? Math.round(totBags / 2);
-                      const oldB = item.old_jute_bags ?? Math.floor(totBags / 2);
-                      const pNo = item.parchi_no || item.gate_pass_no || '-';
-
-                      return (
-                        <tr 
-                          key={item.id} 
-                          className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/60'} hover:bg-yellow-50/50`}
-                        >
-                          <td className="border border-black p-1 text-center font-mono font-bold">
-                            {index + 1}
-                          </td>
-                          <td className="border border-black p-1 text-center font-mono whitespace-nowrap">
-                            {item.date ? item.date.split('-').reverse().join('/') : '-'}
-                          </td>
-                          <td className="border border-black p-1 font-mono font-bold text-black">
-                            {pNo}
-                          </td>
-                          <td className="border border-black p-1 font-bold text-black">
-                            {item.farmer_name}
-                            {item.farmer_name_pa && item.farmer_name_pa !== item.farmer_name && (
-                              <span className="block text-[10px] font-normal text-gray-600">
-                                {item.farmer_name_pa}
-                              </span>
-                            )}
-                          </td>
-                          <td className="border border-black p-1 text-gray-800">
-                            {item.father_husband_name || '-'}
-                          </td>
-                          <td className="border border-black p-1 text-gray-800">
-                            {item.village || '-'}
-                          </td>
-                          <td className="border border-black p-1 font-mono text-[10px]">
-                            {item.mobile || '-'}
-                          </td>
-                          <td className="border border-black p-1 text-center font-semibold text-black">
-                            {item.crop_variety || 'PR-126'}
-                          </td>
-                          <td className="border border-black p-1 font-mono text-[10px]">
-                            {item.vehicle_trolley_no || '-'}
-                          </td>
-                          <td className="border border-black p-1 text-center font-mono">
-                            {newB}
-                          </td>
-                          <td className="border border-black p-1 text-center font-mono">
-                            {oldB}
-                          </td>
-                          <td className="border border-black p-1 text-right font-mono font-bold text-black">
-                            {totBags}
-                          </td>
-                          <td className="border border-black p-1 text-right font-mono font-bold text-black">
-                            {Number(item.weight_quintals || 0).toFixed(2)}
-                          </td>
-                          <td className="border border-black p-1 text-center font-mono text-[10px]">
-                            {item.moisture_percentage ? `${item.moisture_percentage}%` : '-'}
-                          </td>
-                          <td className="border border-black p-1 text-center">
-                            <div className="h-5"></div>
-                          </td>
-                        </tr>
-                      );
-                    })
+                    /* Running header on page 2+ */
+                    <div className="border-b-2 border-black pb-1.5 mb-2 flex items-center justify-between text-xs">
+                      <div>
+                        <span className="font-black text-black text-sm">PUNJABI MANDI SOFTWARE</span>
+                        <span className="text-gray-600 ml-2 text-[11px]">
+                          ਫਸਲ ਆਵਕ ਰਜਿਸਟਰ (Crop Arrival Inward) • ਮਿਤੀ: {selectedDate !== 'All' ? selectedDate.split('-').reverse().join('/') : 'ਸਮੂਹ ਮਿਤੀਆਂ'}
+                        </span>
+                      </div>
+                      <div className="font-mono font-bold text-gray-800 text-[11px]">
+                        ਪੰਨਾ {pageNumber} / {totalPageCount} (Page {pageNumber} of {totalPageCount})
+                      </div>
+                    </div>
                   )}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-gray-200 text-black font-black border-t-2 border-black">
-                    <td colSpan={9} className="border border-black p-2 text-right uppercase">
-                      ਕੁੱਲ ਜੋੜ (GRAND TOTAL):
-                    </td>
-                    <td className="border border-black p-2 text-center font-mono">
-                      {totalNewBags}N
-                    </td>
-                    <td className="border border-black p-2 text-center font-mono">
-                      {totalOldBags}O
-                    </td>
-                    <td className="border border-black p-2 text-right font-mono text-xs">
-                      {totalBags} Bags
-                    </td>
-                    <td className="border border-black p-2 text-right font-mono text-xs">
-                      {totalQuintals.toFixed(2)} Qtl
-                    </td>
-                    <td colSpan={2} className="border border-black p-2 text-center text-[10px] font-mono">
-                      {totalParchis} ਪਰਚੀਆਂ
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
 
-            {/* Official Footer Signatures */}
-            <div className="mt-8 pt-6 border-t border-black grid grid-cols-3 gap-4 text-center text-xs">
-              <div>
-                <p className="font-bold text-gray-700">ਤਿਆਰ ਕਰਤਾ (Munshi)</p>
-                <div className="h-10"></div>
-                <p className="border-t border-dashed border-gray-400 pt-1 font-mono text-[10px]">ਦਸਤਖਤ ਕਲਰਕ / ਮੁਣਸ਼ੀ</p>
+                  {/* Arrival Entries Table for THIS Page Only (Zero row cutoff) */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-[11px] border-collapse border border-black">
+                      <thead>
+                        <tr className="bg-gray-100 text-black font-black border-b-2 border-black">
+                          <th className="border border-black p-1 text-center w-8">ਲੜੀ</th>
+                          <th className="border border-black p-1 text-center w-20">ਮਿਤੀ</th>
+                          <th className="border border-black p-1 w-20">ਪਰਚੀ ਨੰਬਰ</th>
+                          <th className="border border-black p-1">ਕਿਸਾਨ ਦਾ ਨਾਮ (Farmer Name)</th>
+                          <th className="border border-black p-1">ਪਿਤਾ/ਪਤੀ ਦਾ ਨਾਮ</th>
+                          <th className="border border-black p-1">ਪਿੰਡ (Village)</th>
+                          <th className="border border-black p-1 w-24">ਮੋਬਾਈਲ</th>
+                          <th className="border border-black p-1 text-center w-16">ਕਿਸਮ</th>
+                          <th className="border border-black p-1 w-20">ਟਰਾਲੀ ਨੰ.</th>
+                          <th className="border border-black p-1 text-center w-12">ਨਵਾਂ</th>
+                          <th className="border border-black p-1 text-center w-12">ਪੁਰਾਣਾ</th>
+                          <th className="border border-black p-1 text-right w-16">ਕੁੱਲ ਗੱਟੇ</th>
+                          <th className="border border-black p-1 text-right w-20">ਵਜ਼ਨ (Qtl)</th>
+                          <th className="border border-black p-1 text-center w-12">ਨਮੀ%</th>
+                          <th className="border border-black p-1 text-center w-16">ਦਸਤਖਤ</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pageRows.length === 0 ? (
+                          <tr>
+                            <td colSpan={15} className="border border-black p-6 text-center text-gray-500 italic">
+                              ਕੋਈ ਆਵਕ ਐਂਟਰੀ ਨਹੀਂ ਮਿਲੀ।
+                            </td>
+                          </tr>
+                        ) : (
+                          pageRows.map((item, rowIdx) => {
+                            const globalIndex = pageIndex * ROWS_PER_PAGE + rowIdx + 1;
+                            const totBags = item.total_bags_arrived;
+                            const newB = item.new_jute_bags ?? Math.round(totBags / 2);
+                            const oldB = item.old_jute_bags ?? Math.floor(totBags / 2);
+                            const pNo = item.parchi_no || item.gate_pass_no || '-';
+
+                            return (
+                              <tr 
+                                key={item.id} 
+                                className={`${rowIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50/60'} hover:bg-yellow-50/50`}
+                              >
+                                <td className="border border-black p-1 text-center font-mono font-bold">
+                                  {globalIndex}
+                                </td>
+                                <td className="border border-black p-1 text-center font-mono whitespace-nowrap">
+                                  {item.date ? item.date.split('-').reverse().join('/') : '-'}
+                                </td>
+                                <td className="border border-black p-1 font-mono font-bold text-black">
+                                  {pNo}
+                                </td>
+                                <td className="border border-black p-1 font-bold text-black">
+                                  <span>{item.farmer_name}</span>
+                                  {item.farmer_name_pa && item.farmer_name_pa !== item.farmer_name && (
+                                    <span className="block text-[9.5px] font-normal text-gray-600">
+                                      {item.farmer_name_pa}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="border border-black p-1 text-gray-800">
+                                  {item.father_husband_name || '-'}
+                                </td>
+                                <td className="border border-black p-1 text-gray-800">
+                                  {item.village || '-'}
+                                </td>
+                                <td className="border border-black p-1 font-mono text-[10px]">
+                                  {item.mobile || '-'}
+                                </td>
+                                <td className="border border-black p-1 text-center font-semibold text-black">
+                                  {item.crop_variety || 'PR-126'}
+                                </td>
+                                <td className="border border-black p-1 font-mono text-[10px]">
+                                  {item.vehicle_trolley_no || '-'}
+                                </td>
+                                <td className="border border-black p-1 text-center font-mono">
+                                  {newB}
+                                </td>
+                                <td className="border border-black p-1 text-center font-mono">
+                                  {oldB}
+                                </td>
+                                <td className="border border-black p-1 text-right font-mono font-bold text-black">
+                                  {totBags}
+                                </td>
+                                <td className="border border-black p-1 text-right font-mono font-bold text-black">
+                                  {Number(item.weight_quintals || 0).toFixed(2)}
+                                </td>
+                                <td className="border border-black p-1 text-center font-mono text-[10px]">
+                                  {item.moisture_percentage ? `${item.moisture_percentage}%` : '-'}
+                                </td>
+                                <td className="border border-black p-1 text-center">
+                                  <div className="h-4"></div>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+
+                      {/* On the last page, show Grand Totals */}
+                      {isLastPage && (
+                        <tfoot>
+                          <tr className="bg-gray-200 text-black font-black border-t-2 border-black">
+                            <td colSpan={9} className="border border-black p-1.5 text-right uppercase">
+                              ਕੁੱਲ ਜੋੜ (GRAND TOTAL):
+                            </td>
+                            <td className="border border-black p-1.5 text-center font-mono">
+                              {totalNewBags}N
+                            </td>
+                            <td className="border border-black p-1.5 text-center font-mono">
+                              {totalOldBags}O
+                            </td>
+                            <td className="border border-black p-1.5 text-right font-mono text-xs">
+                              {totalBags} Bags
+                            </td>
+                            <td className="border border-black p-1.5 text-right font-mono text-xs">
+                              {totalQuintals.toFixed(2)} Qtl
+                            </td>
+                            <td colSpan={2} className="border border-black p-1.5 text-center text-[10px] font-mono">
+                              {totalParchis} ਪਰਚੀਆਂ
+                            </td>
+                          </tr>
+                        </tfoot>
+                      )}
+                    </table>
+                  </div>
+                </div>
+
+                {/* Footer Section */}
+                <div>
+                  {isLastPage ? (
+                    /* Official Footer Signatures on Final Page */
+                    <div className="mt-4 pt-3 border-t border-black grid grid-cols-3 gap-4 text-center text-xs">
+                      <div>
+                        <p className="font-bold text-gray-700">ਤਿਆਰ ਕਰਤਾ (Munshi)</p>
+                        <div className="h-6"></div>
+                        <p className="border-t border-dashed border-gray-400 pt-0.5 font-mono text-[10px]">ਦਸਤਖਤ ਕਲਰਕ / ਮੁਣਸ਼ੀ</p>
+                      </div>
+
+                      <div>
+                        <p className="font-bold text-gray-700">ਤੋਲਾਈ ਕਰਨ ਵਾਲਾ (Weighman)</p>
+                        <div className="h-6"></div>
+                        <p className="border-t border-dashed border-gray-400 pt-0.5 font-mono text-[10px]">ਤੋਲਾ ਦਸਤਖਤ</p>
+                      </div>
+
+                      <div>
+                        <p className="font-bold text-gray-700">ਆੜ੍ਹਤੀਆ ਫਰਮ (Authorised Signatory)</p>
+                        <div className="h-6"></div>
+                        <p className="border-t border-dashed border-gray-400 pt-0.5 font-mono text-[10px]">ਦਸਤਖਤ / ਮੋਹਰ ਫਰਮ</p>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Continued on next page indicator */
+                    <div className="mt-2 text-right text-[10px] text-gray-600 italic border-t border-gray-200 pt-1">
+                      (ਜਾਰੀ ਅਗਲੇ ਪੰਨੇ {pageNumber + 1} 'ਤੇ... Continued on next page)
+                    </div>
+                  )}
+
+                  {/* Footer Copyright and Page numbering */}
+                  <div className="mt-2 pt-1 border-t border-gray-200 flex items-center justify-between text-[9px] text-gray-500 font-mono">
+                    <span>Punjabi Mandi Software • ਮਿਤੀ: {new Date().toLocaleDateString('en-GB')} • ਰਿਕਾਰਡ ਕੰਪਿਊਟਰਾਈਜ਼ਡ ਤਿਆਰ ਕੀਤਾ ਗਿਆ</span>
+                    <span className="font-bold text-black text-[10px]">ਪੰਨਾ {pageNumber} / {totalPageCount}</span>
+                  </div>
+                </div>
+
               </div>
-
-              <div>
-                <p className="font-bold text-gray-700">ਤੋਲਾਈ ਕਰਨ ਵਾਲਾ (Weighman)</p>
-                <div className="h-10"></div>
-                <p className="border-t border-dashed border-gray-400 pt-1 font-mono text-[10px]">ਤੋਲਾ ਦਸਤਖਤ</p>
-              </div>
-
-              <div>
-                <p className="font-bold text-gray-700">ਆੜ੍ਹਤੀਆ ਫਰਮ (Authorised Signatory)</p>
-                <div className="h-10"></div>
-                <p className="border-t border-dashed border-gray-400 pt-1 font-mono text-[10px]">ਦਸਤਖਤ / ਮੋਹਰ ਫਰਮ</p>
-              </div>
-            </div>
-
-            {/* Footer Copyright */}
-            <div className="mt-4 pt-2 border-t border-gray-200 text-center text-[9px] text-gray-500 font-mono">
-              Punjabi Mandi Software • ਮਿਤੀ: {new Date().toLocaleDateString('en-GB')} • ਰਿਕਾਰਡ ਕੰਪਿਊਟਰਾਈਜ਼ਡ ਤਿਆਰ ਕੀਤਾ ਗਿਆ
-            </div>
-          </div>
+            );
+          })}
         </div>
 
         {/* Modal Footer (Hidden in Print) */}
         <div className="p-3 bg-gray-100 border-t border-gray-200 flex items-center justify-between gap-3 text-xs shrink-0 print:hidden">
           <div className="flex items-center gap-2 text-gray-600">
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            <span>ਰਿਕਾਰਡ ਪ੍ਰਿੰਟ ਅਤੇ PDF ਲਈ ਤਿਆਰ ਹੈ।</span>
+            <span>ਹਰ ਪੰਨੇ 'ਤੇ ਪੂਰੇ ਕਿਸਾਨ ਦਾ ਨਾਮ (ਕੋਈ ਲਾਈਨ ਅੱਧੀ ਨਹੀਂ ਕੱਟੇਗੀ)। ਕੁੱਲ {pages.length} ਪੰਨੇ।</span>
           </div>
 
           <div className="flex items-center gap-2">
