@@ -535,14 +535,40 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
   // --- FARMER ARRIVAL VS PURCHASE COMPARISON DATA ---
   // Calculates for each farmer: Arrived bags, Own purchased bags, Linked family member purchased bags, and remaining balance bags
   // 100% collision-free, distinguishes duplicate names by father/husband name & village, and properly attributes linked farmer purchases
+  // --- FARMER ARRIVAL VS PURCHASE COMPARISON DATA ---
+  // Calculates for each farmer: Arrived bags, Own purchased bags, Linked family member purchased bags, and remaining balance bags
+  // 100% collision-free: isolates duplicate farmer names (e.g. Gurpreet Singh & Gurmail Singh) by unique ID, father name, village & mobile.
+  // Prevents common-name linked farmer theft: purchases are strictly scoped to the correct registered owner and never stolen across farmers.
   const comparisonData = useMemo(() => {
+    // Normalization utilities
     const cleanStr = (s?: string) => (s || '').toLowerCase().trim().replace(/\s+/g, ' ');
+    const cleanCompact = (s?: string) => cleanStr(s).replace(/[^a-z0-9\u0A00-\u0A7F]/g, '');
+    const cleanMobile = (s?: string) => {
+      const digits = (s || '').replace(/\D/g, '');
+      return digits.length >= 10 ? digits.slice(-10) : digits;
+    };
+
+    // Helper to generate unique composite key for unregistered / direct arrivals
+    const buildCompositeFarmerKey = (
+      name?: string,
+      father?: string,
+      village?: string,
+      mobile?: string
+    ) => {
+      const cN = cleanCompact(name) || 'unknown';
+      const cF = cleanCompact(father) || 'unknown';
+      const cV = cleanCompact(village) || 'unknown';
+      const cM = cleanMobile(mobile) || '';
+      return `UNREG_${cN}_${cF}_${cV}${cM ? `_${cM}` : ''}`;
+    };
 
     // 1. Identify all duplicate names across registered farmers
     const regNameCounts = new Map<string, number>();
     registeredFarmers.forEach((rf) => {
-      const n = cleanStr(rf.name_en);
-      if (n) regNameCounts.set(n, (regNameCounts.get(n) || 0) + 1);
+      const nEn = cleanCompact(rf.name_en);
+      if (nEn) regNameCounts.set(nEn, (regNameCounts.get(nEn) || 0) + 1);
+      const nPa = cleanCompact(rf.name_pa);
+      if (nPa && nPa !== nEn) regNameCounts.set(nPa, (regNameCounts.get(nPa) || 0) + 1);
     });
 
     // 2. Seed farmer map with registered farmers keyed by their UNIQUE ID
@@ -617,7 +643,9 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
     }>();
 
     registeredFarmers.forEach((rf) => {
-      const isDup = (regNameCounts.get(cleanStr(rf.name_en)) || 0) > 1;
+      const isDup = (regNameCounts.get(cleanCompact(rf.name_en)) || 0) > 1 ||
+                    (regNameCounts.get(cleanCompact(rf.name_pa)) || 0) > 1;
+
       farmerMap.set(rf.id, {
         uniqueKey: rf.id,
         farmer_id: rf.id,
@@ -658,7 +686,8 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
       });
     });
 
-    // Helper: find registered farmer by composite matching
+    // Helper: find registered farmer by authoritative ID or unambiguous composite match
+    // CRITICAL: NEVER collapses duplicate names into candidates[0]!
     const findRegisteredFarmer = (
       fid?: string,
       name?: string,
@@ -666,49 +695,109 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
       village?: string,
       mobile?: string
     ) => {
+      // 1. Authoritative: Direct Unique Farmer ID lookup
       if (fid && farmerMap.has(fid)) {
         return farmerMap.get(fid);
       }
-      const cName = cleanStr(name);
+
+      const cName = cleanCompact(name);
       if (!cName) return undefined;
 
-      const cFather = cleanStr(father);
-      const cVillage = cleanStr(village);
-      const cMobile = cleanStr(mobile);
+      const cFather = cleanCompact(father);
+      const cVillage = cleanCompact(village);
+      const cMobile = cleanMobile(mobile);
 
+      // Search ONLY among REGISTERED farmers
       const candidates = Array.from(farmerMap.values()).filter((r) => {
-        return (
-          cleanStr(r.name_en) === cName ||
-          cleanStr(r.name_pa) === cName
-        );
+        if (!r.isRegistered) return false;
+        const rNameEn = cleanCompact(r.name_en);
+        const rNamePa = cleanCompact(r.name_pa);
+        return rNameEn === cName || rNamePa === cName;
       });
 
-      if (candidates.length === 1) {
-        return candidates[0];
+      if (candidates.length === 0) {
+        return undefined;
       }
 
+      // If single candidate: check for clear contradiction before returning
+      if (candidates.length === 1) {
+        const cand = candidates[0];
+        const candFather = cleanCompact(cand.father_husband_name_en || cand.father_husband_name_pa);
+        const candVillage = cleanCompact(cand.village_en || cand.village_pa);
+
+        // If father is explicitly provided and clearly conflicts (both > 2 chars)
+        if (cFather && candFather && cFather.length > 2 && candFather.length > 2) {
+          if (!candFather.includes(cFather) && !cFather.includes(candFather)) {
+            // Contradiction: This entry belongs to a different farmer with the same name!
+            return undefined;
+          }
+        }
+        // If village is explicitly provided and clearly conflicts (both > 2 chars)
+        if (cVillage && candVillage && cVillage.length > 2 && candVillage.length > 2) {
+          if (!candVillage.includes(cVillage) && !cVillage.includes(candVillage)) {
+            // Contradiction: Different village!
+            return undefined;
+          }
+        }
+        return cand;
+      }
+
+      // If MULTIPLE REGISTERED FARMERS HAVE THE EXACT SAME NAME (e.g. 2 Gurpreet Singhs or 2 Gurmail Singhs)
       if (candidates.length > 1) {
-        if (cFather) {
-          const matchFather = candidates.find(
-            (c) =>
-              cleanStr(c.father_husband_name_en) === cFather ||
-              cleanStr(c.father_husband_name_pa) === cFather
-          );
-          if (matchFather) return matchFather;
+        let bestCandidate: typeof candidates[0] | undefined;
+        let highestScore = -999;
+        let runnerUpScore = -999;
+
+        candidates.forEach((cand) => {
+          let score = 0;
+          const candFather = cleanCompact(cand.father_husband_name_en || cand.father_husband_name_pa);
+          const candVillage = cleanCompact(cand.village_en || cand.village_pa);
+          const candMobile = cleanMobile(cand.mobile);
+
+          // Father matching / contradiction check
+          if (cFather && candFather) {
+            if (candFather === cFather || candFather.includes(cFather) || cFather.includes(candFather)) {
+              score += 15;
+            } else {
+              score -= 25; // Explicitly different father
+            }
+          }
+
+          // Village matching / contradiction check
+          if (cVillage && candVillage) {
+            if (candVillage === cVillage || candVillage.includes(cVillage) || cVillage.includes(candVillage)) {
+              score += 12;
+            } else {
+              score -= 20; // Explicitly different village
+            }
+          }
+
+          // Mobile matching / contradiction check
+          if (cMobile && candMobile) {
+            if (cMobile === candMobile) {
+              score += 25;
+            } else {
+              score -= 5;
+            }
+          }
+
+          if (score > highestScore) {
+            runnerUpScore = highestScore;
+            highestScore = score;
+            bestCandidate = cand;
+          } else if (score > runnerUpScore) {
+            runnerUpScore = score;
+          }
+        });
+
+        // ONLY return candidate if confidence score is positive AND strictly greater than runner-up
+        if (highestScore > 0 && highestScore > runnerUpScore) {
+          return bestCandidate;
         }
-        if (cVillage) {
-          const matchVillage = candidates.find(
-            (c) =>
-              cleanStr(c.village_en) === cVillage ||
-              cleanStr(c.village_pa) === cVillage
-          );
-          if (matchVillage) return matchVillage;
-        }
-        if (cMobile) {
-          const matchMobile = candidates.find((c) => cleanStr(c.mobile) === cMobile);
-          if (matchMobile) return matchMobile;
-        }
-        return candidates[0];
+
+        // CRITICAL: DO NOT return candidates[0]!
+        // Returning undefined guarantees that an ambiguous entry is NOT dumped into the wrong farmer!
+        return undefined;
       }
 
       return undefined;
@@ -725,8 +814,13 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
       );
 
       if (!rec) {
-        // Create an unregistered farmer record with unique composite key
-        const unregKey = `UNREG_${cleanStr(arr.farmer_name)}_${cleanStr(arr.father_husband_name || '')}_${cleanStr(arr.village || '')}`;
+        // Create or find an unregistered farmer record with unique composite key
+        const unregKey = buildCompositeFarmerKey(
+          arr.farmer_name,
+          arr.father_husband_name,
+          arr.village,
+          arr.mobile
+        );
         rec = farmerMap.get(unregKey);
         if (!rec) {
           rec = {
@@ -780,49 +874,89 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
       });
     });
 
-    // 4. Process Agency Purchases (Both Main Farmer & Linked Farmer purchases)
+    // 4. Process Agency Purchases (Strictly isolated: Main Farmer Own vs Linked Family Purchases)
     agencyPurchases.forEach((pur) => {
       const purBags = Number(pur.total_bags || 0);
       const purWt = Number(pur.weight_quintals || 0);
       const purAmt = Number(pur.total_amount || 0);
       const purRate = Number(pur.rate_per_quintal || 2461);
-      const cPurFarmer = cleanStr(pur.farmer_name);
-      const cBilledTo = cleanStr(pur.billed_to_name);
+      const cPurFarmer = cleanCompact(pur.farmer_name);
+      const cBilledTo = cleanCompact(pur.billed_to_name);
 
-      // Check A: Is this purchase for a LINKED FARMER of a registered farmer?
+      const relCompact = cleanCompact(pur.relation_with_main);
+      const isSelfRelation = !relCompact ||
+        relCompact === 'self' ||
+        relCompact === 'selfਖੁਦ' ||
+        relCompact === 'selfਮੁੱਖਕਿਸਾਨ' ||
+        relCompact === 'ਖੁਦ';
+
+      // Check A: Is this purchase for a LINKED MEMBER of a registered farmer?
       let linkedOwner: ReturnType<typeof farmerMap.get> | undefined;
       let matchedLinkedMember: (typeof farmerMap extends Map<any, infer V> ? V : never)['linked_farmers'][0] | undefined;
 
-      // Method 1: If pur has farmer_id of the main registered farmer
+      // Method 1: Purchase has the authoritative farmer_id of the main registered farmer
       if (pur.farmer_id && farmerMap.has(pur.farmer_id)) {
         const potentialOwner = farmerMap.get(pur.farmer_id)!;
-        const foundLf = potentialOwner.linked_farmers.find(
-          (lf) =>
-            cleanStr(lf.name_en) === cPurFarmer ||
-            cleanStr(lf.name_pa) === cPurFarmer ||
-            cleanStr(lf.name_en) === cBilledTo ||
-            cleanStr(lf.name_pa) === cBilledTo
-        );
-        if (foundLf || (pur.relation_with_main && pur.relation_with_main !== 'Self')) {
+
+        if (!isSelfRelation) {
+          // Explicit non-self relation: Find matching linked family member in this owner's account
+          const foundLf = potentialOwner.linked_farmers.find(
+            (lf) =>
+              cleanCompact(lf.name_en) === cPurFarmer ||
+              cleanCompact(lf.name_pa) === cPurFarmer ||
+              cleanCompact(lf.name_en) === cBilledTo ||
+              cleanCompact(lf.name_pa) === cBilledTo
+          );
           linkedOwner = potentialOwner;
           matchedLinkedMember = foundLf;
+        } else {
+          // Relation is Self, but check if the billing/farmer name is actually a registered linked family member
+          // ONLY match if the name is distinctly different from the main farmer's own name
+          const isMainName = cleanCompact(potentialOwner.name_en) === cPurFarmer ||
+                             cleanCompact(potentialOwner.name_pa) === cPurFarmer;
+          if (!isMainName) {
+            const foundLf = potentialOwner.linked_farmers.find(
+              (lf) =>
+                cleanCompact(lf.name_en) === cPurFarmer ||
+                cleanCompact(lf.name_pa) === cPurFarmer ||
+                cleanCompact(lf.name_en) === cBilledTo ||
+                cleanCompact(lf.name_pa) === cBilledTo
+            );
+            if (foundLf) {
+              linkedOwner = potentialOwner;
+              matchedLinkedMember = foundLf;
+            }
+          }
         }
       }
 
-      // Method 2: If not found yet, check all registered farmers for matching linked member
-      if (!linkedOwner) {
+      // Method 2: If farmer_id was not attached, BUT relation is EXPLICITLY a linked family member
+      // CRITICAL: NEVER do global search if isSelfRelation is true!
+      // And when searching globally, strictly verify parent farmer's village or mobile!
+      if (!linkedOwner && !isSelfRelation && pur.relation_with_main) {
         for (const rfRec of farmerMap.values()) {
+          if (!rfRec.isRegistered) continue;
           const foundLf = rfRec.linked_farmers.find(
             (lf) =>
-              cleanStr(lf.name_en) === cPurFarmer ||
-              cleanStr(lf.name_pa) === cPurFarmer ||
-              cleanStr(lf.name_en) === cBilledTo ||
-              cleanStr(lf.name_pa) === cBilledTo
+              cleanCompact(lf.name_en) === cPurFarmer ||
+              cleanCompact(lf.name_pa) === cPurFarmer ||
+              cleanCompact(lf.name_en) === cBilledTo ||
+              cleanCompact(lf.name_pa) === cBilledTo
           );
           if (foundLf) {
-            linkedOwner = rfRec;
-            matchedLinkedMember = foundLf;
-            break;
+            const rfVil = cleanCompact(rfRec.village_en || rfRec.village_pa);
+            const pVil = cleanCompact(pur.village || pur.address_village);
+            const rfMob = cleanMobile(rfRec.mobile);
+            const pMob = cleanMobile(pur.mobile);
+
+            const vilMatch = !pVil || !rfVil || rfVil.includes(pVil) || pVil.includes(rfVil);
+            const mobMatch = !pMob || !rfMob || pMob === rfMob;
+
+            if (vilMatch && mobMatch) {
+              linkedOwner = rfRec;
+              matchedLinkedMember = foundLf;
+              break;
+            }
           }
         }
       }
@@ -886,8 +1020,13 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
       );
 
       if (!mainRec) {
-        // Try unregistered
-        const unregKey = `UNREG_${cleanStr(pur.farmer_name)}_${cleanStr(pur.father_husband_name || '')}_${cleanStr(pur.village || pur.address_village || '')}`;
+        // Try unregistered / direct composite key
+        const unregKey = buildCompositeFarmerKey(
+          pur.farmer_name,
+          pur.father_husband_name,
+          pur.village || pur.address_village,
+          pur.mobile
+        );
         mainRec = farmerMap.get(unregKey);
         if (!mainRec) {
           mainRec = {
@@ -896,7 +1035,9 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
             name_en: pur.farmer_name,
             name_pa: pur.farmer_name,
             father_husband_name_en: pur.father_husband_name || '',
+            father_husband_name_pa: pur.father_husband_name || '',
             village_en: pur.village || pur.address_village || '',
+            village_pa: pur.village || pur.address_village || '',
             mobile: pur.mobile || '',
             isRegistered: false,
             isDuplicateName: false,
@@ -937,16 +1078,26 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
       });
     });
 
-    // 5. Compute Balances and Check Duplicate Names across the active records
+    // 5. Compute Balances and Identify Duplicate Names across all active records
     const allRecords = Array.from(farmerMap.values());
     const finalNameCounts = new Map<string, number>();
+
+    // Only count active records (those with either arrival or purchase activity)
     allRecords.forEach((r) => {
-      const n = cleanStr(r.name_en);
-      if (n) finalNameCounts.set(n, (finalNameCounts.get(n) || 0) + 1);
+      const hasActivity = r.arrived_bags > 0 || r.own_purchased_bags > 0 || r.linked_purchased_bags > 0;
+      if (hasActivity) {
+        const nEn = cleanCompact(r.name_en);
+        if (nEn) finalNameCounts.set(nEn, (finalNameCounts.get(nEn) || 0) + 1);
+        const nPa = cleanCompact(r.name_pa);
+        if (nPa && nPa !== nEn) finalNameCounts.set(nPa, (finalNameCounts.get(nPa) || 0) + 1);
+      }
     });
 
     const list = allRecords.map((rec) => {
-      const isDup = (finalNameCounts.get(cleanStr(rec.name_en)) || 0) > 1;
+      const countEn = finalNameCounts.get(cleanCompact(rec.name_en)) || 0;
+      const countPa = finalNameCounts.get(cleanCompact(rec.name_pa)) || 0;
+      const isDup = countEn > 1 || countPa > 1;
+
       const totalPurchased = rec.own_purchased_bags + rec.linked_purchased_bags;
       const totalPurchasedWt = Number((rec.own_purchased_quintals + rec.linked_purchased_quintals).toFixed(2));
       const balBags = rec.arrived_bags - totalPurchased;
@@ -1033,7 +1184,10 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
         r.name_en.toLowerCase().includes(q) ||
         r.name_pa.toLowerCase().includes(q) ||
         r.father_husband_name_en.toLowerCase().includes(q) ||
+        (r.father_husband_name_pa && r.father_husband_name_pa.toLowerCase().includes(q)) ||
         r.village_en.toLowerCase().includes(q) ||
+        (r.village_pa && r.village_pa.toLowerCase().includes(q)) ||
+        (r.farmer_id && r.farmer_id.toLowerCase().includes(q)) ||
         r.mobile.includes(q) ||
         r.arrivals.some((a) => (a.parchi_no || '').toLowerCase().includes(q)) ||
         r.linked_farmers.some(

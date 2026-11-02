@@ -443,7 +443,7 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
       address_village: singleVillage.trim(),
       village: singleVillage.trim(),
       mobile: singleMobile.trim(),
-      billed_to_name: singleFarmerName.trim(),
+      billed_to_name: (singleBilledToName.trim() || singleFarmerName.trim()),
       relation_with_main: singleRelation || 'Self',
       crop_type: cropType,
       crop_variety: cropVariety,
