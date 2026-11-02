@@ -1366,7 +1366,7 @@ export default function App() {
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-bold text-xs sm:text-sm text-white">
-                  ਕਿਸਾਨਮਿੱਤਰ ਐਪ ਨੂੰ ਫ਼ੋਨ (APK) ਜਾਂ ਲੈਪਟਾਪ (Desktop App) ਵਜੋਂ ਇੰਸਟਾਲ ਕਰੋ
+                  ਪੰਜਾਬੀ ਮੰਡੀ ਸਾਫਟਵੇਅਰ (Punjabi Mandi Software) ਨੂੰ ਫ਼ੋਨ (APK) ਜਾਂ ਲੈਪਟਾਪ (Desktop App) ਵਜੋਂ ਇੰਸਟਾਲ ਕਰੋ
                 </span>
                 <span className="px-2 py-0.5 bg-amber-400 text-emerald-950 rounded-full font-black text-[10px]">
                   1-Click Install

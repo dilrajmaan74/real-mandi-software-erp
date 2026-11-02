@@ -14,9 +14,9 @@ export default defineConfig(() => {
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon.svg'],
         manifest: {
           id: '/',
-          name: 'KisanMitra ERP - Mandi Management',
-          short_name: 'KisanMitra',
-          description: 'Digital Mandi and Commission Agency (ਆੜ੍ਹਤ) management for Punjab grain markets.',
+          name: 'Punjabi Mandi Software',
+          short_name: 'PunjabiMandi',
+          description: 'Punjabi Mandi Software - Digital Mandi and Commission Agency (ਆੜ੍ਹਤ) management for Punjab grain markets.',
           theme_color: '#064e3b',
           background_color: '#064e3b',
           display: 'standalone',

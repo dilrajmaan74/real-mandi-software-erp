@@ -63,13 +63,13 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
 
           <div className="flex items-center gap-3">
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 p-2 shadow-lg flex items-center justify-center border-2 border-white/40 shrink-0">
-              <img src="/icon.svg" alt="KisanMitra ERP" className="w-full h-full object-contain" />
+              <img src="/icon.svg" alt="Punjabi Mandi Software" className="w-full h-full object-contain" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-lg font-black text-white">KisanMitra ERP ਐਪ ਇੰਸਟਾਲ ਕਰੋ</h3>
+                <h3 className="text-lg font-black text-white">Punjabi Mandi Software ਐਪ ਇੰਸਟਾਲ ਕਰੋ</h3>
                 <span className="px-2 py-0.5 bg-amber-400 text-emerald-950 font-black text-[10px] rounded-full uppercase tracking-wider">
-                  PWA App
+                  ਪੰਜਾਬੀ ਮੰਡੀ ਐਪ
                 </span>
               </div>
               <p className="text-xs text-emerald-200 mt-0.5">
@@ -130,7 +130,7 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
               <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0" />
               <div>
                 <p className="font-bold text-sm">ਐਪ ਪਹਿਲਾਂ ਹੀ ਇੰਸਟਾਲ ਹੈ!</p>
-                <p className="text-[11px] text-emerald-700">ਤੁਸੀਂ ਇਸ ਵੇਲੇ KisanMitra ERP ਨੂੰ ਸਿੱਧੀ ਇੰਸਟਾਲ ਹੋਈ ਐਪ ਵਜੋਂ ਵਰਤ ਰਹੇ ਹੋ।</p>
+                <p className="text-[11px] text-emerald-700">ਤੁਸੀਂ ਇਸ ਵੇਲੇ Punjabi Mandi Software ਨੂੰ ਸਿੱਧੀ ਇੰਸਟਾਲ ਹੋਈ ਐਪ ਵਜੋਂ ਵਰਤ ਰਹੇ ਹੋ।</p>
               </div>
             </div>
           )}
@@ -175,7 +175,7 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
                         ਲਿਸਟ ਵਿੱਚੋਂ <strong>&quot;Install app&quot;</strong> ਜਾਂ <strong>&quot;Add to Home screen (ਹੋਮ ਸਕ੍ਰੀਨ 'ਤੇ ਜੋੜੋ)&quot;</strong> ਉੱਤੇ ਕਲਿੱਕ ਕਰੋ।
                       </li>
                       <li>
-                        <strong>&quot;Install&quot;</strong> ਦਬਾਓ — KisanMitra ERP ਤੁਹਾਡੇ ਮੋਬਾਈਲ ਵਿੱਚ WhatsApp ਵਾਂਗ ਇੱਕ ਐਪ ਬਣ ਜਾਵੇਗੀ!
+                        <strong>&quot;Install&quot;</strong> ਦਬਾਓ — Punjabi Mandi Software ਤੁਹਾਡੇ ਮੋਬਾਈਲ ਵਿੱਚ WhatsApp ਵਾਂਗ ਇੱਕ ਓਰਿਜਨਲ ਐਪ ਬਣ ਜਾਵੇਗੀ!
                       </li>
                     </ol>
                   </div>
@@ -239,10 +239,10 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
                         ਬ੍ਰਾਊਜ਼ਰ ਵਿੱਚ ਸਭ ਤੋਂ ਉੱਪਰ ਵੈੱਬਸਾਈਟ ਲਿੰਕ (URL Bar) ਦੇ ਸੱਜੇ ਪਾਸੇ <strong>ਇੰਸਟਾਲ ਆਈਕਨ (🖥️ ਜਾਂ ⬇️)</strong> 'ਤੇ ਕਲਿੱਕ ਕਰੋ।
                       </li>
                       <li>
-                        ਜਾਂ ਉੱਪਰ ਸੱਜੇ <strong>3 ਬਿੰਦੂ (⋮)</strong> 'ਤੇ ਕਲਿੱਕ ਕਰਕੇ <strong>&quot;Install KisanMitra ERP&quot;</strong> ਚੁਣੋ।
+                        ਜਾਂ ਉੱਪਰ ਸੱਜੇ <strong>3 ਬਿੰਦੂ (⋮)</strong> 'ਤੇ ਕਲਿੱਕ ਕਰਕੇ <strong>&quot;Install Punjabi Mandi Software&quot;</strong> ਚੁਣੋ।
                       </li>
                       <li>
-                        ਲੈਪਟਾਪ ਦੀ ਡੈਸਕਟਾਪ ਸਕ੍ਰੀਨ 'ਤੇ KisanMitra ਦਾ ਆਈਕਨ ਬਣ ਜਾਵੇਗਾ ਅਤੇ ਇਹ ਵੱਖਰੀ ਵਿੰਡੋ ਵਿੱਚ ਬਿਨਾਂ ਬ੍ਰਾਊਜ਼ਰ ਟੈਬਸ ਦੇ ਖੁੱਲ੍ਹੇਗੀ।
+                        ਲੈਪਟਾਪ ਦੀ ਡੈਸਕਟਾਪ ਸਕ੍ਰੀਨ 'ਤੇ Punjabi Mandi Software ਦਾ ਆਈਕਨ ਬਣ ਜਾਵੇਗਾ ਅਤੇ ਇਹ ਵੱਖਰੀ ਵਿੰਡੋ ਵਿੱਚ ਬਿਨਾਂ ਬ੍ਰਾਊਜ਼ਰ ਟੈਬਸ ਦੇ ਖੁੱਲ੍ਹੇਗੀ।
                       </li>
                     </ol>
                   </div>

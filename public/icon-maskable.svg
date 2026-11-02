@@ -59,8 +59,8 @@
 
     <!-- Typography Banner at Bottom -->
     <g text-anchor="middle">
-      <rect x="110" y="415" width="292" height="42" rx="14" fill="#022c22" stroke="#f59e0b" stroke-width="2" />
-      <text x="256" y="443" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="20" fill="#fef08a" letter-spacing="3">KISANMITRA</text>
+      <rect x="90" y="415" width="332" height="42" rx="14" fill="#022c22" stroke="#f59e0b" stroke-width="2" />
+      <text x="256" y="443" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="18" fill="#fef08a" letter-spacing="2">PUNJABI MANDI</text>
     </g>
   </g>
 </svg>
