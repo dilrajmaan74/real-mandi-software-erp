@@ -35,10 +35,14 @@ import {
   ChevronDown,
   ChevronUp,
   Info,
-  TrendingUp
+  TrendingUp,
+  Printer,
+  FileDown
 } from 'lucide-react';
 import { appendCropArrivalToSheets } from '../lib/sheets';
 import { getSavedVillages, registerVillage, VillageItem } from '../lib/villages';
+import { CropArrivalPdfModal } from './CropArrivalPdfModal';
+import { CropArrivalParchiModal } from './CropArrivalParchiModal';
 
 interface CropArrivalModuleProps {
   entries: CropArrivalEntry[];
@@ -71,6 +75,8 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
   // Single Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<CropArrivalEntry | null>(null);
+  const [isArrivalPdfModalOpen, setIsArrivalPdfModalOpen] = useState(false);
+  const [selectedParchiEntry, setSelectedParchiEntry] = useState<CropArrivalEntry | null>(null);
   const [search, setSearch] = useState('');
   const [cropFilter, setCropFilter] = useState('All');
   const [isSyncing, setIsSyncing] = useState<string | null>(null);
@@ -1079,6 +1085,17 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
+          {/* Arrival Register PDF & Print Button */}
+          <button
+            type="button"
+            onClick={() => setIsArrivalPdfModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer border border-emerald-400/40"
+            title="ਆਵਕ ਰਿਕਾਰਡ ਲਿਸਟ ਦੀ PDF ਸ਼ੀਟ ਡਾਊਨਲੋਡ ਕਰੋ ਅਤੇ ਪ੍ਰਿੰਟ ਕੱਢੋ"
+          >
+            <FileDown className="w-4 h-4 text-amber-300" />
+            <span>📄 ਆਵਕ ਲਿਸਟ (PDF / ਪ੍ਰਿੰਟ)</span>
+          </button>
+
           {/* Batch Entry Mode Quick Switch */}
           <button
             type="button"
@@ -1204,7 +1221,7 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
               />
             </div>
 
-            <div className="flex items-center gap-2 self-end sm:self-auto">
+            <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
               <span className="text-xs text-gray-500">ਕਿਸਮ:</span>
               <select
                 value={cropFilter}
@@ -1216,6 +1233,17 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
                 <option value="Hybrid">Hybrid</option>
                 <option value="PR-126">PR-126</option>
               </select>
+
+              {/* PDF & Print Button */}
+              <button
+                type="button"
+                onClick={() => setIsArrivalPdfModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white font-bold rounded-lg text-xs transition shadow-2xs cursor-pointer"
+                title="ਆਵਕ ਰਿਕਾਰਡ ਲਿਸਟ ਦੀ PDF ਸ਼ੀਟ ਡਾਊਨਲੋਡ ਕਰੋ ਅਤੇ ਪ੍ਰਿੰਟ ਕੱਢੋ"
+              >
+                <Printer className="w-3.5 h-3.5 text-amber-300" />
+                <span>ਪ੍ਰਿੰਟ / PDF ਲਿਸਟ</span>
+              </button>
             </div>
           </div>
 
@@ -1337,6 +1365,15 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
 
                         <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedParchiEntry(item)}
+                              title="ਇਸ ਕਿਸਾਨ ਦੀ ਆਵਕ ਪਰਚੀ ਪ੍ਰਿੰਟ / PDF ਕਰੋ"
+                              className="p-1.5 text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer font-bold inline-flex items-center gap-1 text-[11px]"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                              <span>ਪਰਚੀ</span>
+                            </button>
                             <button
                               onClick={() => openEditModal(item)}
                               title="ਐਡਿਟ ਕਰੋ"
@@ -3471,6 +3508,27 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* 🌟 Crop Arrival Register PDF & Print Sheet Modal */}
+      {isArrivalPdfModalOpen && (
+        <CropArrivalPdfModal
+          isOpen={isArrivalPdfModalOpen}
+          onClose={() => setIsArrivalPdfModalOpen(false)}
+          entries={entries}
+          registeredFarmers={registeredFarmers}
+          initialMandi={mandiName}
+          initialDate={date}
+        />
+      )}
+
+      {/* 🌟 Individual Inward Arrival Parchi Modal */}
+      {selectedParchiEntry && (
+        <CropArrivalParchiModal
+          isOpen={!!selectedParchiEntry}
+          onClose={() => setSelectedParchiEntry(null)}
+          entry={selectedParchiEntry}
+        />
       )}
 
     </div>
