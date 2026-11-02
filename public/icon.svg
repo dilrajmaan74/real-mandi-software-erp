@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#064e3b" />
+      <stop offset="60%" stop-color="#065f46" />
+      <stop offset="100%" stop-color="#047857" />
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="40%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#d97706" />
+    </linearGradient>
+    <linearGradient id="shineGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.25" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+    </linearGradient>
+    <filter id="dropShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000000" flood-opacity="0.35" />
+    </filter>
+  </defs>
+
+  <!-- Background rounded squircle with safe margin -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+  
+  <!-- Subtle top shine -->
+  <rect width="512" height="256" rx="112" fill="url(#shineGrad)" />
+
+  <!-- Inner border ring -->
+  <rect x="20" y="20" width="472" height="472" rx="96" fill="none" stroke="#f59e0b" stroke-opacity="0.3" stroke-width="4" />
+
+  <!-- Main Balance Scale & Grain Symbol in Center -->
+  <g filter="url(#dropShadow)" transform="translate(0, 10)">
+    <!-- Central Beam Stand -->
+    <path d="M256 120 L256 380" stroke="#fef08a" stroke-width="12" stroke-linecap="round" />
+    <path d="M200 380 L312 380" stroke="#fef08a" stroke-width="14" stroke-linecap="round" />
+    
+    <!-- Fulcrum top finial -->
+    <circle cx="256" cy="115" r="18" fill="url(#goldGrad)" />
+    <circle cx="256" cy="115" r="8" fill="#064e3b" />
+
+    <!-- Balance Horizontal Crossbeam -->
+    <path d="M140 160 Q256 145 372 160" fill="none" stroke="url(#goldGrad)" stroke-width="14" stroke-linecap="round" />
+
+    <!-- Left Pan strings & pan -->
+    <path d="M146 165 L115 250 M146 165 L177 250" stroke="#fde68a" stroke-width="4" stroke-linecap="round" />
+    <path d="M100 250 Q146 295 192 250 Z" fill="url(#goldGrad)" />
+    <!-- Grain in left pan -->
+    <ellipse cx="146" cy="245" rx="30" ry="10" fill="#fef08a" />
+
+    <!-- Right Pan strings & pan -->
+    <path d="M366 165 L335 250 M366 165 L397 250" stroke="#fde68a" stroke-width="4" stroke-linecap="round" />
+    <path d="M320 250 Q366 295 412 250 Z" fill="url(#goldGrad)" />
+    <!-- Grain in right pan -->
+    <ellipse cx="366" cy="245" rx="30" ry="10" fill="#fef08a" />
+
+    <!-- Wheat / Paddy stalks around center base -->
+    <g stroke="url(#goldGrad)" fill="url(#goldGrad)">
+      <path d="M256 340 Q220 280 180 230" fill="none" stroke-width="5" stroke-linecap="round" />
+      <ellipse cx="185" cy="235" rx="7" ry="14" transform="rotate(-35 185 235)" />
+      <ellipse cx="205" cy="260" rx="7" ry="14" transform="rotate(-25 205 260)" />
+      <ellipse cx="225" cy="290" rx="7" ry="14" transform="rotate(-15 225 290)" />
+
+      <path d="M256 340 Q292 280 332 230" fill="none" stroke-width="5" stroke-linecap="round" />
+      <ellipse cx="327" cy="235" rx="7" ry="14" transform="rotate(35 327 235)" />
+      <ellipse cx="307" cy="260" rx="7" ry="14" transform="rotate(25 307 260)" />
+      <ellipse cx="287" cy="290" rx="7" ry="14" transform="rotate(15 287 290)" />
+    </g>
+  </g>
+
+  <!-- Typography Banner at Bottom -->
+  <g text-anchor="middle">
+    <rect x="110" y="415" width="292" height="42" rx="14" fill="#022c22" stroke="#f59e0b" stroke-width="2" />
+    <text x="256" y="443" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="20" fill="#fef08a" letter-spacing="3">KISANMITRA</text>
+  </g>
+</svg>

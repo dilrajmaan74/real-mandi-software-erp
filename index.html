@@ -1,18 +1,35 @@
 <!doctype html>
-<html lang="en">
+<html lang="pa">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>KisanMitra ERP - Mandi Management</title>
     <meta name="description" content="Digital Mandi and Commission Agency (ਆੜ੍ਹਤ) management for Punjab grain markets with multi-lingual voice/text processing and automated cloud spreadsheet syncing." />
+    
+    <!-- PWA & Mobile Web App Meta Tags -->
+    <meta name="theme-color" content="#064e3b" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="KisanMitra" />
+    <meta name="application-name" content="KisanMitra ERP" />
+    <meta name="msapplication-TileColor" content="#064e3b" />
+
+    <!-- Icons -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/pwa-192x192.png" />
+    <link rel="shortcut icon" href="/favicon.ico" />
+
+    <!-- Open Graph -->
     <meta property="og:title" content="KisanMitra ERP - Mandi Management" />
     <meta property="og:description" content="Digital Mandi and Commission Agency (ਆੜ੍ਹਤ) management for Punjab grain markets with multi-lingual voice/text processing and automated cloud spreadsheet syncing." />
     <meta property="og:type" content="website" />
+    <meta property="og:image" content="/pwa-512x512.png" />
     <meta name="twitter:card" content="summary_large_image" />
   </head>
-  <body>
+  <body class="bg-slate-50 text-slate-900 antialiased selection:bg-amber-400 selection:text-emerald-950">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-

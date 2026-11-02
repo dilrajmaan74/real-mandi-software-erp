@@ -26,7 +26,11 @@ import {
   ArrowRight,
   UserCheck,
   Calendar,
-  Layers
+  Layers,
+  Save,
+  AlertTriangle,
+  FileText,
+  RefreshCw
 } from 'lucide-react';
 import { appendAgencyPurchaseToSheets } from '../lib/sheets';
 import { AllEntryPdfModal } from './AllEntryPdfModal';
@@ -63,7 +67,9 @@ interface AgencyPurchaseModuleProps {
   onAddEntry: (entry: AgencyPurchaseEntry) => void;
   onAddBatchPurchases?: (entries: AgencyPurchaseEntry[]) => void;
   onUpdateEntry: (entry: AgencyPurchaseEntry) => void;
+  onUpdateBatchPurchases?: (entries: AgencyPurchaseEntry[]) => void;
   onDeleteEntry: (id: string) => void;
+  onDeleteBatchPurchases?: (ids: string[]) => void;
   onOpenJForm: (entry: AgencyPurchaseEntry) => void;
   registeredFarmers: FarmerMaster[];
   token: string | null;
@@ -76,7 +82,9 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
   onAddEntry,
   onAddBatchPurchases,
   onUpdateEntry,
+  onUpdateBatchPurchases,
   onDeleteEntry,
+  onDeleteBatchPurchases,
   onOpenJForm,
   registeredFarmers,
   token,
@@ -86,6 +94,16 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<AgencyPurchaseEntry | null>(null);
+
+  // Bulk Date Batch Edit States (for editing all entries of the same date at once)
+  const [isBatchDateEditOpen, setIsBatchDateEditOpen] = useState(false);
+  const [batchEditDate, setBatchEditDate] = useState<string>('');
+  const [batchEditRows, setBatchEditRows] = useState<AgencyPurchaseEntry[]>([]);
+  const [bulkAgencyToApply, setBulkAgencyToApply] = useState<string>('');
+  const [bulkMandiToApply, setBulkMandiToApply] = useState<string>('');
+  const [bulkFirmToApply, setBulkFirmToApply] = useState<string>('');
+  const [bulkRateToApply, setBulkRateToApply] = useState<number>(2461);
+
   const [search, setSearch] = useState('');
   const [selectedFirmView, setSelectedFirmView] = useState<'All' | 'JAMMU TRADING CO.' | 'NEW JAMMU TRADING CO.'>('All');
   const [firmFilter, setFirmFilter] = useState('All');
@@ -373,10 +391,10 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
   const [singleRelation, setSingleRelation] = useState('Self (ਖੁਦ)');
   const [singleVillage, setSingleVillage] = useState('');
   const [singleMobile, setSingleMobile] = useState('');
-  const [singleNewJute, setSingleNewJute] = useState<number>(200);
-  const [singleOldJute, setSingleOldJute] = useState<number>(200);
+  const [singleNewJute, setSingleNewJute] = useState<number>(0);
+  const [singleOldJute, setSingleOldJute] = useState<number>(0);
   const singleTotalBags = Number(singleNewJute || 0) + Number(singleOldJute || 0);
-  const [singleWeightQtl, setSingleWeightQtl] = useState<number>(150.0);
+  const [singleWeightQtl, setSingleWeightQtl] = useState<number>(0.0);
   const [singlePrevKhata, setSinglePrevKhata] = useState<number>(0);
   const [singleAdvance, setSingleAdvance] = useState<number>(0);
 
@@ -468,7 +486,11 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
     const updated: AgencyPurchaseEntry = {
       ...editingEntry,
       farmer_name: editingEntry.farmer_name.trim(),
-      billed_to_name: editingEntry.farmer_name.trim(),
+      father_husband_name: (editingEntry.father_husband_name || '').trim() || undefined,
+      village: (editingEntry.address_village || editingEntry.village || '').trim(),
+      address_village: (editingEntry.address_village || editingEntry.village || '').trim(),
+      mobile: (editingEntry.mobile || '').trim(),
+      billed_to_name: (editingEntry.billed_to_name || editingEntry.farmer_name).trim(),
       total_bags: totBags > 0 ? totBags : editingEntry.total_bags,
       weight_quintals: w,
       total_amount: gross,
@@ -483,6 +505,144 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
 
     onUpdateEntry(updated);
     setEditingEntry(null);
+  };
+
+  // Open Bulk Date Batch Editor
+  const handleOpenBatchDateEdit = (targetDate: string) => {
+    const list = entries.filter((e) => e.date === targetDate);
+    if (list.length === 0) {
+      alert('ਇਸ ਮਿਤੀ ਲਈ ਕੋਈ ਖਰੀਦ ਐਂਟਰੀ ਮੌਜੂਦ ਨਹੀਂ ਹੈ।');
+      return;
+    }
+    setBatchEditDate(targetDate);
+    setBatchEditRows(list.map((e) => ({ ...e })));
+    setBulkAgencyToApply('');
+    setBulkMandiToApply('');
+    setBulkFirmToApply('');
+    setBulkRateToApply(2461);
+    setIsBatchDateEditOpen(true);
+  };
+
+  // Bulk Apply Helpers inside Date Batch Editor
+  const handleApplyBulkAgencyToDateRows = (agencyVal: string) => {
+    if (!agencyVal) return;
+    setBatchEditRows((prev) => prev.map((r) => ({ ...r, purchasing_agency: agencyVal })));
+  };
+
+  const handleApplyBulkFirmToDateRows = (firmId: string) => {
+    const f = ARHTIA_FIRMS.find((firm) => firm.id === firmId);
+    if (!f) return;
+    setBatchEditRows((prev) => prev.map((r) => ({ ...r, firm_id: f.id, firm_name: f.name })));
+  };
+
+  const handleApplyBulkMandiToDateRows = (mandiVal: string) => {
+    if (!mandiVal) return;
+    setBatchEditRows((prev) => prev.map((r) => ({ ...r, mandi_name: mandiVal })));
+  };
+
+  const handleApplyBulkRateToDateRows = (rateVal: number) => {
+    if (rateVal <= 0) return;
+    setBatchEditRows((prev) =>
+      prev.map((r) => {
+        const amt = Number((r.weight_quintals * rateVal).toFixed(2));
+        return {
+          ...r,
+          rate_per_quintal: rateVal,
+          total_amount: amt,
+          net_payable: amt,
+        };
+      })
+    );
+  };
+
+  // Update specific field in a batch row
+  const handleUpdateBatchEditRowField = (
+    id: string,
+    field: keyof AgencyPurchaseEntry,
+    value: any
+  ) => {
+    setBatchEditRows((prev) =>
+      prev.map((row) => {
+        if (row.id !== id) return row;
+        const updated = { ...row, [field]: value };
+
+        const packing = updated.bag_packing_kg || 37.5;
+        const rate = updated.rate_per_quintal || 2461;
+
+        if (field === 'new_jute_bags' || field === 'old_jute_bags') {
+          const n = field === 'new_jute_bags' ? Number(value) || 0 : Number(updated.new_jute_bags) || 0;
+          const o = field === 'old_jute_bags' ? Number(value) || 0 : Number(updated.old_jute_bags) || 0;
+          const tot = n + o;
+          const wt = Number(((tot * packing) / 100).toFixed(2));
+          const amt = Number((wt * rate).toFixed(2));
+          updated.new_jute_bags = n;
+          updated.old_jute_bags = o;
+          updated.total_bags = tot;
+          updated.weight_quintals = wt;
+          updated.total_amount = amt;
+          updated.net_payable = amt;
+        } else if (field === 'weight_quintals') {
+          const wt = Number(value) || 0;
+          const amt = Number((wt * rate).toFixed(2));
+          updated.weight_quintals = wt;
+          updated.total_amount = amt;
+          updated.net_payable = amt;
+        } else if (field === 'rate_per_quintal') {
+          const r = Number(value) || 2461;
+          const amt = Number((updated.weight_quintals * r).toFixed(2));
+          updated.rate_per_quintal = r;
+          updated.total_amount = amt;
+          updated.net_payable = amt;
+        }
+
+        return updated;
+      })
+    );
+  };
+
+  // Remove row from batch editor
+  const handleRemoveRowFromBatchEdit = (id: string) => {
+    setBatchEditRows((prev) => prev.filter((r) => r.id !== id));
+  };
+
+  // Save all updated rows from batch editor
+  const handleSaveBatchDateEdit = () => {
+    if (batchEditRows.length === 0) {
+      alert('ਕੋਈ ਐਂਟਰੀ ਮੌਜੂਦ ਨਹੀਂ ਹੈ!');
+      return;
+    }
+
+    if (onUpdateBatchPurchases) {
+      onUpdateBatchPurchases(batchEditRows);
+    } else {
+      batchEditRows.forEach((r) => onUpdateEntry(r));
+    }
+
+    setIsBatchDateEditOpen(false);
+  };
+
+  // Bulk Delete all entries for a specific date
+  const handleDeleteDateBatch = (targetDate: string) => {
+    const list = entries.filter((e) => e.date === targetDate);
+    if (list.length === 0) {
+      alert('ਇਸ ਮਿਤੀ ਲਈ ਕੋਈ ਖਰੀਦ ਐਂਟਰੀ ਮੌਜੂਦ ਨਹੀਂ ਹੈ।');
+      return;
+    }
+
+    const formattedDate = targetDate.split('-').reverse().join('/');
+    const confirmed = window.confirm(
+      `⚠️ ਸੁਰੱਖਿਆ ਪੁਸ਼ਟੀ:\n\nਕੀ ਤੁਸੀਂ ਮਿਤੀ ${formattedDate} ਦੀਆਂ ਸਾਰੀਆਂ ${list.length} ਖਰੀਦ ਐਂਟਰੀਆਂ ਸਾਫਟਵੇਅਰ ਅਤੇ ਗੂਗਲ ਸ਼ੀਟ ਵਿੱਚੋਂ ਪੱਕੇ ਤੌਰ 'ਤੇ ਹਟਾਉਣਾ ਚਾਹੁੰਦੇ ਹੋ?\n\nਇਹ ਕਾਰਵਾਈ ਵਾਪਸ ਨਹੀਂ ਲਈ ਜਾ ਸਕਦੀ!`
+    );
+
+    if (!confirmed) return;
+
+    if (onDeleteBatchPurchases) {
+      onDeleteBatchPurchases(list.map((e) => e.id));
+    } else {
+      list.forEach((e) => onDeleteEntry(e.id));
+    }
+
+    setSelectedDateTab('All');
   };
 
   const handleSyncEntry = async (entry: AgencyPurchaseEntry) => {
@@ -1003,16 +1163,73 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
               ਮਿਤੀ ਅਨੁਸਾਰ ਸਰਕਾਰੀ ਖਰੀਦ (Browse by Purchase Date):
             </span>
           </div>
-          {selectedDateTab !== 'All' && (
-            <div className="flex items-center gap-2">
+          {selectedDateTab !== 'All' ? (
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* 1. Bulk Edit this Date */}
+              <button
+                type="button"
+                onClick={() => handleOpenBatchDateEdit(selectedDateTab)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-700 hover:bg-blue-800 active:scale-95 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+                title="ਇਸ ਮਿਤੀ ਦੀਆਂ ਸਾਰੀਆਂ ਐਂਟਰੀਆਂ ਇੱਕਠੀਆਂ ਸੋਧੋ"
+              >
+                <Edit3 className="w-3.5 h-3.5 text-amber-300" />
+                <span>ਇਸ ਮਿਤੀ ਦੀਆਂ ਸਾਰੀਆਂ ਐਂਟਰੀਆਂ ਸੋਧੋ (Bulk Edit Date)</span>
+              </button>
+
+              {/* 2. PDF Download for this Date */}
               <button
                 type="button"
                 onClick={() => setIsPdfModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500 hover:bg-amber-400 active:scale-95 text-blue-950 rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 active:scale-95 text-blue-950 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+                title="PDF ਸ਼ੀਟ ਡਾਊਨਲੋਡ ਕਰੋ"
               >
                 <FileDown className="w-3.5 h-3.5" />
-                <span>ਇਸ ਮਿਤੀ ({selectedDateTab.split('-').reverse().join('/')}) ਦੀ PDF / ਪ੍ਰਿੰਟ ਸ਼ੀਟ</span>
+                <span>PDF ਸ਼ੀਟ ({selectedDateTab.split('-').reverse().join('/')})</span>
               </button>
+
+              {/* 3. Direct Print for this Date */}
+              <button
+                type="button"
+                onClick={() => setIsPdfModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+                title="ਪ੍ਰਿੰਟ ਸ਼ੀਟ"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>ਪ੍ਰਿੰਟ ਕਰੋ (Print)</span>
+              </button>
+
+              {/* 4. Delete Entire Date Batch */}
+              <button
+                type="button"
+                onClick={() => handleDeleteDateBatch(selectedDateTab)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 active:scale-95 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+                title="ਇਸ ਮਿਤੀ ਦੀਆਂ ਸਾਰੀਆਂ ਐਂਟਰੀਆਂ ਪੱਕੇ ਤੌਰ 'ਤੇ ਹਟਾਓ"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>ਇਸ ਮਿਤੀ ਦੀਆਂ ਸਾਰੀਆਂ ਐਂਟਰੀਆਂ ਹਟਾਓ (Delete Date Batch)</span>
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setIsPdfModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500 hover:bg-amber-400 text-blue-950 rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
+              >
+                <FileDown className="w-3.5 h-3.5" />
+                <span>ਸਾਰੀਆਂ ਐਂਟਰੀਆਂ ਦੀ PDF / ਪ੍ਰਿੰਟ ਸ਼ੀਟ</span>
+              </button>
+              {distinctEntryDates.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => handleOpenBatchDateEdit(distinctEntryDates[0])}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-700 hover:bg-blue-800 text-white rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
+                  title="ਤਾਜ਼ਾ ਮਿਤੀ ਦੀਆਂ ਸਾਰੀਆਂ ਐਂਟਰੀਆਂ ਸੋਧੋ"
+                >
+                  <Edit3 className="w-3.5 h-3.5 text-amber-300" />
+                  <span>ਤਾਜ਼ਾ ਮਿਤੀ ({distinctEntryDates[0].split('-').reverse().join('/')}) ਬੈਚ ਸੋਧੋ</span>
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -1917,30 +2134,34 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
         </div>
       )}
 
-      {/* 100% Full Edit Modal (Without 3 Labor Boxes) */}
+      {/* 1. 100% Full Edit Modal for Single Entry */}
       {editingEntry && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl border border-gray-200 overflow-hidden my-auto">
-            <div className="p-4 bg-blue-950 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Edit3 className="w-5 h-5 text-amber-400" />
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl border border-gray-200 overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-150">
+            <div className="p-4 bg-gradient-to-r from-blue-900 to-indigo-950 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 bg-blue-800 rounded-lg text-amber-300">
+                  <Edit3 className="w-5 h-5" />
+                </div>
                 <div>
-                  <h3 className="text-sm font-bold">100% ਪੂਰੀ ਖਰੀਦ ਐਂਟਰੀ ਐਡਿਟ ਕਰੋ (Full 100% Edit Purchase)</h3>
-                  <p className="text-[10px] text-blue-200">ID: {editingEntry.id}</p>
+                  <h3 className="text-sm sm:text-base font-bold">100% ਪੂਰੀ ਖਰੀਦ ਐਂਟਰੀ ਸੋਧੋ (Full 100% Edit Purchase Entry)</h3>
+                  <p className="text-[11px] text-blue-200 font-mono">ਐਂਟਰੀ ID: {editingEntry.id}</p>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setEditingEntry(null)}
-                className="text-gray-300 hover:text-white p-1 rounded-lg"
+                className="text-gray-300 hover:text-white p-1 rounded-lg cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleUpdateSubmit} className="p-5 space-y-3.5 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+            <form onSubmit={handleUpdateSubmit} className="p-5 space-y-4 text-xs">
+              {/* Row 1: Date, Firm, Mandi, Agency */}
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <div>
-                  <label className="block text-gray-600 font-semibold mb-1">ਖਰੀਦ ਮਿਤੀ (Date):</label>
+                  <label className="block text-gray-700 font-bold mb-1">ਖਰੀਦ ਮਿਤੀ (Date):</label>
                   <input
                     type="date"
                     value={editingEntry.date}
@@ -1950,7 +2171,7 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-gray-600 font-semibold mb-1">ਆੜ੍ਹਤੀਆ ਫਰਮ (Firm):</label>
+                  <label className="block text-gray-700 font-bold mb-1">ਆੜ੍ਹਤੀਆ ਫਰਮ (Firm):</label>
                   <select
                     value={editingEntry.firm_id}
                     onChange={(e) => {
@@ -1965,7 +2186,7 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-gray-600 font-semibold mb-1">ਦਾਣਾ ਮੰਡੀ (Dana Mandi):</label>
+                  <label className="block text-gray-700 font-bold mb-1">ਦਾਣਾ ਮੰਡੀ (Dana Mandi):</label>
                   <select
                     value={editingEntry.mandi_name || MANDI_LOCATIONS[0]}
                     onChange={(e) => setEditingEntry({ ...editingEntry, mandi_name: e.target.value })}
@@ -1977,7 +2198,7 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-gray-600 font-semibold mb-1">ਖਰੀਦ ਏਜੰਸੀ (Agency):</label>
+                  <label className="block text-gray-700 font-bold mb-1">ਖਰੀਦ ਏਜੰਸੀ (Agency):</label>
                   <select
                     value={editingEntry.purchasing_agency || 'Pungrain (ਪਨਗਰੇਨ)'}
                     onChange={(e) => setEditingEntry({ ...editingEntry, purchasing_agency: e.target.value })}
@@ -1988,106 +2209,519 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
                     <option value="Punsup (ਪਨਸਪ)">Punsup (ਪਨਸਪ)</option>
                     <option value="PSWC (ਵੇਅਰਹਾਊਸ)">PSWC (ਵੇਅਰਹਾਊਸ)</option>
                     <option value="FCI (ਭਾਰਤੀ ਖੁਰਾਕ ਨਿਗਮ)">FCI (ਭਾਰਤੀ ਖੁਰਾਕ ਨਿਗਮ)</option>
+                    <option value="Private Trader / Miller">Private Trader / Miller</option>
                   </select>
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              {/* Row 2: Farmer Name, Father Name, Village, Mobile */}
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <div>
-                  <label className="block text-gray-600 font-semibold mb-1">ਕਿਸਾਨ ਦਾ ਨਾਮ:</label>
+                  <label className="block text-gray-700 font-bold mb-1">ਕਿਸਾਨ ਦਾ ਨਾਮ (Farmer Name):</label>
                   <input
                     type="text"
                     value={editingEntry.farmer_name}
-                    onChange={(e) => setEditingEntry({ ...editingEntry, farmer_name: e.target.value })}
+                    onChange={(e) => setEditingEntry({ ...editingEntry, farmer_name: e.target.value, billed_to_name: e.target.value })}
                     className="w-full p-2 bg-gray-50 border border-gray-300 rounded-xl font-bold text-gray-900"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-gray-600 font-semibold mb-1">ਪਿਤਾ / ਪਤੀ ਦਾ ਨਾਮ:</label>
+                  <label className="block text-gray-700 font-bold mb-1">ਪਿਤਾ / ਪਤੀ ਦਾ ਨਾਮ (Father Name):</label>
                   <input
                     type="text"
                     value={editingEntry.father_husband_name || ''}
                     onChange={(e) => setEditingEntry({ ...editingEntry, father_husband_name: e.target.value })}
                     className="w-full p-2 bg-gray-50 border border-gray-300 rounded-xl text-gray-900"
+                    placeholder="ਪਿਤਾ ਦਾ ਨਾਮ..."
                   />
                 </div>
                 <div>
-                  <label className="block text-gray-600 font-semibold mb-1">ਪਿੰਡ / ਪਤਾ:</label>
+                  <label className="block text-gray-700 font-bold mb-1">ਪਿੰਡ (Village):</label>
                   <input
                     type="text"
                     value={editingEntry.address_village || editingEntry.village || ''}
                     onChange={(e) => setEditingEntry({ ...editingEntry, address_village: e.target.value, village: e.target.value })}
                     className="w-full p-2 bg-gray-50 border border-gray-300 rounded-xl text-gray-900"
+                    placeholder="ਪਿੰਡ ਦਾ ਨਾਮ..."
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-700 font-bold mb-1">ਮੋਬਾਈਲ ਨੰਬਰ (Mobile):</label>
+                  <input
+                    type="text"
+                    value={editingEntry.mobile || ''}
+                    onChange={(e) => setEditingEntry({ ...editingEntry, mobile: e.target.value })}
+                    className="w-full p-2 bg-gray-50 border border-gray-300 rounded-xl font-mono text-gray-900"
+                    placeholder="10-ਅੰਕੀ ਮੋਬਾਈਲ..."
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-4 gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+              {/* Row 3: Variety & Crop Type */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-gray-600 font-semibold mb-1">ਨਵਾਂ ਜੂਟ:</label>
-                  <input
-                    type="number"
-                    value={editingEntry.new_jute_bags || 0}
+                  <label className="block text-gray-700 font-bold mb-1">ਫਸਲ ਕਿਸਮ (Variety):</label>
+                  <select
+                    value={editingEntry.crop_variety || 'PR-126'}
+                    onChange={(e) => setEditingEntry({ ...editingEntry, crop_variety: e.target.value })}
+                    className="w-full p-2 bg-gray-50 border border-gray-300 rounded-xl font-bold text-gray-900"
+                  >
+                    <option value="PR-126">PR-126</option>
+                    <option value="110">110</option>
+                    <option value="Hybrid">Hybrid</option>
+                    <option value="PR-131">PR-131</option>
+                    <option value="PR-130">PR-130</option>
+                    <option value="PR-128">PR-128</option>
+                    <option value="Pusa 44">Pusa 44</option>
+                    <option value="1509 Basmati">1509 Basmati</option>
+                    <option value="1121 Basmati">1121 Basmati</option>
+                    <option value="Paddy Grade A">Paddy Grade A</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-gray-700 font-bold mb-1">ਭਰਤੀ / ਪੈਕਿੰਗ (Kg):</label>
+                  <select
+                    value={editingEntry.bag_packing_kg || 37.5}
                     onChange={(e) => {
-                      const n = Number(e.target.value) || 0;
-                      const o = editingEntry.old_jute_bags || 0;
-                      setEditingEntry({ ...editingEntry, new_jute_bags: n, total_bags: n + o });
+                      const p = Number(e.target.value) || 37.5;
+                      const tot = Number(editingEntry.total_bags || 0);
+                      const wt = Number(((tot * p) / 100).toFixed(2));
+                      const rate = editingEntry.rate_per_quintal || 2461;
+                      const amt = Number((wt * rate).toFixed(2));
+                      setEditingEntry({ ...editingEntry, bag_packing_kg: p, weight_quintals: wt, total_amount: amt, net_payable: amt });
                     }}
-                    className="w-full p-1.5 bg-white border border-emerald-300 rounded font-mono font-bold"
-                  />
-                </div>
-                <div>
-                  <label className="block text-gray-600 font-semibold mb-1">ਪੁਰਾਣਾ ਜੂਟ:</label>
-                  <input
-                    type="number"
-                    value={editingEntry.old_jute_bags || 0}
-                    onChange={(e) => {
-                      const o = Number(e.target.value) || 0;
-                      const n = editingEntry.new_jute_bags || 0;
-                      setEditingEntry({ ...editingEntry, old_jute_bags: o, total_bags: n + o });
-                    }}
-                    className="w-full p-1.5 bg-white border border-amber-300 rounded font-mono font-bold"
-                  />
-                </div>
-                <div>
-                  <label className="block text-gray-600 font-semibold mb-1">ਵਜ਼ਨ Qtl:</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={editingEntry.weight_quintals}
-                    onChange={(e) => setEditingEntry({ ...editingEntry, weight_quintals: Number(e.target.value) || 0 })}
-                    className="w-full p-1.5 bg-white border border-gray-300 rounded font-mono font-bold text-emerald-900"
-                  />
-                </div>
-                <div>
-                  <label className="block text-gray-600 font-semibold mb-1">ਰੇਟ ₹:</label>
-                  <input
-                    type="number"
-                    value={editingEntry.rate_per_quintal}
-                    onChange={(e) => setEditingEntry({ ...editingEntry, rate_per_quintal: Number(e.target.value) || 2461 })}
-                    className="w-full p-1.5 bg-white border border-blue-400 rounded font-mono font-bold text-blue-900"
-                  />
+                    className="w-full p-2 bg-gray-50 border border-gray-300 rounded-xl font-bold text-gray-900 font-mono"
+                  >
+                    <option value={37.5}>37.5 Kg (ਸਰਕਾਰੀ ਮਾਨਤਾ ਪ੍ਰਾਪਤ ਭਰਤੀ)</option>
+                    <option value={50}>50.0 Kg</option>
+                  </select>
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-gray-200 flex items-center justify-end gap-2">
+              {/* Row 4: Bags & Weight & Rate & Gross Amount Calculation */}
+              <div className="p-4 bg-amber-50/80 border-2 border-amber-300 rounded-2xl space-y-3">
+                <div className="text-xs font-bold text-amber-950 flex items-center justify-between">
+                  <span>ਬਾਰਦਾਨਾ, ਵਜ਼ਨ ਅਤੇ ਸਰਕਾਰੀ ਰੇਟ ਹਿਸਾਬ (Bags, Weight & Amount Calculation):</span>
+                  <span className="font-mono text-emerald-900 font-black">
+                    ਕੁੱਲ ਰਕਮ: ₹{Number(editingEntry.total_amount || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">ਨਵਾਂ ਜੂਟ (New A):</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={editingEntry.new_jute_bags || 0}
+                      onChange={(e) => {
+                        const n = Number(e.target.value) || 0;
+                        const o = editingEntry.old_jute_bags || 0;
+                        const tot = n + o;
+                        const packing = editingEntry.bag_packing_kg || 37.5;
+                        const wt = Number(((tot * packing) / 100).toFixed(2));
+                        const rate = editingEntry.rate_per_quintal || 2461;
+                        const amt = Number((wt * rate).toFixed(2));
+                        setEditingEntry({ ...editingEntry, new_jute_bags: n, total_bags: tot, weight_quintals: wt, total_amount: amt, net_payable: amt });
+                      }}
+                      className="w-full p-2 bg-white border border-emerald-400 rounded-xl font-mono font-bold text-gray-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">ਪੁਰਾਣਾ ਜੂਟ (Old B):</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={editingEntry.old_jute_bags || 0}
+                      onChange={(e) => {
+                        const o = Number(e.target.value) || 0;
+                        const n = editingEntry.new_jute_bags || 0;
+                        const tot = n + o;
+                        const packing = editingEntry.bag_packing_kg || 37.5;
+                        const wt = Number(((tot * packing) / 100).toFixed(2));
+                        const rate = editingEntry.rate_per_quintal || 2461;
+                        const amt = Number((wt * rate).toFixed(2));
+                        setEditingEntry({ ...editingEntry, old_jute_bags: o, total_bags: tot, weight_quintals: wt, total_amount: amt, net_payable: amt });
+                      }}
+                      className="w-full p-2 bg-white border border-amber-400 rounded-xl font-mono font-bold text-gray-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">ਕੁੱਲ ਬੋਰੀਆਂ (Total):</label>
+                    <div className="w-full p-2 bg-gray-100 border border-gray-300 rounded-xl font-mono font-black text-gray-900 text-sm">
+                      {editingEntry.total_bags || 0} Bags
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">ਵਜ਼ਨ Qtl (Weight):</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={editingEntry.weight_quintals || 0}
+                      onChange={(e) => {
+                        const wt = Number(e.target.value) || 0;
+                        const rate = editingEntry.rate_per_quintal || 2461;
+                        const amt = Number((wt * rate).toFixed(2));
+                        setEditingEntry({ ...editingEntry, weight_quintals: wt, total_amount: amt, net_payable: amt });
+                      }}
+                      className="w-full p-2 bg-white border border-emerald-400 rounded-xl font-mono font-black text-emerald-950"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">MSP ਰੇਟ ₹:</label>
+                    <input
+                      type="number"
+                      value={editingEntry.rate_per_quintal || 2461}
+                      onChange={(e) => {
+                        const r = Number(e.target.value) || 2461;
+                        const amt = Number(((editingEntry.weight_quintals || 0) * r).toFixed(2));
+                        setEditingEntry({ ...editingEntry, rate_per_quintal: r, total_amount: amt, net_payable: amt });
+                      }}
+                      className="w-full p-2 bg-white border border-blue-400 rounded-xl font-mono font-black text-blue-950"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Form Buttons */}
+              <div className="pt-3 border-t border-gray-200 flex items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setEditingEntry(null)}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-100 transition-colors"
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-100 transition-colors cursor-pointer"
                 >
                   ਰੱਦ ਕਰੋ
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-xl font-bold shadow-md"
+                  className="px-6 py-2.5 bg-blue-700 hover:bg-blue-800 text-white rounded-xl font-bold shadow-md transition-all active:scale-95 cursor-pointer flex items-center gap-2"
                 >
-                  ਸੋਧ ਸੇਵ ਕਰੋ (Update 100%)
+                  <Save className="w-4 h-4" />
+                  <span>ਸੋਧ ਸੇਵ ਕਰੋ (Save 100% Full Edit)</span>
                 </button>
               </div>
-
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 2. 🌟 BATCH / BULK DATE EDITOR MODAL (ਇੱਕੋ ਮਿਤੀ ਦੀਆਂ ਸਾਰੀਆਂ ਐਂਟਰੀਆਂ ਇੱਕ ਵਾਰ ਵਿੱਚ ਸੋਧੋ) */}
+      {isBatchDateEditOpen && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl border border-gray-300 overflow-hidden my-auto max-h-[95vh] flex flex-col animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="p-4 bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-800 rounded-xl text-amber-300">
+                  <Edit3 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-bold flex items-center gap-2">
+                    <span>ਮਿਤੀ {batchEditDate.split('-').reverse().join('/')} ਦੀਆਂ ਸਾਰੀਆਂ ਐਂਟਰੀਆਂ ਸੋਧੋ (Bulk Edit Date Batch)</span>
+                    <span className="text-xs bg-amber-400 text-blue-950 px-2 py-0.5 rounded-full font-mono font-bold">
+                      {batchEditRows.length} ਕਿਸਾਨ ਐਂਟਰੀਆਂ
+                    </span>
+                  </h3>
+                  <p className="text-xs text-blue-200">
+                    ਇੱਥੋਂ ਤੁਸੀਂ ਇਸ ਮਿਤੀ ਦੀ ਹਰੇਕ ਕਿਸਾਨ ਐਂਟਰੀ ਦੇ ਬਾਰਦਾਨੇ, ਵਜ਼ਨ, ਰੇਟ ਅਤੇ ਏਜੰਸੀ ਨੂੰ ਇੱਕੋ ਸਮੇਂ ਸੋਧ ਸਕਦੇ ਹੋ।
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsBatchDateEditOpen(false)}
+                className="text-gray-300 hover:text-white p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Quick Bulk Action Bar (ਤੁਰੰਤ ਸਾਰੀਆਂ ਐਂਟਰੀਆਂ 'ਤੇ ਲਾਗੂ ਕਰੋ) */}
+            <div className="p-3 bg-indigo-50/70 border-b border-indigo-200 shrink-0 text-xs">
+              <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-indigo-100">
+                <span className="font-bold text-indigo-950 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>ਤੁਰੰਤ ਸਾਰੀਆਂ ਐਂਟਰੀਆਂ 'ਤੇ ਲਾਗੂ ਕਰੋ (Apply Bulk Settings to All Rows):</span>
+                </span>
+                <span className="text-[11px] text-gray-500 italic">
+                  ਕਿਸੇ ਵੀ ਡ੍ਰੌਪਡਾਊਨ ਵਿੱਚੋਂ ਚੁਣ ਕੇ 'ਲਾਗੂ ਕਰੋ' ਦਬਾਓ
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 pt-2">
+                {/* 1. Bulk Agency */}
+                <div className="flex items-center gap-1">
+                  <select
+                    value={bulkAgencyToApply}
+                    onChange={(e) => setBulkAgencyToApply(e.target.value)}
+                    className="flex-1 p-1.5 bg-white border border-gray-300 rounded-lg text-xs font-semibold"
+                  >
+                    <option value="">-- ਸਾਰਿਆਂ ਲਈ ਏਜੰਸੀ ਚੁਣੋ --</option>
+                    <option value="Pungrain (ਪਨਗਰੇਨ)">Pungrain (ਪਨਗਰੇਨ)</option>
+                    <option value="Markfed (ਮਾਰਕਫੈੱਡ)">Markfed (ਮਾਰਕਫੈੱਡ)</option>
+                    <option value="Punsup (ਪਨਸਪ)">Punsup (ਪਨਸਪ)</option>
+                    <option value="PSWC (ਵੇਅਰਹਾਊਸ)">PSWC (ਵੇਅਰਹਾਊਸ)</option>
+                    <option value="FCI (ਭਾਰਤੀ ਖੁਰਾਕ ਨਿਗਮ)">FCI (ਭਾਰਤੀ ਖੁਰਾਕ ਨਿਗਮ)</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyBulkAgencyToDateRows(bulkAgencyToApply)}
+                    disabled={!bulkAgencyToApply}
+                    className="px-2 py-1.5 bg-indigo-700 hover:bg-indigo-800 disabled:opacity-50 text-white rounded-lg font-bold text-[11px] cursor-pointer"
+                  >
+                    ਲਾਗੂ ਕਰੋ
+                  </button>
+                </div>
+
+                {/* 2. Bulk Mandi */}
+                <div className="flex items-center gap-1">
+                  <select
+                    value={bulkMandiToApply}
+                    onChange={(e) => setBulkMandiToApply(e.target.value)}
+                    className="flex-1 p-1.5 bg-white border border-gray-300 rounded-lg text-xs font-semibold"
+                  >
+                    <option value="">-- ਸਾਰਿਆਂ ਲਈ ਮੰਡੀ ਚੁਣੋ --</option>
+                    {MANDI_LOCATIONS.map((loc) => (
+                      <option key={loc} value={loc}>{loc}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyBulkMandiToDateRows(bulkMandiToApply)}
+                    disabled={!bulkMandiToApply}
+                    className="px-2 py-1.5 bg-indigo-700 hover:bg-indigo-800 disabled:opacity-50 text-white rounded-lg font-bold text-[11px] cursor-pointer"
+                  >
+                    ਲਾਗੂ ਕਰੋ
+                  </button>
+                </div>
+
+                {/* 3. Bulk Firm */}
+                <div className="flex items-center gap-1">
+                  <select
+                    value={bulkFirmToApply}
+                    onChange={(e) => setBulkFirmToApply(e.target.value)}
+                    className="flex-1 p-1.5 bg-white border border-gray-300 rounded-lg text-xs font-semibold"
+                  >
+                    <option value="">-- ਸਾਰਿਆਂ ਲਈ ਫਰਮ ਚੁਣੋ --</option>
+                    {ARHTIA_FIRMS.map((f) => (
+                      <option key={f.id} value={f.id}>{f.name}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyBulkFirmToDateRows(bulkFirmToApply)}
+                    disabled={!bulkFirmToApply}
+                    className="px-2 py-1.5 bg-indigo-700 hover:bg-indigo-800 disabled:opacity-50 text-white rounded-lg font-bold text-[11px] cursor-pointer"
+                  >
+                    ਲਾਗੂ ਕਰੋ
+                  </button>
+                </div>
+
+                {/* 4. Bulk Rate */}
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    value={bulkRateToApply}
+                    onChange={(e) => setBulkRateToApply(Number(e.target.value) || 2461)}
+                    className="flex-1 p-1.5 bg-white border border-gray-300 rounded-lg text-xs font-mono font-bold"
+                    placeholder="ਰੇਟ ₹..."
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleApplyBulkRateToDateRows(bulkRateToApply)}
+                    className="px-2 py-1.5 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg font-bold text-[11px] cursor-pointer"
+                  >
+                    ਲਾਗੂ ਕਰੋ
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Scrollable Editable Table */}
+            <div className="flex-1 overflow-auto p-4">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead className="bg-gray-100 text-gray-700 font-bold sticky top-0 z-10 shadow-xs border-b border-gray-300">
+                  <tr>
+                    <th className="p-2 text-center w-10">#</th>
+                    <th className="p-2 min-w-[140px]">ਕਿਸਾਨ ਦਾ ਨਾਮ (Farmer)</th>
+                    <th className="p-2 min-w-[120px]">ਪਿਤਾ / ਪਤੀ ਦਾ ਨਾਮ</th>
+                    <th className="p-2 min-w-[110px]">ਪਿੰਡ (Village)</th>
+                    <th className="p-2 min-w-[100px]">ਮੋਬਾਈਲ (Mobile)</th>
+                    <th className="p-2 text-center w-20">ਨਵਾਂ (A)</th>
+                    <th className="p-2 text-center w-20">ਪੁਰਾਣਾ (B)</th>
+                    <th className="p-2 text-right w-20">ਕੁੱਲ ਬੋਰੀਆਂ</th>
+                    <th className="p-2 text-right w-24">ਵਜ਼ਨ (Qtl)</th>
+                    <th className="p-2 text-right w-24">ਰੇਟ ₹</th>
+                    <th className="p-2 text-right min-w-[100px]">ਕੁੱਲ ਰਕਮ ₹</th>
+                    <th className="p-2 min-w-[130px]">ਏਜੰਸੀ (Agency)</th>
+                    <th className="p-2 text-center w-12">ਹਟਾਓ</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {batchEditRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={13} className="p-8 text-center text-gray-400">
+                        ਕੋਈ ਐਂਟਰੀ ਮੌਜੂਦ ਨਹੀਂ ਹੈ।
+                      </td>
+                    </tr>
+                  ) : (
+                    batchEditRows.map((row, idx) => (
+                      <tr key={row.id} className="hover:bg-blue-50/30 transition-colors">
+                        <td className="p-2 text-center font-mono font-bold text-gray-500">
+                          {idx + 1}
+                        </td>
+                        <td className="p-1.5">
+                          <input
+                            type="text"
+                            value={row.farmer_name}
+                            onChange={(e) => handleUpdateBatchEditRowField(row.id, 'farmer_name', e.target.value)}
+                            className="w-full p-1.5 bg-white border border-gray-300 rounded-lg text-xs font-bold text-gray-900"
+                            required
+                          />
+                        </td>
+                        <td className="p-1.5">
+                          <input
+                            type="text"
+                            value={row.father_husband_name || ''}
+                            onChange={(e) => handleUpdateBatchEditRowField(row.id, 'father_husband_name', e.target.value)}
+                            className="w-full p-1.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-800"
+                            placeholder="ਪਿਤਾ..."
+                          />
+                        </td>
+                        <td className="p-1.5">
+                          <input
+                            type="text"
+                            value={row.address_village || row.village || ''}
+                            onChange={(e) => {
+                              handleUpdateBatchEditRowField(row.id, 'address_village', e.target.value);
+                              handleUpdateBatchEditRowField(row.id, 'village', e.target.value);
+                            }}
+                            className="w-full p-1.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-800"
+                            placeholder="ਪਿੰਡ..."
+                          />
+                        </td>
+                        <td className="p-1.5">
+                          <input
+                            type="text"
+                            value={row.mobile || ''}
+                            onChange={(e) => handleUpdateBatchEditRowField(row.id, 'mobile', e.target.value)}
+                            className="w-full p-1.5 bg-white border border-gray-200 rounded-lg text-xs font-mono text-gray-800"
+                            placeholder="ਮੋਬਾਈਲ..."
+                          />
+                        </td>
+                        <td className="p-1.5 text-center">
+                          <input
+                            type="number"
+                            min="0"
+                            value={row.new_jute_bags || 0}
+                            onChange={(e) => handleUpdateBatchEditRowField(row.id, 'new_jute_bags', e.target.value)}
+                            className="w-16 p-1.5 bg-emerald-50 border border-emerald-300 rounded-lg text-xs font-mono font-bold text-center"
+                          />
+                        </td>
+                        <td className="p-1.5 text-center">
+                          <input
+                            type="number"
+                            min="0"
+                            value={row.old_jute_bags || 0}
+                            onChange={(e) => handleUpdateBatchEditRowField(row.id, 'old_jute_bags', e.target.value)}
+                            className="w-16 p-1.5 bg-amber-50 border border-amber-300 rounded-lg text-xs font-mono font-bold text-center"
+                          />
+                        </td>
+                        <td className="p-2 text-right font-mono font-bold text-gray-900">
+                          {row.total_bags || 0}
+                        </td>
+                        <td className="p-1.5 text-right">
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={row.weight_quintals || 0}
+                            onChange={(e) => handleUpdateBatchEditRowField(row.id, 'weight_quintals', e.target.value)}
+                            className="w-20 p-1.5 bg-white border border-gray-300 rounded-lg text-xs font-mono font-bold text-right text-emerald-950"
+                          />
+                        </td>
+                        <td className="p-1.5 text-right">
+                          <input
+                            type="number"
+                            value={row.rate_per_quintal || 2461}
+                            onChange={(e) => handleUpdateBatchEditRowField(row.id, 'rate_per_quintal', e.target.value)}
+                            className="w-16 p-1.5 bg-white border border-gray-300 rounded-lg text-xs font-mono font-bold text-right text-blue-950"
+                          />
+                        </td>
+                        <td className="p-2 text-right font-mono font-black text-gray-950">
+                          ₹{Number(row.total_amount || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                        </td>
+                        <td className="p-1.5">
+                          <select
+                            value={row.purchasing_agency || 'Pungrain (ਪਨਗਰੇਨ)'}
+                            onChange={(e) => handleUpdateBatchEditRowField(row.id, 'purchasing_agency', e.target.value)}
+                            className="w-full p-1.5 bg-white border border-gray-200 rounded-lg text-xs font-semibold"
+                          >
+                            <option value="Pungrain (ਪਨਗਰੇਨ)">Pungrain (ਪਨਗਰੇਨ)</option>
+                            <option value="Markfed (ਮਾਰਕਫੈੱਡ)">Markfed (ਮਾਰਕਫੈੱਡ)</option>
+                            <option value="Punsup (ਪਨਸਪ)">Punsup (ਪਨਸਪ)</option>
+                            <option value="PSWC (ਵੇਅਰਹਾਊਸ)">PSWC (ਵੇਅਰਹਾਊਸ)</option>
+                            <option value="FCI (ਭਾਰਤੀ ਖੁਰਾਕ ਨਿਗਮ)">FCI (ਭਾਰਤੀ ਖੁਰਾਕ ਨਿਗਮ)</option>
+                          </select>
+                        </td>
+                        <td className="p-2 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveRowFromBatchEdit(row.id)}
+                            className="p-1 text-gray-400 hover:text-red-600 rounded transition cursor-pointer"
+                            title="ਇਹ ਰੋਅ ਹਟਾਓ"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Live Totals & Action Footer */}
+            <div className="p-4 bg-gray-100 border-t border-gray-300 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+              {/* Batch Totals */}
+              <div className="flex items-center gap-3 text-xs flex-wrap font-mono font-bold">
+                <span className="bg-white px-2.5 py-1 rounded-lg border border-gray-200 text-gray-700">
+                  ਕੁੱਲ ਕਿਸਾਨ: <strong>{batchEditRows.length}</strong>
+                </span>
+                <span className="bg-emerald-100 px-2.5 py-1 rounded-lg border border-emerald-300 text-emerald-950">
+                  ਨਵਾਂ: <strong>{batchEditRows.reduce((s, r) => s + (r.new_jute_bags || 0), 0)}N</strong>
+                </span>
+                <span className="bg-amber-100 px-2.5 py-1 rounded-lg border border-amber-300 text-amber-950">
+                  ਪੁਰਾਣਾ: <strong>{batchEditRows.reduce((s, r) => s + (r.old_jute_bags || 0), 0)}O</strong>
+                </span>
+                <span className="bg-blue-100 px-2.5 py-1 rounded-lg border border-blue-300 text-blue-950">
+                  ਕੁੱਲ ਬੋਰੀਆਂ: <strong>{batchEditRows.reduce((s, r) => s + (r.total_bags || 0), 0)} Bags</strong>
+                </span>
+                <span className="bg-emerald-100 px-2.5 py-1 rounded-lg border border-emerald-300 text-emerald-950">
+                  ਕੁੱਲ ਵਜ਼ਨ: <strong>{batchEditRows.reduce((s, r) => s + (r.weight_quintals || 0), 0).toFixed(2)} Qtl</strong>
+                </span>
+                <span className="bg-purple-100 px-2.5 py-1 rounded-lg border border-purple-300 text-purple-950">
+                  ਕੁੱਲ ਰਕਮ: <strong>₹{batchEditRows.reduce((s, r) => s + (r.total_amount || 0), 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</strong>
+                </span>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsBatchDateEditOpen(false)}
+                  className="px-4 py-2 border border-gray-300 bg-white hover:bg-gray-100 text-gray-700 rounded-xl font-semibold transition cursor-pointer"
+                >
+                  ਰੱਦ ਕਰੋ
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveBatchDateEdit}
+                  className="px-6 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-xl font-bold shadow-md transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
+                >
+                  <Save className="w-4 h-4 text-amber-300" />
+                  <span>ਸਾਰੀਆਂ ਐਂਟਰੀਆਂ ਸੇਵ ਕਰੋ ({batchEditRows.length} Entries)</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

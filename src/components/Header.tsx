@@ -14,6 +14,7 @@ import {
   FileText,
   HelpCircle
 } from 'lucide-react';
+import { PWAInstallNavButton } from './PWAInstallModal';
 
 interface HeaderProps {
   user: User | null;
@@ -30,6 +31,7 @@ interface HeaderProps {
   hasLocalDataToUpload?: boolean;
   onOpenLetterPad?: () => void;
   onOpenAuthTroubleshoot?: () => void;
+  onOpenPwaModal?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -47,6 +49,7 @@ export const Header: React.FC<HeaderProps> = ({
   hasLocalDataToUpload = false,
   onOpenLetterPad,
   onOpenAuthTroubleshoot,
+  onOpenPwaModal,
 }) => {
   const mandiOptions = [
     'Khanna Grain Market (Asia’s Largest)',
@@ -118,6 +121,11 @@ export const Header: React.FC<HeaderProps> = ({
                   Print & PDF
                 </span>
               </button>
+            )}
+
+            {/* In-App PWA Install Button (Android Phone APK / Desktop Web App) */}
+            {onOpenPwaModal && (
+              <PWAInstallNavButton onOpenModal={onOpenPwaModal} />
             )}
 
             {/* Cloud Sync Status Badge */}

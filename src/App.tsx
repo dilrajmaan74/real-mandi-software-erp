@@ -19,6 +19,7 @@ import { JFormModal } from './components/JFormModal';
 import { JsonViewerModal } from './components/JsonViewerModal';
 import { GoogleSheetsModal } from './components/GoogleSheetsModal';
 import { UnauthorizedDomainModal } from './components/UnauthorizedDomainModal';
+import { PWAInstallModal, MandiOfflineIndicator } from './components/PWAInstallModal';
 import { 
   FarmerMaster, 
   CropArrivalEntry, 
@@ -81,6 +82,7 @@ import {
   RefreshCw,
   Smartphone,
   Laptop,
+  Download,
   Trash2
 } from 'lucide-react';
 
@@ -477,6 +479,7 @@ export default function App() {
   const [editingFarmer, setEditingFarmer] = useState<FarmerMaster | null>(null);
   const [selectedJFormEntry, setSelectedJFormEntry] = useState<any | null>(null);
   const [selectedJsonData, setSelectedJsonData] = useState<any | null>(null);
+  const [isPwaModalOpen, setIsPwaModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
   const showToast = useCallback((type: 'success' | 'error' | 'info', text: string) => {
@@ -1033,6 +1036,35 @@ export default function App() {
     showToast('success', `ਖਰੀਦ ਐਂਟਰੀ ${updated.id} ਅੱਪਡੇਟ ਹੋਈ`);
   };
 
+  const handleUpdateBatchPurchases = (updatedList: AgencyPurchaseEntry[]) => {
+    const map = new Map(updatedList.map((e) => [e.id, e]));
+    setAgencyPurchases((prev) => prev.map((e) => map.get(e.id) || e));
+    if (user) {
+      for (const updated of updatedList) {
+        saveAgencyPurchaseToCloud(user.uid, updated).catch(console.error);
+      }
+    }
+    showToast('success', `${updatedList.length} ਖਰੀਦ ਐਂਟਰੀਆਂ ਸਫਲਤਾਪੂਰਵਕ ਅੱਪਡੇਟ ਹੋਈਆਂ।`);
+  };
+
+  const handleDeleteBatchPurchases = (ids: string[]) => {
+    const idSet = new Set(ids);
+    setAgencyPurchases((prev) => prev.filter((e) => !idSet.has(e.id)));
+    if (user) {
+      for (const id of ids) {
+        deleteAgencyPurchaseFromCloud(user.uid, id).catch(console.error);
+      }
+    }
+    if (token && sheetConfig) {
+      for (const id of ids) {
+        deleteAgencyPurchaseFromSheets(token, sheetConfig.spreadsheetId, id).catch((e) =>
+          console.warn('Sheet delete purchase error:', e)
+        );
+      }
+    }
+    showToast('info', `${ids.length} ਖਰੀਦ ਐਂਟਰੀਆਂ ਸਾਫਟਵੇਅਰ ਅਤੇ ਗੂਗਲ ਸ਼ੀਟ ਵਿੱਚੋਂ ਹਟਾਈਆਂ ਗਈਆਂ।`);
+  };
+
   // Lifting Dispatch Handlers
   const handleAddLifting = async (entry: LiftingDispatchEntry) => {
     setLiftingDispatches((prev) => [entry, ...prev]);
@@ -1145,6 +1177,7 @@ export default function App() {
         hasLocalDataToUpload={hasLocalDataToUpload}
         onOpenLetterPad={() => setActiveModule('letterpad')}
         onOpenAuthTroubleshoot={() => setIsUnauthorizedDomainModalOpen(true)}
+        onOpenPwaModal={() => setIsPwaModalOpen(true)}
       />
 
       {/* Main Container */}
@@ -1324,6 +1357,39 @@ export default function App() {
           </div>
         </div>
 
+        {/* Quick App Install Banner (Android APK & Laptop Web App) */}
+        <div className="print:hidden bg-gradient-to-r from-emerald-900 via-teal-900 to-emerald-950 text-white rounded-2xl p-3 sm:p-4 shadow-sm border border-emerald-700/60 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-400 text-emerald-950 flex items-center justify-center font-black shadow-md shrink-0">
+              <Download className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-bold text-xs sm:text-sm text-white">
+                  ਕਿਸਾਨਮਿੱਤਰ ਐਪ ਨੂੰ ਫ਼ੋਨ (APK) ਜਾਂ ਲੈਪਟਾਪ (Desktop App) ਵਜੋਂ ਇੰਸਟਾਲ ਕਰੋ
+                </span>
+                <span className="px-2 py-0.5 bg-amber-400 text-emerald-950 rounded-full font-black text-[10px]">
+                  1-Click Install
+                </span>
+              </div>
+              <p className="text-[11px] text-emerald-200 mt-0.5">
+                ਮੋਬਾਈਲ ਵਿੱਚ ਬਿਨਾਂ ਬ੍ਰਾਊਜ਼ਰ ਤੋਂ ਸਿੱਧੀ ਓਰਿਜਨਲ ਐਪ ਵਾਂਗ ਚੱਲੇਗੀ ਅਤੇ ਲੈਪਟਾਪ ਵਿੱਚ ਡੈਸਕਟਾਪ ਸ਼ਾਰਟਕੱਟ ਬਣ ਜਾਵੇਗਾ।
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={() => setIsPwaModalOpen(true)}
+              className="w-full sm:w-auto px-4 py-2 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 active:scale-95 text-emerald-950 font-black rounded-xl text-xs transition shadow-md cursor-pointer flex items-center justify-center gap-2"
+            >
+              <Smartphone className="w-4 h-4" />
+              <span>ਹੁਣੇ ਇੰਸਟਾਲ ਕਰੋ (Install App)</span>
+            </button>
+          </div>
+        </div>
+
         {/* Toast Alert Banner */}
         {toastMessage && (
           <div
@@ -1430,6 +1496,8 @@ export default function App() {
             onAddEntry={handleAddPurchase}
             onAddBatchPurchases={handleAddBatchPurchases}
             onUpdateEntry={handleUpdatePurchase}
+            onUpdateBatchPurchases={handleUpdateBatchPurchases}
+            onDeleteBatchPurchases={handleDeleteBatchPurchases}
             onDeleteEntry={(id) => {
               if (confirm('ਖਰੀਦ ਐਂਟਰੀ ਹਟਾਉਣੀ ਹੈ?')) {
                 setAgencyPurchases((prev) => prev.filter((e) => e.id !== id));
@@ -1662,6 +1730,15 @@ export default function App() {
         onRetryRedirectLogin={handleLoginRedirect}
         lastError={lastAuthError}
       />
+
+      {/* PWA App Installation Modal (Android APK / Laptop Web App / iOS) */}
+      <PWAInstallModal
+        isOpen={isPwaModalOpen}
+        onClose={() => setIsPwaModalOpen(false)}
+      />
+
+      {/* Mandi Offline Status Indicator */}
+      <MandiOfflineIndicator />
 
     </div>
   );
