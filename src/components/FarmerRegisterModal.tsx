@@ -367,6 +367,21 @@ export const FarmerRegisterModal: React.FC<FarmerRegisterModalProps> = ({
       }
     }
 
+    // Duplicate farmer name + father/village warning
+    const duplicateFarmer = existingFarmers.find(
+      (f) =>
+        f.id !== editingFarmer?.id &&
+        f.name_en.trim().toLowerCase() === nameEn.trim().toLowerCase() &&
+        (f.father_husband_name_en?.trim().toLowerCase() === fatherEn.trim().toLowerCase() ||
+          f.village_en.trim().toLowerCase() === villageEn.trim().toLowerCase())
+    );
+    if (duplicateFarmer) {
+      const confirmDup = window.confirm(
+        `⚠️ ਡੁਪਲੀਕੇਟ ਕਿਸਾਨ ਚੇਤਾਵਨੀ (Duplicate Farmer Warning)!\n\nਇਸ ਨਾਮ (${nameEn}) ਅਤੇ ਪਿੰਡ (${villageEn}) ਦਾ ਕਿਸਾਨ ਪਹਿਲਾਂ ਤੋਂ ਰਜਿਸਟਰਡ ਹੈ (ID: ${duplicateFarmer.id})!\n\nਕੀ ਤੁਸੀਂ ਫਿਰ ਵੀ ਨਵਾਂ ਖਾਤਾ ਬਣਾਉਣਾ ਚਾਹੁੰਦੇ ਹੋ?`
+      );
+      if (!confirmDup) return;
+    }
+
     const farmerToSave: FarmerMaster = {
       id: editingFarmer ? editingFarmer.id : `FR-${Date.now().toString().slice(-6)}`,
       name_en: nameEn.trim(),

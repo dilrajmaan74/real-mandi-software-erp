@@ -12,7 +12,8 @@ import {
   RefreshCw,
   Lock,
   FileText,
-  HelpCircle
+  HelpCircle,
+  Copy
 } from 'lucide-react';
 import { PWAInstallNavButton } from './PWAInstallModal';
 
@@ -32,6 +33,8 @@ interface HeaderProps {
   onOpenLetterPad?: () => void;
   onOpenAuthTroubleshoot?: () => void;
   onOpenPwaModal?: () => void;
+  onOpenDuplicateCleaner?: () => void;
+  duplicateCount?: number;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -50,6 +53,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenLetterPad,
   onOpenAuthTroubleshoot,
   onOpenPwaModal,
+  onOpenDuplicateCleaner,
+  duplicateCount = 0,
 }) => {
   const mandiOptions = [
     'Khanna Grain Market (Asia’s Largest)',
@@ -120,6 +125,28 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className="bg-emerald-950 text-amber-300 text-[10px] px-1 py-0.2 rounded font-bold">
                   Print & PDF
                 </span>
+              </button>
+            )}
+
+            {/* Global Duplicate Data Cleaner Button */}
+            {onOpenDuplicateCleaner && (
+              <button
+                type="button"
+                onClick={onOpenDuplicateCleaner}
+                className={`flex items-center gap-1.5 font-bold px-3 py-1.5 rounded-lg text-xs transition-all shadow-sm cursor-pointer ${
+                  duplicateCount > 0
+                    ? 'bg-rose-600 hover:bg-rose-500 text-white animate-pulse'
+                    : 'bg-emerald-900/80 hover:bg-emerald-800 text-emerald-100 border border-emerald-700/60'
+                }`}
+                title="ਸਾਫਟਵੇਅਰ ਵਿੱਚੋਂ ਡੁਪਲੀਕੇਟ ਐਂਟਰੀਆਂ ਚੈੱਕ ਅਤੇ ਸਾਫ਼ ਕਰੋ"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                <span>ਡੁਪਲੀਕੇਟ ਸਾਫ਼ ਕਰੋ</span>
+                {duplicateCount > 0 && (
+                  <span className="bg-white text-rose-700 text-[10px] px-1.5 py-0.2 rounded-full font-black">
+                    {duplicateCount}
+                  </span>
+                )}
               </button>
             )}
 

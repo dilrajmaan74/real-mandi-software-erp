@@ -5,9 +5,28 @@ import path from 'path';
 import { GoogleGenAI, Type } from '@google/genai';
 
 dotenv.config();
+process.env.DISABLE_HMR = 'true';
 
 const isProduction = process.env.NODE_ENV === 'production';
-const PORT = parseInt(process.env.PORT || '3000', 10);
+
+// Parse CLI flags like --port 3000 and --host 0.0.0.0
+const cliArgs = process.argv.slice(2);
+let cliPort: number | undefined;
+let cliHost: string | undefined;
+
+for (let i = 0; i < cliArgs.length; i++) {
+  if (cliArgs[i] === '--port' && cliArgs[i + 1]) {
+    cliPort = parseInt(cliArgs[i + 1], 10);
+    i++;
+  } else if (cliArgs[i] === '--host' && cliArgs[i + 1]) {
+    cliHost = cliArgs[i + 1];
+    i++;
+  }
+}
+
+// Dev server must run on port 3000
+const PORT = cliPort || (isProduction && process.env.PORT ? parseInt(process.env.PORT, 10) : 3000);
+const HOST = cliHost || '0.0.0.0';
 
 async function startServer() {
   const app = express();
@@ -278,7 +297,10 @@ Always output valid JSON conforming strictly to the requested schema.`;
   // Start Vite in dev mode or serve static files in production
   if (!isProduction) {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: false,
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
@@ -289,8 +311,12 @@ Always output valid JSON conforming strictly to the requested schema.`;
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`KisanMitra ERP server is running on http://0.0.0.0:${PORT}`);
+  const server = app.listen(PORT, HOST, () => {
+    console.log(`Punjabi Mandi Software server is running on http://${HOST}:${PORT}`);
+  });
+
+  server.on('error', (err: any) => {
+    console.error('Server error:', err);
   });
 }
 

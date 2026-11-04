@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { User } from 'firebase/auth';
 import { Header } from './components/Header';
 import { FarmerDirectory } from './components/FarmerDirectory';
@@ -20,6 +20,8 @@ import { JsonViewerModal } from './components/JsonViewerModal';
 import { GoogleSheetsModal } from './components/GoogleSheetsModal';
 import { UnauthorizedDomainModal } from './components/UnauthorizedDomainModal';
 import { PWAInstallModal, MandiOfflineIndicator } from './components/PWAInstallModal';
+import { DuplicateCleanerModal } from './components/DuplicateCleanerModal';
+import { findDuplicateArrivals, findDuplicatePurchases, findDuplicateFarmers } from './lib/duplicates';
 import { 
   FarmerMaster, 
   CropArrivalEntry, 
@@ -480,7 +482,20 @@ export default function App() {
   const [selectedJFormEntry, setSelectedJFormEntry] = useState<any | null>(null);
   const [selectedJsonData, setSelectedJsonData] = useState<any | null>(null);
   const [isPwaModalOpen, setIsPwaModalOpen] = useState(false);
+  const [isDuplicateCleanerOpen, setIsDuplicateCleanerOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+
+  // Duplicate Detection across entire software (Arrivals, Purchases, Farmers)
+  const duplicateArrivalGroups = useMemo(() => findDuplicateArrivals(cropArrivals), [cropArrivals]);
+  const duplicatePurchaseGroups = useMemo(() => findDuplicatePurchases(agencyPurchases), [agencyPurchases]);
+  const duplicateFarmerGroups = useMemo(() => findDuplicateFarmers(farmers), [farmers]);
+
+  const totalDuplicateCount = useMemo(() => {
+    const a = duplicateArrivalGroups.reduce((sum: number, g) => sum + g.duplicates.length, 0);
+    const p = duplicatePurchaseGroups.reduce((sum: number, g) => sum + g.duplicates.length, 0);
+    const f = duplicateFarmerGroups.reduce((sum: number, g) => sum + g.duplicates.length, 0);
+    return a + p + f;
+  }, [duplicateArrivalGroups, duplicatePurchaseGroups, duplicateFarmerGroups]);
 
   const showToast = useCallback((type: 'success' | 'error' | 'info', text: string) => {
     setToastMessage({ type, text });
@@ -1065,6 +1080,42 @@ export default function App() {
     showToast('info', `${ids.length} ਖਰੀਦ ਐਂਟਰੀਆਂ ਸਾਫਟਵੇਅਰ ਅਤੇ ਗੂਗਲ ਸ਼ੀਟ ਵਿੱਚੋਂ ਹਟਾਈਆਂ ਗਈਆਂ।`);
   };
 
+  const handleDeleteBatchArrivals = (ids: string[]) => {
+    const idSet = new Set(ids);
+    setCropArrivals((prev) => prev.filter((e) => !idSet.has(e.id)));
+    if (user) {
+      for (const id of ids) {
+        deleteCropArrivalFromCloud(user.uid, id).catch(console.error);
+      }
+    }
+    if (token && sheetConfig) {
+      for (const id of ids) {
+        deleteCropArrivalFromSheets(token, sheetConfig.spreadsheetId, id).catch((e) =>
+          console.warn('Sheet delete arrival error:', e)
+        );
+      }
+    }
+    showToast('info', `${ids.length} ਆਵਕ ਐਂਟਰੀਆਂ ਸਾਫਟਵੇਅਰ ਅਤੇ ਗੂਗਲ ਸ਼ੀਟ ਵਿੱਚੋਂ ਹਟਾਈਆਂ ਗਈਆਂ।`);
+  };
+
+  const handleDeleteBatchFarmers = (ids: string[]) => {
+    const idSet = new Set(ids);
+    setFarmers((prev) => prev.filter((f) => !idSet.has(f.id)));
+    if (user) {
+      for (const id of ids) {
+        deleteFarmerFromCloud(user.uid, id).catch(console.error);
+      }
+    }
+    if (token && sheetConfig) {
+      for (const id of ids) {
+        deleteFarmerFromSheets(token, sheetConfig.spreadsheetId, id).catch((e) =>
+          console.warn('Sheet delete farmer error:', e)
+        );
+      }
+    }
+    showToast('info', `${ids.length} ਕਿਸਾਨ ਪ੍ਰੋਫਾਈਲਾਂ ਸਾਫਟਵੇਅਰ ਅਤੇ ਗੂਗਲ ਸ਼ੀਟ ਵਿੱਚੋਂ ਹਟਾਈਆਂ ਗਈਆਂ।`);
+  };
+
   // Lifting Dispatch Handlers
   const handleAddLifting = async (entry: LiftingDispatchEntry) => {
     setLiftingDispatches((prev) => [entry, ...prev]);
@@ -1178,6 +1229,8 @@ export default function App() {
         onOpenLetterPad={() => setActiveModule('letterpad')}
         onOpenAuthTroubleshoot={() => setIsUnauthorizedDomainModalOpen(true)}
         onOpenPwaModal={() => setIsPwaModalOpen(true)}
+        onOpenDuplicateCleaner={() => setIsDuplicateCleanerOpen(true)}
+        duplicateCount={totalDuplicateCount}
       />
 
       {/* Main Container */}
@@ -1454,6 +1507,7 @@ export default function App() {
                 showToast('info', 'ਆਵਕ ਐਂਟਰੀ ਸਾਫਟਵੇਅਰ ਅਤੇ ਗੂਗਲ ਸ਼ੀਟ ਵਿੱਚੋਂ ਹਟਾਈ ਗਈ।');
               }
             }}
+            onDeleteBatchEntries={handleDeleteBatchArrivals}
             registeredFarmers={farmers}
             agencyPurchases={agencyPurchases}
             token={token}
@@ -1735,6 +1789,18 @@ export default function App() {
       <PWAInstallModal
         isOpen={isPwaModalOpen}
         onClose={() => setIsPwaModalOpen(false)}
+      />
+
+      {/* Global Duplicate Data Cleaner Modal (ਆਵਕ, ਖਰੀਦ ਅਤੇ ਕਿਸਾਨ ਸੂਚੀ) */}
+      <DuplicateCleanerModal
+        isOpen={isDuplicateCleanerOpen}
+        onClose={() => setIsDuplicateCleanerOpen(false)}
+        cropArrivals={cropArrivals}
+        agencyPurchases={agencyPurchases}
+        farmers={farmers}
+        onDeleteArrivals={handleDeleteBatchArrivals}
+        onDeletePurchases={handleDeleteBatchPurchases}
+        onDeleteFarmers={handleDeleteBatchFarmers}
       />
 
       {/* Mandi Offline Status Indicator */}

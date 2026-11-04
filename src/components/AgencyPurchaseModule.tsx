@@ -30,10 +30,12 @@ import {
   Save,
   AlertTriangle,
   FileText,
-  RefreshCw
+  RefreshCw,
+  Copy
 } from 'lucide-react';
 import { appendAgencyPurchaseToSheets } from '../lib/sheets';
 import { AllEntryPdfModal } from './AllEntryPdfModal';
+import { findDuplicatePurchases, checkPurchaseDuplicate } from '../lib/duplicates';
 
 export interface SelectableFarmerItem {
   uniqueKey: string;
@@ -185,6 +187,29 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
   const [quickNewBags, setQuickNewBags] = useState<number>(0);
   const [quickOldBags, setQuickOldBags] = useState<number>(0);
 
+  // Duplicate Detection & Filtering States
+  const duplicatePurchaseGroups = useMemo(() => findDuplicatePurchases(entries), [entries]);
+  const duplicatePurchaseCount = duplicatePurchaseGroups.reduce((sum, g) => sum + g.duplicates.length, 0);
+  const duplicatePurchaseIdSet = useMemo(() => {
+    return new Set(duplicatePurchaseGroups.flatMap((g) => g.duplicates.map((d) => d.id)));
+  }, [duplicatePurchaseGroups]);
+  const [showOnlyDuplicates, setShowOnlyDuplicates] = useState(false);
+
+  const handleDeleteAllDuplicatePurchases = () => {
+    const ids = duplicatePurchaseGroups.flatMap((g) => g.duplicates.map((d) => d.id));
+    if (ids.length === 0) {
+      alert('ਕੋਈ ਡੁਪਲੀਕੇਟ ਖਰੀਦ ਐਂਟਰੀ ਨਹੀਂ ਹੈ।');
+      return;
+    }
+    if (confirm(`ਕੀ ਤੁਸੀਂ ਸਾਰੀਆਂ ${ids.length} ਡੁਪਲੀਕੇਟ ਖਰੀਦ ਕਾਪੀਆਂ ਨੂੰ ਇੱਕ ਕਲਿੱਕ ਵਿੱਚ ਹਟਾਉਣਾ ਚਾਹੁੰਦੇ ਹੋ?\n(ਮੂਲ ਖਰੀਦ ਐਂਟਰੀ ਸੁਰੱਖਿਅਤ ਰਹੇਗੀ)`)) {
+      if (onDeleteBatchPurchases) {
+        onDeleteBatchPurchases(ids);
+      } else {
+        ids.forEach((id) => onDeleteEntry(id));
+      }
+    }
+  };
+
   // Filtered farmers in selection modal
   const filteredFarmerChoices = useMemo(() => {
     const q = farmerSearch.toLowerCase().trim();
@@ -327,6 +352,30 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
       return;
     }
 
+    // Check for duplicate purchases before saving
+    const duplicateWarnings: string[] = [];
+    for (const row of batchRows) {
+      const fName = row.farmerItem.nameEn || row.farmerItem.displayName;
+      const dup = checkPurchaseDuplicate(
+        {
+          farmer_name: fName,
+          date,
+          total_bags: row.totalBags,
+          purchasing_agency: agency,
+        },
+        entries
+      );
+      if (dup) {
+        duplicateWarnings.push(`• ${fName} (ਮਿਤੀ: ${date}, ਥੈਲੇ: ${row.totalBags}, ਏਜੰਸੀ: ${agency})`);
+      }
+    }
+    if (duplicateWarnings.length > 0) {
+      const confirmed = window.confirm(
+        `⚠️ ਡੁਪਲੀਕੇਟ ਖਰੀਦ ਚੇਤਾਵਨੀ (Duplicate Purchase Warning)!\n\nਹੇਠ ਲਿਖੀਆਂ ਐਂਟਰੀਆਂ ਪਹਿਲਾਂ ਤੋਂ ਹੀ ਸਿਸਟਮ ਵਿੱਚ ਮੌਜੂਦ ਹਨ:\n${duplicateWarnings.slice(0, 5).join('\n')}${duplicateWarnings.length > 5 ? `\n...ਅਤੇ ਹੋਰ ${duplicateWarnings.length - 5}` : ''}\n\nਕੀ ਤੁਸੀਂ ਫਿਰ ਵੀ ਇਹ ਡੁਪਲੀਕੇਟ ਐਂਟਰੀਆਂ ਸੇਵ ਕਰਨੀਆਂ ਚਾਹੁੰਦੇ ਹੋ?`
+      );
+      if (!confirmed) return;
+    }
+
     const activeFirm = ARHTIA_FIRMS.find((f) => f.id === selectedFirmId) || ARHTIA_FIRMS[0];
     const generatedEntries: AgencyPurchaseEntry[] = batchRows.map((row, index) => {
       const item = row.farmerItem;
@@ -428,6 +477,22 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
     if (!singleFarmerName.trim()) {
       alert('ਕਿਸਾਨ ਦਾ ਨਾਮ ਦਰਜ ਕਰੋ');
       return;
+    }
+
+    const dupCheck = checkPurchaseDuplicate(
+      {
+        farmer_name: singleFarmerName.trim(),
+        date,
+        total_bags: singleTotalBags,
+        purchasing_agency: agency,
+      },
+      entries
+    );
+    if (dupCheck) {
+      const proceed = window.confirm(
+        `⚠️ ਡੁਪਲੀਕੇਟ ਖਰੀਦ ਚੇਤਾਵਨੀ (Duplicate Purchase Warning)!\n\nਕਿਸਾਨ "${singleFarmerName.trim()}" ਦੀ ਮਿਤੀ ${date} ਨੂੰ ${singleTotalBags} ਥੈਲੇ ਅਤੇ ਏਜੰਸੀ "${agency}" ਵਾਲੀ ਐਂਟਰੀ ਪਹਿਲਾਂ ਤੋਂ ਮੌਜੂਦ ਹੈ!\n\nਕੀ ਤੁਸੀਂ ਦੁਬਾਰਾ ਸੇਵ ਕਰਨਾ ਚਾਹੁੰਦੇ ਹੋ?`
+      );
+      if (!proceed) return;
     }
 
     const activeFirm = ARHTIA_FIRMS.find((f) => f.id === selectedFirmId) || ARHTIA_FIRMS[0];
@@ -683,7 +748,8 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
     const matchMandi = mandiFilter === 'All' || e.mandi_name?.includes(mandiFilter);
     const matchAgency = agencyFilter === 'All' || e.purchasing_agency.includes(agencyFilter);
     const matchDate = selectedDateTab === 'All' || e.date === selectedDateTab;
-    return matchSearch && matchFirm && matchMandi && matchAgency && matchDate;
+    const matchDuplicate = !showOnlyDuplicates || duplicatePurchaseIdSet.has(e.id);
+    return matchSearch && matchFirm && matchMandi && matchAgency && matchDate && matchDuplicate;
   });
 
   // Analytical Charts by Firm
@@ -1151,6 +1217,35 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
             <option value="PSWC">PSWC (ਵੇਅਰਹਾਊਸ)</option>
             <option value="FCI">FCI (ਭਾਰਤੀ ਖੁਰਾਕ ਨਿਗਮ)</option>
           </select>
+
+          {/* Duplicate Purchase Detection & Clean Buttons */}
+          {duplicatePurchaseCount > 0 && (
+            <div className="flex items-center gap-1.5 ml-auto">
+              <button
+                type="button"
+                onClick={() => setShowOnlyDuplicates(!showOnlyDuplicates)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-xs cursor-pointer ${
+                  showOnlyDuplicates
+                    ? 'bg-red-600 text-white ring-2 ring-red-400'
+                    : 'bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200'
+                }`}
+                title="ਸਿਰਫ਼ ਡੁਪਲੀਕੇਟ ਖਰੀਦ ਐਂਟਰੀਆਂ ਦੇਖੋ"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                <span>ਸਿਰਫ਼ ਡੁਪਲੀਕੇਟ ({duplicatePurchaseCount})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDeleteAllDuplicatePurchases}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 active:scale-95 text-white rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
+                title="ਸਾਰੀਆਂ ਡੁਪਲੀਕੇਟ ਖਰੀਦ ਕਾਪੀਆਂ ਹਟਾਓ (ਮੂਲ ਐਂਟਰੀ ਸੁਰੱਖਿਅਤ ਰਹੇਗੀ)"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>ਡੁਪਲੀਕੇਟ ਸਾਫ਼ ਕਰੋ ({duplicatePurchaseCount})</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1318,9 +1413,17 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
               filteredEntries.map((item) => {
                 // Show ONLY single selected farmer name
                 const displayedFarmerName = item.farmer_name || item.billed_to_name;
+                const isDuplicate = duplicatePurchaseIdSet.has(item.id);
 
                 return (
-                  <tr key={item.id} className="hover:bg-blue-50/20 transition-colors">
+                  <tr
+                    key={item.id}
+                    className={`transition-colors ${
+                      isDuplicate
+                        ? 'bg-red-50/50 hover:bg-red-50 border-l-4 border-l-red-500'
+                        : 'hover:bg-blue-50/20'
+                    }`}
+                  >
                     <td className="py-3 px-3">
                       <div className="font-bold text-gray-900">{item.date}</div>
                       <div className="text-[10px] text-blue-900 font-bold">{item.firm_name || 'JAMMU TRADING CO.'}</div>
@@ -1329,7 +1432,14 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
 
                     {/* ONLY Single Selected Farmer's Name */}
                     <td className="py-3 px-3">
-                      <div className="font-bold text-gray-950 text-sm">{displayedFarmerName}</div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-bold text-gray-950 text-sm">{displayedFarmerName}</span>
+                        {isDuplicate && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 border border-red-300">
+                            <Copy className="w-3 h-3" /> ⚠️ ਡੁਪਲੀਕੇਟ ਕਾਪੀ
+                          </span>
+                        )}
+                      </div>
                       <div className="text-gray-500 text-xs">
                         ਪਿਤਾ: {item.father_husband_name || '-'} • ਪਿੰਡ: {item.address_village || item.village || '-'}
                         {item.mobile ? ` • ਮੋ: ${item.mobile}` : ''}

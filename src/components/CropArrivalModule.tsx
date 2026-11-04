@@ -37,12 +37,14 @@ import {
   Info,
   TrendingUp,
   Printer,
-  FileDown
+  FileDown,
+  Copy
 } from 'lucide-react';
 import { appendCropArrivalToSheets } from '../lib/sheets';
 import { getSavedVillages, registerVillage, VillageItem } from '../lib/villages';
 import { CropArrivalPdfModal } from './CropArrivalPdfModal';
 import { CropArrivalParchiModal } from './CropArrivalParchiModal';
+import { findDuplicateArrivals, checkArrivalDuplicate } from '../lib/duplicates';
 
 interface CropArrivalModuleProps {
   entries: CropArrivalEntry[];
@@ -50,6 +52,7 @@ interface CropArrivalModuleProps {
   onAddBatchEntries?: (entries: CropArrivalEntry[]) => void;
   onUpdateEntry: (entry: CropArrivalEntry) => void;
   onDeleteEntry: (id: string) => void;
+  onDeleteBatchEntries?: (ids: string[]) => void;
   registeredFarmers: FarmerMaster[];
   agencyPurchases?: AgencyPurchaseEntry[];
   token: string | null;
@@ -63,6 +66,7 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
   onAddBatchEntries,
   onUpdateEntry,
   onDeleteEntry,
+  onDeleteBatchEntries,
   registeredFarmers,
   agencyPurchases = [],
   token,
@@ -80,6 +84,29 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
   const [search, setSearch] = useState('');
   const [cropFilter, setCropFilter] = useState('All');
   const [isSyncing, setIsSyncing] = useState<string | null>(null);
+
+  // Duplicate Detection & Filtering States
+  const duplicateArrivalGroups = useMemo(() => findDuplicateArrivals(entries), [entries]);
+  const duplicateArrivalCount = duplicateArrivalGroups.reduce((sum, g) => sum + g.duplicates.length, 0);
+  const duplicateArrivalIdSet = useMemo(() => {
+    return new Set(duplicateArrivalGroups.flatMap((g) => g.duplicates.map((d) => d.id)));
+  }, [duplicateArrivalGroups]);
+  const [showOnlyDuplicates, setShowOnlyDuplicates] = useState(false);
+
+  const handleDeleteAllDuplicateArrivals = () => {
+    const ids = duplicateArrivalGroups.flatMap((g) => g.duplicates.map((d) => d.id));
+    if (ids.length === 0) {
+      alert('ਕੋਈ ਡੁਪਲੀਕੇਟ ਆਵਕ ਐਂਟਰੀ ਨਹੀਂ ਹੈ।');
+      return;
+    }
+    if (confirm(`ਕੀ ਤੁਸੀਂ ਸਾਰੀਆਂ ${ids.length} ਡੁਪਲੀਕੇਟ ਆਵਕ ਕਾਪੀਆਂ ਨੂੰ ਇੱਕ ਕਲਿੱਕ ਵਿੱਚ ਹਟਾਉਣਾ ਚਾਹੁੰਦੇ ਹੋ?\n(ਹਰੇਕ ਡਾਟਾ ਦਾ ਪਹਿਲਾ ਅਸਲੀ ਰਿਕਾਰਡ ਸੁਰੱਖਿਅਤ ਰਹੇਗਾ)`)) {
+      if (onDeleteBatchEntries) {
+        onDeleteBatchEntries(ids);
+      } else {
+        ids.forEach((id) => onDeleteEntry(id));
+      }
+    }
+  };
 
   // Form states for Single Entry (Default Bags set to ZERO 0)
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -280,6 +307,24 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
 
     const currentParchi = parchiNo.trim() || `PR-${Date.now().toString().slice(-4)}`;
 
+    // Duplicate Entry Safeguard: Check if this farmer already has an arrival on this date
+    const duplicateMatch = checkArrivalDuplicate(
+      {
+        farmer_name: farmerName.trim(),
+        date,
+        total_bags_arrived: totalBags,
+        parchi_no: currentParchi,
+      },
+      entries
+    );
+
+    if (duplicateMatch) {
+      const confirmSave = confirm(
+        `⚠️ ਡੁਪਲੀਕੇਟ ਐਂਟਰੀ ਚੇਤਾਵਨੀ (Duplicate Entry Warning)!\n\nਕਿਸਾਨ: ${duplicateMatch.farmer_name}\nਮਿਤੀ: ${duplicateMatch.date ? duplicateMatch.date.split('-').reverse().join('/') : '-'}\nਗੱਟੇ: ${duplicateMatch.total_bags_arrived} Bags\nਪਰਚੀ: ${duplicateMatch.parchi_no || duplicateMatch.gate_pass_no || '-'}\n\nਇਸ ਕਿਸਾਨ ਦੀ ਇਸ ਮਿਤੀ ਲਈ ਇਹੋ ਜਿਹੀ ਆਵਕ ਐਂਟਰੀ ਪਹਿਲਾਂ ਹੀ ਮੌਜੂਦ ਹੈ!\n\nਕੀ ਤੁਸੀਂ ਵਾਕਈ ਇਹ ਨਵੀਂ ਐਂਟਰੀ ਦੁਬਾਰਾ ਸੇਵ ਕਰਨੀ ਚਾਹੁੰਦੇ ਹੋ?`
+      );
+      if (!confirmSave) return;
+    }
+
     const newEntry: CropArrivalEntry = {
       id: `ARR-${Date.now().toString().slice(-5)}`,
       date,
@@ -336,8 +381,27 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
       return;
     }
 
-    const calculatedWeight = Number((((totBags * 37.5) + Number(batchLooseKg || 0)) / 100).toFixed(2));
     const currentParchi = batchParchiNo.trim() || `PR-${Date.now().toString().slice(-4)}`;
+
+    // Duplicate Entry Safeguard for Batch Row
+    const duplicateMatch = checkArrivalDuplicate(
+      {
+        farmer_name: batchFarmerName.trim(),
+        date: batchEntryDate || batchDate,
+        total_bags_arrived: totBags,
+        parchi_no: currentParchi,
+      },
+      [...entries, ...stagedEntries]
+    );
+
+    if (duplicateMatch) {
+      const confirmSave = confirm(
+        `⚠️ ਡੁਪਲੀਕੇਟ ਆਵਕ ਚੇਤਾਵਨੀ (Duplicate Warning)!\n\nਕਿਸਾਨ "${batchFarmerName}" ਦੀ ਮਿਤੀ ${batchEntryDate || batchDate} ਲਈ ${totBags} ਗੱਟਿਆਂ ਦੀ ਐਂਟਰੀ ਪਹਿਲਾਂ ਹੀ ਮੌਜੂਦ ਹੈ।\nਕੀ ਤੁਸੀਂ ਵਾਕਈ ਇਹ ਐਂਟਰੀ ਲਿਸਟ ਵਿੱਚ ਦੁਬਾਰਾ ਜੋੜਨਾ ਚਾਹੁੰਦੇ ਹੋ?`
+      );
+      if (!confirmSave) return;
+    }
+
+    const calculatedWeight = Number((((totBags * 37.5) + Number(batchLooseKg || 0)) / 100).toFixed(2));
 
     const bLaborRate = Number(batchLaborRate) >= 0 ? Number(batchLaborRate) : 8;
     const bSukhiRate = batchEnableSukhiKiti ? Number(batchSukhiKitiRate || 0) : 0;
@@ -524,10 +588,11 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
           e.village.toLowerCase().includes(q) ||
           pNo.toLowerCase().includes(q) ||
           (e.mandi_name && e.mandi_name.toLowerCase().includes(q));
+        if (showOnlyDuplicates && !duplicateArrivalIdSet.has(e.id)) return false;
         const matchCrop = cropFilter === 'All' || e.crop_type.includes(cropFilter) || e.crop_variety.includes(cropFilter);
         return matchSearch && matchCrop;
       });
-  }, [entries, search, cropFilter]);
+  }, [entries, search, cropFilter, showOnlyDuplicates, duplicateArrivalIdSet]);
 
   const totalQuintals = entries.reduce((acc, curr) => acc + (curr.weight_quintals || 0), 0);
   const totalBagsCount = entries.reduce((acc, curr) => acc + (curr.total_bags_arrived || 0), 0);
@@ -1398,6 +1463,36 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
                 <Printer className="w-3.5 h-3.5 text-amber-300" />
                 <span>ਪ੍ਰਿੰਟ / PDF ਲਿਸਟ</span>
               </button>
+
+              {/* Duplicate Filter Toggle */}
+              {duplicateArrivalCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowOnlyDuplicates((prev) => !prev)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer border ${
+                    showOnlyDuplicates
+                      ? 'bg-amber-500 text-stone-950 border-amber-600 shadow-xs'
+                      : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
+                  }`}
+                  title="ਸਿਰਫ਼ ਡੁਪਲੀਕੇਟ ਆਵਕ ਐਂਟਰੀਆਂ ਦੇਖੋ"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>{showOnlyDuplicates ? 'ਸਾਰੀਆਂ ਆਵਕਾਂ' : `ਡੁਪਲੀਕੇਟ ਦੇਖੋ (${duplicateArrivalCount})`}</span>
+                </button>
+              )}
+
+              {/* 1-Click Clean Duplicate Copies Button */}
+              {duplicateArrivalCount > 0 && (
+                <button
+                  type="button"
+                  onClick={handleDeleteAllDuplicateArrivals}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-bold rounded-lg text-xs transition shadow-2xs cursor-pointer animate-pulse"
+                  title="ਸਾਰੀਆਂ ਡੁਪਲੀਕੇਟ ਆਵਕ ਕਾਪੀਆਂ ਇੱਕ ਕਲਿੱਕ ਵਿੱਚ ਹਟਾਓ (ਮੂਲ ਐਂਟਰੀ ਸੁਰੱਖਿਅਤ ਰਹੇਗੀ)"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-amber-300" />
+                  <span>ਡੁਪਲੀਕੇਟ ਸਾਫ਼ ਕਰੋ ({duplicateArrivalCount})</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -1434,8 +1529,17 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
                     const looseKg = item.loose_weight_kg ?? 0;
                     const pNo = item.parchi_no || item.gate_pass_no || 'PR-000';
 
+                    const isDuplicate = duplicateArrivalIdSet.has(item.id);
+
                     return (
-                      <tr key={item.id} className="hover:bg-emerald-50/40 transition-colors">
+                      <tr 
+                        key={item.id} 
+                        className={`transition-colors border-b border-gray-100 ${
+                          isDuplicate 
+                            ? 'bg-red-50/50 hover:bg-red-100/60 border-l-4 border-l-red-500' 
+                            : 'hover:bg-emerald-50/40'
+                        }`}
+                      >
                         <td className="py-3 px-3 font-mono">
                           <div className="font-bold text-emerald-950 flex items-center gap-1">
                             <span className="text-[10px] bg-emerald-100 text-emerald-900 px-1 rounded font-semibold">ਪਰਚੀ</span>
@@ -1451,11 +1555,17 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
                         </td>
 
                         <td className="py-3 px-3">
-                          <div className="font-bold text-gray-900">
-                            {item.farmer_name}
+                          <div className="font-bold text-gray-900 flex items-center gap-1.5 flex-wrap">
+                            <span>{item.farmer_name}</span>
                             {item.father_husband_name && (
-                              <span className="text-gray-600 font-normal ml-1.5 text-xs">
+                              <span className="text-gray-600 font-normal text-xs">
                                 (ਸ/ਓ {item.father_husband_name})
+                              </span>
+                            )}
+                            {isDuplicate && (
+                              <span className="inline-flex items-center gap-1 bg-red-100 text-red-900 border border-red-300 text-[10px] font-black px-2 py-0.5 rounded-full shadow-2xs">
+                                <Copy className="w-3 h-3 text-red-700" />
+                                ਡੁਪਲੀਕੇਟ ਕਾਪੀ
                               </span>
                             )}
                           </div>
