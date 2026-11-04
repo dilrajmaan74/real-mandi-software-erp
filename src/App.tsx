@@ -21,6 +21,7 @@ import { GoogleSheetsModal } from './components/GoogleSheetsModal';
 import { UnauthorizedDomainModal } from './components/UnauthorizedDomainModal';
 import { PWAInstallModal, MandiOfflineIndicator } from './components/PWAInstallModal';
 import { DuplicateCleanerModal } from './components/DuplicateCleanerModal';
+import { DashboardModule } from './components/DashboardModule';
 import { findDuplicateArrivals, findDuplicatePurchases, findDuplicateFarmers } from './lib/duplicates';
 import { 
   FarmerMaster, 
@@ -85,7 +86,8 @@ import {
   Smartphone,
   Laptop,
   Download,
-  Trash2
+  Trash2,
+  LayoutDashboard
 } from 'lucide-react';
 
 // Demo Initial Data
@@ -358,8 +360,8 @@ export const DEMO_IDS = new Set([
 export default function App() {
   // Active Module Navigation Tab
   const [activeModule, setActiveModule] = useState<
-    'farmers' | 'arrivals' | 'bardana' | 'agency' | 'lifting' | 'letterpad' | 'ai_assistant'
-  >('farmers');
+    'dashboard' | 'farmers' | 'arrivals' | 'bardana' | 'agency' | 'lifting' | 'letterpad' | 'ai_assistant'
+  >('dashboard');
 
   // Authentication
   const [user, setUser] = useState<User | null>(null);
@@ -1275,10 +1277,29 @@ export default function App() {
           </div>
         )}
 
-        {/* 5 Distinct Module Tabs Bar */}
+        {/* Module Tabs Bar */}
         <div className="print:hidden bg-white rounded-2xl shadow-xs border border-gray-200 p-2 overflow-x-auto">
           <div className="flex items-center gap-1.5 min-w-max">
             
+            {/* Module 0: Mandi Dashboard */}
+            <button
+              type="button"
+              onClick={() => setActiveModule('dashboard')}
+              className={`inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                activeModule === 'dashboard'
+                  ? 'bg-emerald-950 text-white shadow-md ring-2 ring-amber-400'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              <LayoutDashboard className="w-4 h-4 text-amber-400" />
+              <span>0. Dashboard (ਡੈਸ਼ਬੋਰਡ)</span>
+              <span className={`px-2 py-0.5 rounded-full text-xs font-mono font-bold ${
+                activeModule === 'dashboard' ? 'bg-amber-400 text-emerald-950' : 'bg-emerald-100 text-emerald-800'
+              }`}>
+                ਲਾਈਵ
+              </span>
+            </button>
+
             {/* Module 1: Farmer Register */}
             <button
               type="button"
@@ -1467,6 +1488,30 @@ export default function App() {
               ✕
             </button>
           </div>
+        )}
+
+        {/* 0. SEPARATE MODULE: Mandi Dashboard */}
+        {activeModule === 'dashboard' && (
+          <DashboardModule
+            farmers={farmers}
+            cropArrivals={cropArrivals}
+            bardanaEntries={bardanaEntries}
+            agencyPurchases={agencyPurchases}
+            liftingDispatches={liftingDispatches}
+            currentMandi={currentMandi}
+            duplicateCount={totalDuplicateCount}
+            onOpenDuplicateCleaner={() => setIsDuplicateCleanerOpen(true)}
+            onNavigateModule={(mod) => setActiveModule(mod)}
+            onOpenLetterPad={() => setActiveModule('letterpad')}
+            onOpenSheetModal={() => setIsSheetModalOpen(true)}
+            onAddNewFarmer={() => {
+              setEditingFarmer(null);
+              setIsFarmerModalOpen(true);
+            }}
+            sheetConfig={sheetConfig}
+            cloudSyncActive={cloudSyncActive}
+            user={user}
+          />
         )}
 
         {/* 1. SEPARATE MODULE: Farmer Register */}
