@@ -44,6 +44,7 @@ import {
   findTruckBy4DigitsOrNumber,
   searchTrucks
 } from '../lib/trucks';
+import { SingleTruckGatePassModal } from './SingleTruckGatePassModal';
 
 interface LiftingDispatchModuleProps {
   entries: LiftingDispatchEntry[];
@@ -71,6 +72,7 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
   const [editingEntry, setEditingEntry] = useState<LiftingDispatchEntry | null>(null);
   const [reconcilingEntry, setReconcilingEntry] = useState<LiftingDispatchEntry | null>(null);
   const [viewPhotoUrl, setViewPhotoUrl] = useState<string | null>(null);
+  const [gatePassModalEntry, setGatePassModalEntry] = useState<LiftingDispatchEntry | null>(null);
 
   // Filters & Tabs
   const [search, setSearch] = useState('');
@@ -243,6 +245,9 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
     onAddEntry(newEntry);
     setIsModalOpen(false);
 
+    // Auto-open Single Truck Gate Pass for Print & PDF immediately after OK/Submit
+    setGatePassModalEntry(newEntry);
+
     // Auto-save truck to master list
     saveTruck(
       truckNo.trim().toUpperCase(),
@@ -287,6 +292,8 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
 
     onUpdateEntry(updated);
     setReconcilingEntry(null);
+    // Auto-open updated Gate Pass with verified sheller receiving details
+    setGatePassModalEntry(updated);
   };
 
   const handleUpdateSubmit = (e: React.FormEvent) => {
@@ -693,8 +700,18 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
                 return (
                   <tr key={item.id} className="hover:bg-purple-50/20 transition-colors">
                     <td className="py-3 px-3 font-mono">
-                      <div className="font-bold text-gray-900">{item.challan_no}</div>
-                      <div className="text-[10px] text-gray-400">{item.date_time}</div>
+                      <button
+                        type="button"
+                        onClick={() => setGatePassModalEntry(item)}
+                        className="text-left group cursor-pointer"
+                        title="ਇਸ ਸਿੰਗਲ ਟਰੱਕ ਦਾ ਗੇਟ ਪਾਸ ਦੇਖੋ / ਪ੍ਰਿੰਟ / PDF ਕਰੋ"
+                      >
+                        <div className="font-bold text-gray-900 group-hover:text-purple-700 underline-offset-2 group-hover:underline flex items-center gap-1">
+                          <span>{item.challan_no}</span>
+                          <Printer className="w-3 h-3 text-purple-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </div>
+                        <div className="text-[10px] text-gray-400">{item.date_time}</div>
+                      </button>
                     </td>
 
                     <td className="py-3 px-3">
@@ -838,7 +855,16 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
                     </td>
 
                     <td className="py-3 px-3 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
+                      <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => setGatePassModalEntry(item)}
+                          title="ਇਸ ਸਿੰਗਲ ਟਰੱਕ ਦਾ ਗੇਟ ਪਾਸ ਦੇਖੋ / ਪ੍ਰਿੰਟ / PDF ਕਰੋ"
+                          className="px-2.5 py-1 bg-amber-400 hover:bg-amber-300 text-purple-950 font-black rounded-lg text-xs flex items-center gap-1 cursor-pointer transition shadow-2xs"
+                        >
+                          <Printer className="w-3.5 h-3.5 text-purple-950" />
+                          <span>ਗੇਟ ਪਾਸ</span>
+                        </button>
                         <button
                           onClick={() => openReconciliationModal(item)}
                           title="ਸ਼ੈਲਰ ਪਹੁੰਚ ਤੇ ਤੋਟਾ/ਰਿਜੈਕਟ ਹਿਸਾਬ"
@@ -1991,6 +2017,13 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
           </div>
         </div>
       )}
+
+      {/* Single Truck Gate Pass Modal (Print / PDF / WhatsApp with 100% micro-details) */}
+      <SingleTruckGatePassModal
+        isOpen={Boolean(gatePassModalEntry)}
+        onClose={() => setGatePassModalEntry(null)}
+        entry={gatePassModalEntry}
+      />
 
     </div>
   );
