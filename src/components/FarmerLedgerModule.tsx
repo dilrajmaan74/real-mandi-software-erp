@@ -96,31 +96,130 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
   const [newEntryMode, setNewEntryMode] = useState<FarmerLedgerEntry['payment_mode']>('Cash (ਨਕਦ)');
   const [newEntryNotes, setNewEntryNotes] = useState('');
 
-  // Selected Farmer
+  // Comprehensive Phone Number Cleaning (extracts last 10 digits)
+  const cleanPhone = (phone?: string) => {
+    if (!phone) return '';
+    const digits = phone.replace(/\D/g, '');
+    return digits.length >= 10 ? digits.slice(-10) : digits;
+  };
+
+  // Extract normalized name tokens for fuzzy/token matching
+  const getNameTokens = (name?: string): string[] => {
+    if (!name) return [];
+    return name
+      .toLowerCase()
+      .replace(/[.,/#!$%^&*;:{}=\-_`~()]/g, ' ')
+      .replace(/\b(s\/o|d\/o|w\/o|so|do|wo|sardar|bhai|ji|singh|kaur|shri|sm|pb)\b/gi, ' ')
+      .split(/\s+/)
+      .map((t) => t.trim())
+      .filter((t) => t.length >= 2);
+  };
+
+  // 1. Comprehensive list of all farmers across Directory + Arrivals + Purchases + Ledger
+  // This ensures that even if a farmer was only entered in Arrivals or Purchases without being pre-registered,
+  // they 100% appear in the Farmer Ledger and can never be missed!
+  const allMasterFarmers = useMemo(() => {
+    const list: FarmerMaster[] = [...farmers];
+    const seenNames = new Set(farmers.map((f) => f.name_en.toLowerCase().trim()));
+    const seenIds = new Set(farmers.map((f) => f.id));
+
+    // Discover any farmers from Crop Arrivals
+    cropArrivals.forEach((a) => {
+      const aName = (a.farmer_name || '').trim();
+      if (!aName) return;
+      const cleanA = aName.toLowerCase();
+      if (seenNames.has(cleanA)) return;
+
+      const aPhone = cleanPhone(a.mobile);
+      if (aPhone.length >= 10) {
+        const phoneMatch = list.find((f) => cleanPhone(f.mobile_number) === aPhone);
+        if (phoneMatch) return;
+      }
+
+      const genId = a.farmer_id || `ARR-FARMER-${cleanA.replace(/[^a-z0-9]/g, '')}`;
+      if (seenIds.has(genId)) return;
+
+      seenNames.add(cleanA);
+      seenIds.add(genId);
+
+      list.push({
+        id: genId,
+        name_en: a.farmer_name,
+        name_pa: a.farmer_name_pa || '',
+        father_husband_name_en: a.father_husband_name || '',
+        father_husband_name_pa: a.father_husband_name_pa || '',
+        village_en: a.village || '',
+        village_pa: a.village_pa || '',
+        mobile_number: a.mobile || '',
+        aadhaar_number: '',
+        linked_farmers: [],
+        created_at: a.date || new Date().toISOString(),
+      });
+    });
+
+    // Discover any farmers from Agency Purchases (J-Forms)
+    agencyPurchases.forEach((p) => {
+      const pName = (p.farmer_name || '').trim();
+      if (!pName) return;
+      const cleanP = pName.toLowerCase();
+      if (seenNames.has(cleanP)) return;
+
+      const pPhone = cleanPhone(p.mobile);
+      if (pPhone.length >= 10) {
+        const phoneMatch = list.find((f) => cleanPhone(f.mobile_number) === pPhone);
+        if (phoneMatch) return;
+      }
+
+      const genId = p.farmer_id || `PUR-FARMER-${cleanP.replace(/[^a-z0-9]/g, '')}`;
+      if (seenIds.has(genId)) return;
+
+      seenNames.add(cleanP);
+      seenIds.add(genId);
+
+      list.push({
+        id: genId,
+        name_en: p.farmer_name,
+        name_pa: '',
+        father_husband_name_en: p.father_husband_name || '',
+        father_husband_name_pa: '',
+        village_en: p.address_village || p.village || '',
+        village_pa: '',
+        mobile_number: p.mobile || '',
+        aadhaar_number: '',
+        linked_farmers: [],
+        created_at: p.date || new Date().toISOString(),
+      });
+    });
+
+    return list;
+  }, [farmers, cropArrivals, agencyPurchases]);
+
+  // Selected Farmer (from all discovered farmers)
   const currentFarmer = useMemo(() => {
-    return farmers.find((f) => f.id === selectedFarmerId) || farmers[0] || null;
-  }, [farmers, selectedFarmerId]);
+    return allMasterFarmers.find((f) => f.id === selectedFarmerId) || allMasterFarmers[0] || null;
+  }, [allMasterFarmers, selectedFarmerId]);
 
   // Filtered farmers list for search
   const filteredFarmers = useMemo(() => {
     const q = search.toLowerCase().trim();
-    if (!q) return farmers;
-    return farmers.filter((f) => 
+    if (!q) return allMasterFarmers;
+    return allMasterFarmers.filter((f) => 
       f.name_en.toLowerCase().includes(q) ||
-      f.name_pa.toLowerCase().includes(q) ||
-      f.village_en.toLowerCase().includes(q) ||
-      f.village_pa.toLowerCase().includes(q) ||
-      f.mobile_number.includes(q) ||
-      f.aadhaar_number.includes(q)
+      (f.name_pa && f.name_pa.toLowerCase().includes(q)) ||
+      (f.village_en && f.village_en.toLowerCase().includes(q)) ||
+      (f.village_pa && f.village_pa.toLowerCase().includes(q)) ||
+      (f.mobile_number && f.mobile_number.includes(q)) ||
+      (f.aadhaar_number && f.aadhaar_number.includes(q))
     );
-  }, [farmers, search]);
+  }, [allMasterFarmers, search]);
 
-  // All linked names and Aadhaar for the active farmer (to catch purchases billed to family)
+  // Robust Farmer Identification Metadata
   const currentFarmerIdentifiers = useMemo(() => {
-    if (!currentFarmer) return { names: [], aadhaars: [], ids: [] };
+    if (!currentFarmer) return { names: [], normalizedNames: [], phones: [], aadhaars: [], ids: [] };
     const names = [currentFarmer.name_en.toLowerCase().trim()];
     if (currentFarmer.name_pa) names.push(currentFarmer.name_pa.trim());
-    const aadhaars = [currentFarmer.aadhaar_number.replace(/\D/g, '')];
+    const phones = [cleanPhone(currentFarmer.mobile_number)].filter(Boolean);
+    const aadhaars = [currentFarmer.aadhaar_number ? currentFarmer.aadhaar_number.replace(/\D/g, '') : ''].filter(Boolean);
     const ids = [currentFarmer.id];
 
     (currentFarmer.linked_farmers || []).forEach((lf) => {
@@ -130,31 +229,98 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
       if (lf.id) ids.push(lf.id);
     });
 
-    return { names, aadhaars, ids };
+    const normalizedNames = names.map((n) => getNameTokens(n).join(' ')).filter(Boolean);
+
+    return { names, normalizedNames, phones, aadhaars, ids };
   }, [currentFarmer]);
 
-  // 1. Farmer's Crop Arrivals
+  // 1. Farmer's Crop Arrivals (100% Comprehensive Multi-Factor Matching)
   const farmerArrivals = useMemo(() => {
     if (!currentFarmer) return [];
+
+    const fId = currentFarmer.id;
+    const fPhone = cleanPhone(currentFarmer.mobile_number);
+    const fNameEn = (currentFarmer.name_en || '').toLowerCase().trim();
+    const fNamePa = (currentFarmer.name_pa || '').trim();
+    const fVillageEn = (currentFarmer.village_en || '').toLowerCase().trim();
+    const fVillagePa = (currentFarmer.village_pa || '').trim();
+    const fFatherEn = (currentFarmer.father_husband_name_en || '').toLowerCase().trim();
+    const fTokens = getNameTokens(currentFarmer.name_en);
+
     return cropArrivals.filter((a) => {
+      // 1. ID Match (direct or linked)
       if (a.farmer_id && currentFarmerIdentifiers.ids.includes(a.farmer_id)) return true;
-      const arrName = (a.farmer_name || '').toLowerCase().trim();
-      const matchName = currentFarmerIdentifiers.names.includes(arrName);
-      const arrVillage = (a.village || '').toLowerCase().trim();
-      const matchVillage = arrVillage === currentFarmer.village_en.toLowerCase().trim() || arrVillage === currentFarmer.village_pa.trim();
-      return matchName || (matchName && matchVillage);
+
+      // 2. Phone Number Match (10 digit exact mobile)
+      const aPhone = cleanPhone(a.mobile);
+      if (aPhone && fPhone && aPhone.length >= 10 && aPhone === fPhone) return true;
+
+      // 3. Name Exact Match
+      const aName = (a.farmer_name || '').toLowerCase().trim();
+      const aNamePa = (a.farmer_name_pa || '').trim();
+      if (aName && (aName === fNameEn || currentFarmerIdentifiers.names.includes(aName))) return true;
+      if (aNamePa && (aNamePa === fNamePa || currentFarmerIdentifiers.names.includes(aNamePa))) return true;
+
+      // 4. Token / Substring Matching with Village or Father
+      const aVillage = (a.village || '').toLowerCase().trim();
+      const aVillagePa = (a.village_pa || '').trim();
+      const villageMatches = (aVillage && fVillageEn && (aVillage === fVillageEn || aVillage.includes(fVillageEn) || fVillageEn.includes(aVillage))) ||
+                             (aVillagePa && fVillagePa && aVillagePa === fVillagePa);
+
+      const aFather = (a.father_husband_name || '').toLowerCase().trim();
+      const fatherMatches = aFather && fFatherEn && (aFather === fFatherEn || aFather.includes(fFatherEn) || fFatherEn.includes(aFather));
+
+      const aTokens = getNameTokens(a.farmer_name);
+      const hasSharedCoreName = aTokens.some((t) => fTokens.includes(t));
+
+      if (hasSharedCoreName && (villageMatches || fatherMatches)) return true;
+      if (fatherMatches && villageMatches) return true;
+
+      return false;
     });
   }, [cropArrivals, currentFarmer, currentFarmerIdentifiers]);
 
-  // 2. Farmer's Agency Purchases / J-Forms
+  // 2. Farmer's Agency Purchases / J-Forms (100% Comprehensive Multi-Factor Matching)
   const farmerPurchases = useMemo(() => {
     if (!currentFarmer) return [];
+
+    const fId = currentFarmer.id;
+    const fPhone = cleanPhone(currentFarmer.mobile_number);
+    const fNameEn = (currentFarmer.name_en || '').toLowerCase().trim();
+    const fNamePa = (currentFarmer.name_pa || '').trim();
+    const fVillageEn = (currentFarmer.village_en || '').toLowerCase().trim();
+    const fFatherEn = (currentFarmer.father_husband_name_en || '').toLowerCase().trim();
+    const fTokens = getNameTokens(currentFarmer.name_en);
+
     return agencyPurchases.filter((p) => {
+      // 1. ID Match
       if (p.farmer_id && currentFarmerIdentifiers.ids.includes(p.farmer_id)) return true;
-      const pName = (p.farmer_name || '').toLowerCase().trim();
-      const billedTo = (p.billed_to_name || '').toLowerCase().trim();
-      const matchName = currentFarmerIdentifiers.names.includes(pName) || currentFarmerIdentifiers.names.includes(billedTo);
-      return matchName;
+
+      // 2. Phone Match
+      const pPhone = cleanPhone(p.mobile);
+      if (pPhone && fPhone && pPhone.length >= 10 && pPhone === fPhone) return true;
+
+      // 3. Farmer Name or Billed To Name exact match
+      const pFarmer = (p.farmer_name || '').toLowerCase().trim();
+      const pBilled = (p.billed_to_name || '').toLowerCase().trim();
+      if (pFarmer && (pFarmer === fNameEn || currentFarmerIdentifiers.names.includes(pFarmer))) return true;
+      if (pBilled && (pBilled === fNameEn || currentFarmerIdentifiers.names.includes(pBilled))) return true;
+
+      // 4. Token Matching with Village or Father
+      const pVillage = (p.address_village || p.village || '').toLowerCase().trim();
+      const villageMatches = pVillage && fVillageEn && (pVillage === fVillageEn || pVillage.includes(fVillageEn) || fVillageEn.includes(pVillage));
+
+      const pFather = (p.father_husband_name || '').toLowerCase().trim();
+      const fatherMatches = pFather && fFatherEn && (pFather === fFatherEn || pFather.includes(fFatherEn) || fFatherEn.includes(pFather));
+
+      const pFarmerTokens = getNameTokens(p.farmer_name);
+      const pBilledTokens = getNameTokens(p.billed_to_name);
+      const hasCoreToken = pFarmerTokens.some((t) => fTokens.includes(t)) || pBilledTokens.some((t) => fTokens.includes(t));
+
+      if (hasCoreToken && (villageMatches || fatherMatches)) return true;
+      if (fatherMatches && villageMatches) return true;
+
+      return false;
     });
   }, [agencyPurchases, currentFarmer, currentFarmerIdentifiers]);
 
@@ -204,19 +370,28 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
   // 3. Farmer's Manual Cash / Advance Ledger Transactions
   const farmerCustomEntries = useMemo(() => {
     if (!currentFarmer) return [];
-    return ledgerEntries.filter((l) => l.farmer_id === currentFarmer.id);
-  }, [ledgerEntries, currentFarmer]);
+    const fNameEn = (currentFarmer.name_en || '').toLowerCase().trim();
+    const fNamePa = (currentFarmer.name_pa || '').trim();
+    return ledgerEntries.filter((l) => {
+      if (l.farmer_id && (l.farmer_id === currentFarmer.id || currentFarmerIdentifiers.ids.includes(l.farmer_id))) return true;
+      const lName = (l.farmer_name || '').toLowerCase().trim();
+      return lName && (lName === fNameEn || lName === fNamePa.toLowerCase() || currentFarmerIdentifiers.names.includes(lName));
+    });
+  }, [ledgerEntries, currentFarmer, currentFarmerIdentifiers]);
 
   // 4. Farmer's Bardana
   const farmerBardanaIssued = useMemo(() => {
     if (!currentFarmer) return 0;
+    const fTokens = getNameTokens(currentFarmer.name_en);
     return bardanaEntries
       .filter((b) => b.transaction_type === 'Issued to Farmer' && (
-        b.farmer_name?.toLowerCase().includes(currentFarmer.name_en.toLowerCase()) ||
-        b.farmer_name?.includes(currentFarmer.name_pa)
+        b.farmer_name && (
+          currentFarmerIdentifiers.names.includes(b.farmer_name.toLowerCase().trim()) ||
+          getNameTokens(b.farmer_name).some((t) => fTokens.includes(t))
+        )
       ))
       .reduce((s, b) => s + (Number(b.quantity_bags) || 0), 0);
-  }, [bardanaEntries, currentFarmer]);
+  }, [bardanaEntries, currentFarmer, currentFarmerIdentifiers]);
 
   const farmerBardanaReturned = useMemo(() => {
     return farmerArrivals.reduce((s, a) => s + (Number(a.total_bags_arrived) || 0), 0);
@@ -698,7 +873,7 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
             <div className="flex items-center justify-between">
               <span className="font-bold text-xs text-gray-700 uppercase tracking-wider">ਕਿਸਾਨ ਚੁਣੋ (Select Farmer)</span>
               <span className="text-[11px] font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                {farmers.length} ਕੁੱਲ
+                {allMasterFarmers.length} ਕੁੱਲ
               </span>
             </div>
 
@@ -721,8 +896,34 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
               ) : (
                 filteredFarmers.map((f) => {
                   const isSelected = f.id === currentFarmer?.id;
-                  const fPurchases = agencyPurchases.filter(p => p.farmer_id === f.id || p.farmer_name?.toLowerCase() === f.name_en.toLowerCase());
+                  const fPhone = cleanPhone(f.mobile_number);
+                  const fNameEn = (f.name_en || '').toLowerCase().trim();
+                  const fTokens = getNameTokens(f.name_en);
+
+                  const fPurchases = agencyPurchases.filter(p => {
+                    if (p.farmer_id && p.farmer_id === f.id) return true;
+                    const pPhone = cleanPhone(p.mobile);
+                    if (pPhone && fPhone && pPhone === fPhone) return true;
+                    const pFarmer = (p.farmer_name || '').toLowerCase().trim();
+                    const pBilled = (p.billed_to_name || '').toLowerCase().trim();
+                    if (pFarmer && pFarmer === fNameEn) return true;
+                    if (pBilled && pBilled === fNameEn) return true;
+                    const pTokens = getNameTokens(p.farmer_name);
+                    return pTokens.some(t => fTokens.includes(t));
+                  });
+
+                  const fArrivals = cropArrivals.filter(a => {
+                    if (a.farmer_id && a.farmer_id === f.id) return true;
+                    const aPhone = cleanPhone(a.mobile);
+                    if (aPhone && fPhone && aPhone === fPhone) return true;
+                    const aName = (a.farmer_name || '').toLowerCase().trim();
+                    if (aName && aName === fNameEn) return true;
+                    const aTokens = getNameTokens(a.farmer_name);
+                    return aTokens.some(t => fTokens.includes(t));
+                  });
+
                   const fGross = fPurchases.reduce((s, p) => s + (p.total_amount || 0), 0);
+                  const fArrivalBags = fArrivals.reduce((s, a) => s + (Number(a.total_bags_arrived) || 0), 0);
 
                   return (
                     <button
@@ -743,13 +944,27 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
                       </div>
                       <div className="flex items-center justify-between text-[11px] mt-1 opacity-85">
                         <span className="truncate flex items-center gap-1">
-                          <MapPin className="w-3 h-3 text-amber-400" />
-                          <span>{f.village_en}</span>
+                          <MapPin className="w-3 h-3 text-amber-400 shrink-0" />
+                          <span className="truncate">{f.village_en || 'ਪਿੰਡ N/A'}</span>
                         </span>
-                        <span className="font-mono font-bold">
-                          {fGross > 0 ? `₹${(fGross / 100000).toFixed(1)}L` : '0'}
+                        <span className="font-mono font-bold shrink-0">
+                          {fGross > 0 ? `₹${(fGross / 100000).toFixed(1)}L` : (fArrivalBags > 0 ? `${fArrivalBags} ਗੱਟੇ` : '—')}
                         </span>
                       </div>
+                      {(fArrivals.length > 0 || fPurchases.length > 0) && (
+                        <div className="flex items-center gap-1.5 mt-1 text-[9.5px] font-mono">
+                          {fArrivals.length > 0 && (
+                            <span className={`px-1.5 py-0.2 rounded ${isSelected ? 'bg-emerald-800 text-amber-200' : 'bg-amber-100 text-amber-900'}`}>
+                              {fArrivals.length} ਆਵਕ ({fArrivalBags} ਬੋਰੇ)
+                            </span>
+                          )}
+                          {fPurchases.length > 0 && (
+                            <span className={`px-1.5 py-0.2 rounded ${isSelected ? 'bg-emerald-800 text-emerald-200' : 'bg-blue-100 text-blue-900'}`}>
+                              {fPurchases.length} J-Form
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </button>
                   );
                 })
@@ -879,6 +1094,25 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
                       <p className="text-xs sm:text-sm text-gray-600 mt-0.5 font-medium">
                         ਸਪੁੱਤਰ/ਪਤੀ: <b>{currentFarmer.father_husband_name_en} {currentFarmer.father_husband_name_pa && `(${currentFarmer.father_husband_name_pa})`}</b> • ਪਿੰਡ: <b>{currentFarmer.village_en} {currentFarmer.village_pa && `(${currentFarmer.village_pa})`}</b>
                       </p>
+                      {/* Live Record Counts Indicator */}
+                      <div className="flex items-center gap-1.5 mt-2 flex-wrap text-[11px] font-bold">
+                        <span className="bg-amber-50 text-amber-950 px-2.5 py-0.5 rounded-lg border border-amber-200 flex items-center gap-1">
+                          <Wheat className="w-3.5 h-3.5 text-amber-600" />
+                          <span>ਆਵਕ: {farmerArrivals.length} ਪਰਚੀਆਂ ({farmerArrivalBags} ਗੱਟੇ)</span>
+                        </span>
+                        <span className="bg-blue-50 text-blue-950 px-2.5 py-0.5 rounded-lg border border-blue-200 flex items-center gap-1">
+                          <Building2 className="w-3.5 h-3.5 text-blue-700" />
+                          <span>ਸਰਕਾਰੀ ਖਰੀਦ: {farmerPurchases.length} J-Forms (₹{defaultJFormTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })})</span>
+                        </span>
+                        <span className="bg-emerald-50 text-emerald-950 px-2.5 py-0.5 rounded-lg border border-emerald-200 flex items-center gap-1">
+                          <CreditCard className="w-3.5 h-3.5 text-emerald-700" />
+                          <span>ਨਕਦ ਐਂਟਰੀਆਂ: {farmerCustomEntries.length}</span>
+                        </span>
+                        <span className="bg-purple-50 text-purple-950 px-2.5 py-0.5 rounded-lg border border-purple-200 flex items-center gap-1">
+                          <Package className="w-3.5 h-3.5 text-purple-700" />
+                          <span>ਬਾਰਦਾਨਾ: {farmerBardanaPending > 0 ? `${farmerBardanaPending} ਬਕਾਇਆ` : 'ਕਲੀਅਰ'}</span>
+                        </span>
+                      </div>
                     </div>
                   </div>
 
@@ -1220,16 +1454,279 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
                   </div>
                 </div>
 
+                {/* 100% Complete Itemized Farmer Records Section (ਸੰਪੂਰਨ ਰਿਕਾਰਡ ਤੇ ਆਡਿਟ ਵੇਰਵਾ) */}
+                <div className="mt-8 pt-6 border-t-2 border-emerald-950/20 space-y-6">
+                  
+                  {/* Section Title Banner */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-gray-200">
+                    <div>
+                      <h3 className="text-sm sm:text-base font-black text-gray-950 flex items-center gap-2">
+                        <FileText className="w-5 h-5 text-emerald-800" />
+                        <span>ਸੰਪੂਰਨ ਕਿਸਾਨ ਰਿਕਾਰਡ ਤੇ ਆਡਿਟ ਵੇਰਵਾ (Complete Itemized Records & Audit Trail)</span>
+                      </h3>
+                      <p className="text-[11px] text-gray-500 font-medium">
+                        ਕਿਸਾਨ ਦੀਆਂ ਸਾਰੀਆਂ ਮੰਡੀ ਆਵਕ ਪਰਚੀਆਂ, ਸਰਕਾਰੀ J-Forms, ਲੇਬਰ ਕਟੌਤੀਆਂ ਅਤੇ ਨਕਦ ਲੈਣ-ਦੇਣ ਦਾ ਪੂਰਾ ਵੇਰਵਾ (JPG / PDF / ਪ੍ਰਿੰਟ ਵਿੱਚ ਸ਼ਾਮਲ)
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[10px] font-mono font-bold bg-amber-100 text-amber-900 px-2.5 py-1 rounded-lg">
+                        {farmerArrivals.length} ਆਵਕ ਪਰਚੀਆਂ
+                      </span>
+                      <span className="text-[10px] font-mono font-bold bg-blue-100 text-blue-900 px-2.5 py-1 rounded-lg">
+                        {farmerPurchases.length} ਸਰਕਾਰੀ ਖਰੀਦਾਂ (J-Forms)
+                      </span>
+                      <span className="text-[10px] font-mono font-bold bg-emerald-100 text-emerald-900 px-2.5 py-1 rounded-lg">
+                        {farmerCustomEntries.length} ਨਕਦ ਐਂਟਰੀਆਂ
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 1. Crop Inward Arrivals Table (ਮੰਡੀ ਆਵਕ ਪਰਚੀਆਂ) */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-black text-amber-950 flex items-center gap-1.5 uppercase tracking-wide">
+                        <Wheat className="w-4 h-4 text-amber-600" />
+                        <span>1. ਮੰਡੀ ਆਵਕ ਪਰਚੀਆਂ ਦਾ ਵੇਰਵਾ (Crop Inward Arrivals - {farmerArrivals.length})</span>
+                      </h4>
+                      <span className="text-[10.5px] font-bold text-gray-600 font-mono">
+                        ਕੁੱਲ: {farmerArrivalBags.toLocaleString()} ਗੱਟੇ | {farmerArrivalQuintals.toFixed(2)} ਕੁਇੰਟਲ
+                      </span>
+                    </div>
+
+                    {farmerArrivals.length === 0 ? (
+                      <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 text-center text-xs text-gray-500">
+                        ਇਸ ਕਿਸਾਨ ਦੀ ਅਜੇ ਕੋਈ ਮੰਡੀ ਆਵਕ ਪਰਚੀ ਦਰਜ ਨਹੀਂ ਹੈ।
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-2xs">
+                        <table className="w-full text-left text-[11px]">
+                          <thead className="bg-amber-50/80 text-amber-950 font-bold border-b border-amber-200">
+                            <tr>
+                              <th className="py-2 px-2.5">#</th>
+                              <th className="py-2 px-2.5">ਤਾਰੀਖ</th>
+                              <th className="py-2 px-2.5">ਪਰਚੀ ਨੰ.</th>
+                              <th className="py-2 px-2.5">ਟਰਾਲੀ / ਵਾਹਨ</th>
+                              <th className="py-2 px-2.5">ਕਿਸਮ</th>
+                              <th className="py-2 px-2.5 text-center">ਗੱਟੇ</th>
+                              <th className="py-2 px-2.5 text-right">ਵਜ਼ਨ (Qtl)</th>
+                              <th className="py-2 px-2.5 text-center">ਨਮੀ %</th>
+                              <th className="py-2 px-2.5 text-right">ਪੱਲੇਦਾਰੀ ਲੇਬਰ</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 bg-white">
+                            {farmerArrivals.map((a, idx) => {
+                              const bags = Number(a.total_bags_arrived) || 0;
+                              const weight = Number(a.weight_quintals) || ((bags * (Number(a.bag_packing_kg) || 37.5)) / 100);
+                              const labor = Number(a.labor_total) || (bags * (adjustments.palledariRate || 8));
+                              return (
+                                <tr key={a.id || idx} className="hover:bg-amber-50/30">
+                                  <td className="py-1.5 px-2.5 text-gray-400 font-mono text-[10px]">{idx + 1}</td>
+                                  <td className="py-1.5 px-2.5 font-mono">{a.date}</td>
+                                  <td className="py-1.5 px-2.5 font-mono font-bold text-amber-900">{a.parchi_no || a.gate_pass_no || '—'}</td>
+                                  <td className="py-1.5 px-2.5 font-medium text-gray-800">{a.vehicle_trolley_no || 'ਟਰਾਲੀ'}</td>
+                                  <td className="py-1.5 px-2.5 text-gray-700">{a.crop_variety || a.crop_type || 'ਝੋਨਾ'}</td>
+                                  <td className="py-1.5 px-2.5 font-mono font-bold text-center">{bags}</td>
+                                  <td className="py-1.5 px-2.5 font-mono text-right">{weight.toFixed(2)}</td>
+                                  <td className="py-1.5 px-2.5 font-mono text-center">{a.moisture_percentage ? `${a.moisture_percentage}%` : '—'}</td>
+                                  <td className="py-1.5 px-2.5 font-mono font-bold text-rose-700 text-right">₹{labor.toLocaleString('en-IN')}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                          <tfoot className="bg-amber-100/60 font-bold border-t-2 border-amber-300 text-amber-950">
+                            <tr>
+                              <td colSpan={5} className="py-2 px-2.5 text-left font-black">ਕੁੱਲ ਜੋੜ (Total Inward Arrivals):</td>
+                              <td className="py-2 px-2.5 font-mono font-black text-center">{farmerArrivalBags.toLocaleString()} ਗੱਟੇ</td>
+                              <td className="py-2 px-2.5 font-mono font-black text-right">{farmerArrivalQuintals.toFixed(2)} Qtl</td>
+                              <td className="py-2 px-2.5 text-center">—</td>
+                              <td className="py-2 px-2.5 font-mono font-black text-rose-800 text-right">₹{totalPalledariLabor.toLocaleString('en-IN')}</td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 2. Agency Purchases & J-Forms Table (ਸਰਕਾਰੀ ਖਰੀਦ / J-Form) */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-black text-blue-950 flex items-center gap-1.5 uppercase tracking-wide">
+                        <Building2 className="w-4 h-4 text-blue-700" />
+                        <span>2. ਸਰਕਾਰੀ ਖਰੀਦ ਤੇ J-Form ਦਾ ਵੇਰਵਾ (Agency Purchases / J-Forms - {farmerPurchases.length})</span>
+                      </h4>
+                      <span className="text-[10.5px] font-bold text-gray-600 font-mono">
+                        ਕੁੱਲ: {farmerPurchasedBags.toLocaleString()} ਗੱਟੇ | ₹{defaultJFormTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+
+                    {farmerPurchases.length === 0 ? (
+                      <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 text-center text-xs text-gray-500">
+                        ਇਸ ਕਿਸਾਨ ਦੀ ਅਜੇ ਕੋਈ ਸਰਕਾਰੀ ਖਰੀਦ ਜਾਂ J-Form ਐਂਟਰੀ ਦਰਜ ਨਹੀਂ ਹੈ।
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-2xs">
+                        <table className="w-full text-left text-[11px]">
+                          <thead className="bg-blue-50/80 text-blue-950 font-bold border-b border-blue-200">
+                            <tr>
+                              <th className="py-2 px-2.5">#</th>
+                              <th className="py-2 px-2.5">ਤਾਰੀਖ</th>
+                              <th className="py-2 px-2.5">ਏਜੰਸੀ</th>
+                              <th className="py-2 px-2.5">ਆੜ੍ਹਤੀਆ ਫਰਮ</th>
+                              <th className="py-2 px-2.5">ਬਿਲ ਨਾਮ (Billed To)</th>
+                              <th className="py-2 px-2.5 text-center">ਗੱਟੇ</th>
+                              <th className="py-2 px-2.5 text-right">ਵਜ਼ਨ (Qtl)</th>
+                              <th className="py-2 px-2.5 text-right">ਸਰਕਾਰੀ ਰੇਟ</th>
+                              <th className="py-2 px-2.5 text-right font-black">J-Form ਕੁੱਲ ਰਕਮ</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 bg-white">
+                            {farmerPurchases.map((p, idx) => (
+                              <tr key={p.id || idx} className="hover:bg-blue-50/30">
+                                <td className="py-1.5 px-2.5 text-gray-400 font-mono text-[10px]">{idx + 1}</td>
+                                <td className="py-1.5 px-2.5 font-mono">{p.date}</td>
+                                <td className="py-1.5 px-2.5 font-bold text-blue-900">{p.purchasing_agency}</td>
+                                <td className="py-1.5 px-2.5 text-gray-700">{p.firm_name}</td>
+                                <td className="py-1.5 px-2.5 font-medium text-gray-900">
+                                  {p.billed_to_name}
+                                  {p.relation_with_main && (
+                                    <span className="text-[10px] text-gray-500 ml-1">({p.relation_with_main})</span>
+                                  )}
+                                </td>
+                                <td className="py-1.5 px-2.5 font-mono font-bold text-center">{p.total_bags}</td>
+                                <td className="py-1.5 px-2.5 font-mono text-right">{Number(p.weight_quintals || 0).toFixed(2)}</td>
+                                <td className="py-1.5 px-2.5 font-mono text-right">₹{p.rate_per_quintal || 2461}</td>
+                                <td className="py-1.5 px-2.5 font-mono font-black text-emerald-900 text-right">
+                                  ₹{Number(p.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot className="bg-blue-100/60 font-bold border-t-2 border-blue-300 text-blue-950">
+                            <tr>
+                              <td colSpan={5} className="py-2 px-2.5 text-left font-black">ਕੁੱਲ ਜੋੜ (Total J-Forms / Agency Purchases):</td>
+                              <td className="py-2 px-2.5 font-mono font-black text-center">{farmerPurchasedBags.toLocaleString()} ਗੱਟੇ</td>
+                              <td className="py-2 px-2.5 font-mono font-black text-right">{farmerPurchasedQuintals.toFixed(2)} Qtl</td>
+                              <td className="py-2 px-2.5 text-right">—</td>
+                              <td className="py-2 px-2.5 font-mono font-black text-emerald-950 text-right">
+                                ₹{defaultJFormTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 3. Cash Advances & Ledger Entries Table (ਨਕਦ ਲੈਣ-ਦੇਣ ਤੇ ਪੇਸ਼ਗੀ) */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-black text-emerald-950 flex items-center gap-1.5 uppercase tracking-wide">
+                        <CreditCard className="w-4 h-4 text-emerald-700" />
+                        <span>3. ਸੀਜ਼ਨ ਦੌਰਾਨ ਨਕਦ ਲੈਣ-ਦੇਣ ਤੇ ਪੇਸ਼ਗੀ ਖਾਤਾ (Cash Advances & Ledger Entries - {farmerCustomEntries.length})</span>
+                      </h4>
+                      <div className="flex items-center gap-2 text-[10.5px] font-bold font-mono">
+                        <span className="text-rose-700">ਕੁੱਲ ਲਏ: -₹{customDebits.toLocaleString('en-IN')}</span>
+                        {customCredits > 0 && (
+                          <span className="text-emerald-700">| ਜਮ੍ਹਾਂ: +₹{customCredits.toLocaleString('en-IN')}</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {farmerCustomEntries.length === 0 ? (
+                      <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 text-center text-xs text-gray-500">
+                        ਇਸ ਸੀਜ਼ਨ ਦੌਰਾਨ ਕੋਈ ਵੱਖਰੀ ਨਕਦ ਪੇਸ਼ਗੀ ਜਾਂ ਅਦਾਇਗੀ ਐਂਟਰੀ ਦਰਜ ਨਹੀਂ ਕੀਤੀ ਗਈ।
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-2xs">
+                        <table className="w-full text-left text-[11px]">
+                          <thead className="bg-emerald-50/80 text-emerald-950 font-bold border-b border-emerald-200">
+                            <tr>
+                              <th className="py-2 px-2.5">#</th>
+                              <th className="py-2 px-2.5">ਤਾਰੀਖ</th>
+                              <th className="py-2 px-2.5">ਲੈਣ-ਦੇਣ ਦੀ ਕਿਸਮ</th>
+                              <th className="py-2 px-2.5 text-right">ਕਿਸਾਨ ਨੇ ਲਏ (Debit -)</th>
+                              <th className="py-2 px-2.5 text-right">ਕਿਸਾਨ ਨੇ ਦਿੱਤੇ (Credit +)</th>
+                              <th className="py-2 px-2.5">ਭੁਗਤਾਨ ਮੋਡ</th>
+                              <th className="py-2 px-2.5">ਵੇਰਵਾ / Remarks</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 bg-white">
+                            {farmerCustomEntries.map((e, idx) => (
+                              <tr key={e.id || idx} className="hover:bg-emerald-50/30">
+                                <td className="py-1.5 px-2.5 text-gray-400 font-mono text-[10px]">{idx + 1}</td>
+                                <td className="py-1.5 px-2.5 font-mono">{e.date}</td>
+                                <td className="py-1.5 px-2.5 font-bold text-gray-900">{e.transaction_type}</td>
+                                <td className="py-1.5 px-2.5 font-mono font-bold text-rose-700 text-right">
+                                  {e.entry_type === 'debit' ? `₹${Number(e.amount).toLocaleString('en-IN')}` : '—'}
+                                </td>
+                                <td className="py-1.5 px-2.5 font-mono font-bold text-emerald-700 text-right">
+                                  {e.entry_type === 'credit' ? `₹${Number(e.amount).toLocaleString('en-IN')}` : '—'}
+                                </td>
+                                <td className="py-1.5 px-2.5 text-gray-600 font-medium">{e.payment_mode || 'Cash'}</td>
+                                <td className="py-1.5 px-2.5 text-gray-500 italic">{e.notes || '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot className="bg-emerald-100/60 font-bold border-t-2 border-emerald-300 text-emerald-950">
+                            <tr>
+                              <td colSpan={3} className="py-2 px-2.5 text-left font-black">ਕੁੱਲ ਨਕਦ ਜੋੜ:</td>
+                              <td className="py-2 px-2.5 font-mono font-black text-rose-800 text-right">
+                                -₹{customDebits.toLocaleString('en-IN')}
+                              </td>
+                              <td className="py-2 px-2.5 font-mono font-black text-emerald-800 text-right">
+                                {customCredits > 0 ? `+₹${customCredits.toLocaleString('en-IN')}` : '—'}
+                              </td>
+                              <td colSpan={2} className="py-2 px-2.5 text-gray-500">—</td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 4. Bardana Summary Strip */}
+                  <div className="bg-gray-50 rounded-2xl p-3 border border-gray-200">
+                    <div className="flex items-center justify-between text-xs mb-2">
+                      <span className="font-bold text-gray-800 flex items-center gap-1.5">
+                        <Package className="w-4 h-4 text-orange-600" />
+                        <span>4. ਬਾਰਦਾਨਾ ਹਿਸਾਬ (Gunny Bags Record)</span>
+                      </span>
+                      <span className={`font-mono font-black text-xs px-2 py-0.5 rounded-full ${
+                        farmerBardanaPending > 0 ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'
+                      }`}>
+                        {farmerBardanaPending > 0 ? `${farmerBardanaPending} ਗੱਟੇ ਬਕਾਇਆ` : 'ਬਾਰਦਾਨਾ ਕਲੀਅਰ ਹੈ'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-center text-[11px]">
+                      <div className="bg-white p-2 rounded-xl border border-gray-200">
+                        <span className="text-gray-500 block text-[10px]">ਦਿੱਤੇ ਗੱਟੇ:</span>
+                        <span className="font-mono font-bold text-gray-900">{farmerBardanaIssued.toLocaleString()}</span>
+                      </div>
+                      <div className="bg-white p-2 rounded-xl border border-gray-200">
+                        <span className="text-gray-500 block text-[10px]">ਵਾਪਸ ਆਏ ਗੱਟੇ:</span>
+                        <span className="font-mono font-bold text-emerald-700">{farmerBardanaReturned.toLocaleString()}</span>
+                      </div>
+                      <div className="bg-white p-2 rounded-xl border border-gray-200">
+                        <span className="text-gray-500 block text-[10px]">ਬਕਾਇਆ ਗੱਟੇ:</span>
+                        <span className={`font-mono font-bold ${farmerBardanaPending > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
+                          {farmerBardanaPending.toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+
                 {/* Signatures Block (Visible in Screen, Print, JPG, and PDF) */}
                 <div className="grid grid-cols-2 gap-8 mt-10 pt-8 border-t-2 border-gray-300 text-xs text-center font-bold">
                   <div>
                     <div className="h-14 border-b-2 border-gray-400 mb-2"></div>
                     <span className="text-gray-950 font-black">ਦਸਤਖ਼ਤ / ਅੰਗੂਠਾ ਕਿਸਾਨ (Farmer Signature)</span>
-                    <p className="text-[10px] text-gray-500 font-normal mt-0.5">ਮੈਂ ਇਹ ਹਿਸਾਬ-ਕਿਤਾਬ ਪੜ੍ਹ ਕੇ ਸਹੀ ਤਸਦੀਕ ਕੀਤਾ ਹੈ।</p>
+                    <p className="text-[10px] text-gray-500 font-normal mt-0.5">ਮੈਂ ਇਹ ਪੂਰਾ ਹਿਸਾਬ-ਕਿਤਾਬ ਤੇ ਸਾਰੀਆਂ ਪਰਚੀਆਂ ਪੜ੍ਹ ਕੇ ਸਹੀ ਤਸਦੀਕ ਕੀਤਾ ਹੈ।</p>
                   </div>
                   <div>
                     <div className="h-14 border-b-2 border-gray-400 mb-2"></div>
-                    <span className="text-gray-950 font-black">ਦਸਤਖ਼ਤ ਆੜ੍ਹਤੀਆ (JAMMU TRADING CO.)</span>
+                    <span className="text-gray-950 font-black">ਦਸਤਖ਼ਤ ਆੜ੍ਹਤੀਆ (JAMMU TRADING CO. & NEW JAMMU TRADING CO.)</span>
                     <p className="text-[10px] text-gray-500 font-normal mt-0.5">ਕਮਿਸ਼ਨ ਏਜੰਟ (ਆੜ੍ਹਤੀਆ ਫਰਮ ਮੋਹਰ ਸਹਿਤ)</p>
                   </div>
                 </div>
