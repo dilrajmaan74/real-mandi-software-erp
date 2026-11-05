@@ -14,7 +14,8 @@ import {
   ChevronDown, 
   ChevronUp,
   Building,
-  CheckCircle2
+  CheckCircle2,
+  BookOpen
 } from 'lucide-react';
 
 interface FarmerDirectoryProps {
@@ -22,6 +23,7 @@ interface FarmerDirectoryProps {
   onAddNew: () => void;
   onEditFarmer: (farmer: FarmerMaster) => void;
   onDeleteFarmer: (id: string) => void;
+  onViewLedger?: (farmerId: string) => void;
   sheetConfig: GoogleSheetConfig | null;
   onSyncSheets: () => void;
   isSyncing: boolean;
@@ -32,6 +34,7 @@ export const FarmerDirectory: React.FC<FarmerDirectoryProps> = ({
   onAddNew,
   onEditFarmer,
   onDeleteFarmer,
+  onViewLedger,
   sheetConfig,
   onSyncSheets,
   isSyncing,
@@ -235,6 +238,17 @@ export const FarmerDirectory: React.FC<FarmerDirectoryProps> = ({
 
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          {onViewLedger && (
+                            <button
+                              type="button"
+                              onClick={() => onViewLedger(farmer.id)}
+                              className="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 shadow-xs"
+                              title="ਖਾਤਾ / ਲੈਜਰ ਦੇਖੋ (View Farmer Ledger)"
+                            >
+                              <BookOpen className="w-3.5 h-3.5 text-amber-800" />
+                              <span>ਖਾਤਾ (Ledger)</span>
+                            </button>
+                          )}
                           <button
                             onClick={() => onEditFarmer(farmer)}
                             className="p-1.5 text-emerald-700 hover:bg-emerald-100 rounded-md transition-colors cursor-pointer"

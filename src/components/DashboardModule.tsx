@@ -45,7 +45,7 @@ interface DashboardModuleProps {
   currentMandi: string;
   duplicateCount: number;
   onOpenDuplicateCleaner: () => void;
-  onNavigateModule: (module: 'farmers' | 'arrivals' | 'bardana' | 'agency' | 'lifting' | 'letterpad' | 'ai_assistant') => void;
+  onNavigateModule: (module: 'farmers' | 'arrivals' | 'bardana' | 'agency' | 'lifting' | 'letterpad' | 'ai_assistant' | 'dashboard' | 'farmer_ledger') => void;
   onOpenLetterPad: () => void;
   onOpenSheetModal: () => void;
   onAddNewFarmer: () => void;
@@ -869,8 +869,17 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
           <span className="text-xs text-gray-400">1-ਕਲਿੱਕ ਕੰਟਰੋਲ</span>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-9 gap-3">
           
+          <button
+            type="button"
+            onClick={() => onNavigateModule('farmer_ledger')}
+            className="p-3 bg-amber-500/20 hover:bg-amber-500/30 active:scale-95 rounded-2xl border border-amber-400/40 transition text-center cursor-pointer flex flex-col items-center justify-center gap-1.5"
+          >
+            <Wallet className="w-5 h-5 text-amber-300" />
+            <span className="text-xs font-bold text-amber-200">ਕਿਸਾਨ ਖਾਤਾ</span>
+          </button>
+
           <button
             type="button"
             onClick={() => onNavigateModule('arrivals')}

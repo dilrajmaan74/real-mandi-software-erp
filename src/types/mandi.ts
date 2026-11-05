@@ -367,3 +367,15 @@ export interface LetterPadDocument {
   created_at: string;
 }
 
+export interface FarmerLedgerEntry {
+  id: string;
+  farmer_id: string;
+  farmer_name: string;
+  date: string;
+  transaction_type: 'Advance (ਪੇਸ਼ਗੀ)' | 'Payment Received (ਅਦਾਇਗੀ ਮਿਲੀ)' | 'Diesel / Fertilizer (ਤੇਲ/ਖਾਦ)' | 'Old Khata (ਪੁਰਾਣਾ ਬਕਾਇਆ)' | 'Other (ਹੋਰ)';
+  amount: number;
+  entry_type: 'debit' | 'credit'; // debit = farmer took money / owes; credit = farmer deposited or credited
+  notes?: string;
+  payment_mode?: 'Cash (ਨਕਦ)' | 'Bank Transfer (ਬੈਂਕ ਟਰਾਂਸਫਰ)' | 'Cheque' | 'UPI';
+  created_at: string;
+}

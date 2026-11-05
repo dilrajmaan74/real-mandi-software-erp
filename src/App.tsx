@@ -22,6 +22,7 @@ import { UnauthorizedDomainModal } from './components/UnauthorizedDomainModal';
 import { PWAInstallModal, MandiOfflineIndicator } from './components/PWAInstallModal';
 import { DuplicateCleanerModal } from './components/DuplicateCleanerModal';
 import { DashboardModule } from './components/DashboardModule';
+import { FarmerLedgerModule } from './components/FarmerLedgerModule';
 import { findDuplicateArrivals, findDuplicatePurchases, findDuplicateFarmers } from './lib/duplicates';
 import { 
   FarmerMaster, 
@@ -29,6 +30,7 @@ import {
   BardanaEntry, 
   AgencyPurchaseEntry, 
   LiftingDispatchEntry,
+  FarmerLedgerEntry,
   MandiTransaction, 
   GoogleSheetConfig,
   ShellerMaster,
@@ -87,7 +89,8 @@ import {
   Laptop,
   Download,
   Trash2,
-  LayoutDashboard
+  LayoutDashboard,
+  BookOpen
 } from 'lucide-react';
 
 // Demo Initial Data
@@ -360,8 +363,11 @@ export const DEMO_IDS = new Set([
 export default function App() {
   // Active Module Navigation Tab
   const [activeModule, setActiveModule] = useState<
-    'dashboard' | 'farmers' | 'arrivals' | 'bardana' | 'agency' | 'lifting' | 'letterpad' | 'ai_assistant'
+    'dashboard' | 'farmers' | 'arrivals' | 'bardana' | 'agency' | 'lifting' | 'letterpad' | 'ai_assistant' | 'farmer_ledger'
   >('dashboard');
+
+  // Currently selected farmer ID when jumping directly into farmer_ledger
+  const [activeLedgerFarmerId, setActiveLedgerFarmerId] = useState<string | null>(null);
 
   // Authentication
   const [user, setUser] = useState<User | null>(null);
@@ -449,6 +455,17 @@ export default function App() {
       console.warn(e);
     }
     return INITIAL_DEMO_LIFTING;
+  });
+
+  // Module 7: Farmer Ledger & Passbook Custom Entries
+  const [farmerLedgerEntries, setFarmerLedgerEntries] = useState<FarmerLedgerEntry[]>(() => {
+    try {
+      const saved = localStorage.getItem('kisanmitra_farmer_ledger_entries');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.warn(e);
+    }
+    return [];
   });
 
   // Rice Shellers Master
@@ -648,6 +665,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('kisanmitra_shellers', JSON.stringify(shellers));
   }, [shellers]);
+
+  useEffect(() => {
+    localStorage.setItem('kisanmitra_farmer_ledger_entries', JSON.stringify(farmerLedgerEntries));
+  }, [farmerLedgerEntries]);
 
   useEffect(() => {
     if (sheetConfig) {
@@ -1156,6 +1177,17 @@ export default function App() {
     showToast('success', `ਲਿਫਟਿੰਗ ਚਲਾਨ ${updated.challan_no} ਅੱਪਡੇਟ ਹੋਇਆ`);
   };
 
+  // Farmer Ledger Handlers
+  const handleAddLedgerEntry = (entry: FarmerLedgerEntry) => {
+    setFarmerLedgerEntries((prev) => [entry, ...prev]);
+    showToast('success', `ਕਿਸਾਨ ਖਾਤੇ ਵਿੱਚ ${entry.entry_type === 'debit' ? 'ਪੇਸ਼ਗੀ (-)' : 'ਅਦਾਇਗੀ (+)'} ₹${entry.amount.toLocaleString('en-IN')} ਦਰਜ ਹੋਈ!`);
+  };
+
+  const handleDeleteLedgerEntry = (id: string) => {
+    setFarmerLedgerEntries((prev) => prev.filter((e) => e.id !== id));
+    showToast('info', 'ਖਾਤਾ ਐਂਟਰੀ ਹਟਾ ਦਿੱਤੀ ਗਈ।');
+  };
+
   // Software Demo Data Cleanup Management (Only relevant when not logged in)
   const hasDemoData = 
     !user && (
@@ -1414,6 +1446,25 @@ export default function App() {
               </span>
             </button>
 
+            {/* Module 7: Farmer Ledger (ਕਿਸਾਨ ਖਾਤਾ / ਬਹੀ-ਖਾਤਾ) */}
+            <button
+              type="button"
+              onClick={() => setActiveModule('farmer_ledger')}
+              className={`inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                activeModule === 'farmer_ledger'
+                  ? 'bg-amber-600 text-white shadow-md ring-2 ring-amber-300'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              <BookOpen className="w-4 h-4 text-amber-300" />
+              <span>7. ਕਿਸਾਨ ਖਾਤਾ (Farmer Ledger)</span>
+              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                activeModule === 'farmer_ledger' ? 'bg-amber-800 text-amber-100' : 'bg-amber-100 text-amber-900'
+              }`}>
+                ਬਹੀ-ਖਾਤਾ
+              </span>
+            </button>
+
             {/* AI Voice Assistant */}
             <button
               type="button"
@@ -1527,6 +1578,10 @@ export default function App() {
               setIsFarmerModalOpen(true);
             }}
             onDeleteFarmer={handleDeleteFarmer}
+            onViewLedger={(farmerId) => {
+              setActiveLedgerFarmerId(farmerId);
+              setActiveModule('farmer_ledger');
+            }}
             sheetConfig={sheetConfig}
             onSyncSheets={() => setIsSheetModalOpen(true)}
             isSyncing={false}
@@ -1651,7 +1706,23 @@ export default function App() {
           />
         )}
 
-        {/* 6. AI Voice Studio for Unstructured Audio / Text */}
+        {/* 7. SEPARATE MODULE: Farmer Ledger / Account Passbook (ਕਿਸਾਨ ਖਾਤਾ / ਬਹੀ-ਖਾਤਾ) */}
+        {activeModule === 'farmer_ledger' && (
+          <FarmerLedgerModule
+            farmers={farmers}
+            cropArrivals={cropArrivals}
+            bardanaEntries={bardanaEntries}
+            agencyPurchases={agencyPurchases}
+            ledgerEntries={farmerLedgerEntries}
+            onAddLedgerEntry={handleAddLedgerEntry}
+            onDeleteLedgerEntry={handleDeleteLedgerEntry}
+            onNavigateModule={(mod) => setActiveModule(mod)}
+            currentMandi={currentMandi}
+            selectedFarmerIdProp={activeLedgerFarmerId}
+          />
+        )}
+
+        {/* 8. AI Voice Studio for Unstructured Audio / Text */}
         {activeModule === 'ai_assistant' && (
           <div className="space-y-6">
             <VoiceTextInputStudio onProcess={handleProcessVoiceInput} isLoading={isParsing} />
