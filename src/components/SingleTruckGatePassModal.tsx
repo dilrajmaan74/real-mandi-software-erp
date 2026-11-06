@@ -58,9 +58,7 @@ export const SingleTruckGatePassModal: React.FC<SingleTruckGatePassModalProps> =
     }
   }, [entry?.id, entry?.firm_name]);
 
-  if (!isOpen || !entry) return null;
-
-  // Active Firm Details (License, Mobile, Name)
+  // Active Firm Details (License, Mobile, Name) - Always called unconditionally
   const firmInfo = useMemo(() => {
     if (selectedFirm === 'JAMMU TRADING CO.') {
       return {
@@ -101,6 +99,9 @@ export const SingleTruckGatePassModal: React.FC<SingleTruckGatePassModalProps> =
       };
     }
   }, [selectedFirm]);
+
+  // Early return ONLY after all React hooks have run
+  if (!isOpen || !entry) return null;
 
   const handleFirmChange = (newFirm: string) => {
     setSelectedFirm(newFirm);
