@@ -2023,6 +2023,13 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
         isOpen={Boolean(gatePassModalEntry)}
         onClose={() => setGatePassModalEntry(null)}
         entry={gatePassModalEntry}
+        onUpdateEntryFirm={(entryId, newFirmName) => {
+          if (gatePassModalEntry && gatePassModalEntry.id === entryId) {
+            const updated = { ...gatePassModalEntry, firm_name: newFirmName };
+            setGatePassModalEntry(updated);
+            onUpdateEntry(updated);
+          }
+        }}
       />
 
     </div>
