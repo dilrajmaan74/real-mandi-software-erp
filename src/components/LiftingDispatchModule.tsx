@@ -46,6 +46,28 @@ import {
 } from '../lib/trucks';
 import { SingleTruckGatePassModal } from './SingleTruckGatePassModal';
 
+// Format date in Day/Month/Year (DD/MM/YYYY) format
+export const formatDayMonthYear = (rawDate?: string, includeTime = true): string => {
+  if (!rawDate) return '—';
+  try {
+    const d = new Date(rawDate);
+    if (isNaN(d.getTime())) return rawDate;
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    const dateFormatted = `${day}/${month}/${year}`;
+    if (!includeTime) return dateFormatted;
+    const timeFormatted = d.toLocaleTimeString('en-IN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+    return `${dateFormatted} • ${timeFormatted}`;
+  } catch {
+    return rawDate;
+  }
+};
+
 interface LiftingDispatchModuleProps {
   entries: LiftingDispatchEntry[];
   onAddEntry: (entry: LiftingDispatchEntry) => void;
@@ -153,11 +175,11 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
     }
   };
 
-  // Bag Categories & Breakdown (Old Bags, New Bags, Both)
+  // Bag Categories & Breakdown (Old Bags, New Bags, Both) - Start empty as requested!
   const [bagCategory, setBagCategory] = useState<'both' | 'old' | 'new'>('both');
-  const [newBags, setNewBags] = useState<number>(200);
-  const [oldBags, setOldBags] = useState<number>(200);
-  const [pendingYardBags, setPendingYardBags] = useState<number>(150);
+  const [newBags, setNewBags] = useState<number | ''>('');
+  const [oldBags, setOldBags] = useState<number | ''>('');
+  const [pendingYardBags, setPendingYardBags] = useState<number | ''>('');
   const [challanNo, setChallanNo] = useState(`CH-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
 
   // Total Bags & Auto Quintal Calculation (400 bags = 150.00 Qtl => 0.375 qtl/bag)
@@ -256,15 +278,31 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
       godown.trim() || selectedSheller
     );
 
-    // Reset Form
+    // Reset Form to blank empty boxes
     setTruckNo('');
     setDriverName('');
     setDriverMobile('');
     setMatchedTruckBadge(null);
     setTruckPhoto(undefined);
-    setNewBags(200);
-    setOldBags(200);
+    setNewBags('');
+    setOldBags('');
+    setPendingYardBags('');
     setChallanNo(`CH-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
+  };
+
+  // Open New Dispatch Modal with clean, empty input fields
+  const handleOpenNewDispatchModal = () => {
+    setTruckNo('');
+    setDriverName('');
+    setDriverMobile('');
+    setMatchedTruckBadge(null);
+    setTruckPhoto(undefined);
+    setNewBags('');
+    setOldBags('');
+    setPendingYardBags('');
+    setChallanNo(`CH-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
+    setDateTime(new Date().toISOString().slice(0, 16));
+    setIsModalOpen(true);
   };
 
   // Open Reconciliation Modal for Sheller Delivery
@@ -342,7 +380,7 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
 
   // Filtered entries by Search, Firm Tabs, Sheller, Agency, Variety, Bag Type, and Delivery Status
   const filteredEntries = useMemo(() => {
-    return entries.filter((e) => {
+    const list = entries.filter((e) => {
       const q = search.toLowerCase();
       const matchSearch =
         !search ||
@@ -382,6 +420,13 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
         bagTypeFilter === 'both' ? ((e.new_bags || 0) > 0 && (e.old_bags || 0) > 0) : true;
 
       return matchSearch && matchFirm && matchStatus && matchSheller && matchAgency && matchVariety && matchBagType;
+    });
+
+    // Date-wise sort: Newest date & time at the top
+    return [...list].sort((a, b) => {
+      const timeA = new Date(a.date_time || 0).getTime();
+      const timeB = new Date(b.date_time || 0).getTime();
+      return timeB - timeA;
     });
   }, [entries, search, firmTab, statusFilter, shellerFilter, agencyFilter, varietyFilter, bagTypeFilter]);
 
@@ -442,7 +487,7 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
 
           <button
             type="button"
-            onClick={() => setIsModalOpen(true)}
+            onClick={handleOpenNewDispatchModal}
             className="inline-flex items-center gap-2 px-4 py-2 bg-amber-400 hover:bg-amber-300 text-purple-950 rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
           >
             <Plus className="w-4 h-4" />
@@ -673,7 +718,7 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
         <table className="w-full text-left text-xs border-collapse">
           <thead>
             <tr className="bg-gray-50 text-gray-700 font-bold border-b border-gray-200">
-              <th className="py-3 px-3">ਚਲਾਨ ਨੰਬਰ / ਸਮਾਂ</th>
+              <th className="py-3 px-3">ਚਲਾਨ ਨੰਬਰ / ਮਿਤੀ (DD/MM/YYYY)</th>
               <th className="py-3 px-3">ਆੜ੍ਹਤੀਆ ਫਰਮ</th>
               <th className="py-3 px-3">ਟਰੱਕ, ਫੋਟੋ ਤੇ ਡਰਾਈਵਰ</th>
               <th className="py-3 px-3">ਸ਼ੈਲਰ, ਏਜੰਸੀ ਤੇ ਕਿਸਮ</th>
@@ -703,14 +748,17 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
                       <button
                         type="button"
                         onClick={() => setGatePassModalEntry(item)}
-                        className="text-left group cursor-pointer"
+                        className="text-left group cursor-pointer block"
                         title="ਇਸ ਸਿੰਗਲ ਟਰੱਕ ਦਾ ਗੇਟ ਪਾਸ ਦੇਖੋ / ਪ੍ਰਿੰਟ / PDF ਕਰੋ"
                       >
                         <div className="font-bold text-gray-900 group-hover:text-purple-700 underline-offset-2 group-hover:underline flex items-center gap-1">
                           <span>{item.challan_no}</span>
                           <Printer className="w-3 h-3 text-purple-600 opacity-0 group-hover:opacity-100 transition-opacity" />
                         </div>
-                        <div className="text-[10px] text-gray-400">{item.date_time}</div>
+                        <div className="text-[10px] text-purple-900 font-semibold font-mono flex items-center gap-1 mt-0.5">
+                          <Clock className="w-3 h-3 text-purple-600 shrink-0" />
+                          <span>{formatDayMonthYear(item.date_time)}</span>
+                        </div>
                       </button>
                     </td>
 
@@ -804,7 +852,9 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
                             <span>✓ ਤਸਦੀਕ (ਸ਼ੈਲਰ ਪਹੁੰਚਿਆ)</span>
                           </span>
                           {item.delivered_date_time && (
-                            <div className="text-[9px] text-gray-400 mt-0.5">{item.delivered_date_time}</div>
+                            <div className="text-[9.5px] text-emerald-800 font-mono font-medium mt-0.5">
+                              ਪਹੁੰਚ: {formatDayMonthYear(item.delivered_date_time)}
+                            </div>
                           )}
                         </div>
                       ) : (
@@ -1214,9 +1264,11 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
                       <label className="block text-gray-700 font-bold mb-1">ਏ-ਕਲਾਸ ਗੱਟੇ (A-Class Bags):</label>
                       <input
                         type="number"
+                        min="0"
                         value={newBags}
-                        onChange={(e) => setNewBags(Number(e.target.value))}
-                        className="w-full p-2 bg-white border border-purple-300 rounded-lg font-mono font-bold text-purple-950"
+                        onChange={(e) => setNewBags(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
+                        placeholder="ਨਵੇਂ ਗੱਟੇ ਦਰਜ ਕਰੋ..."
+                        className="w-full p-2 bg-white border border-purple-300 rounded-lg font-mono font-bold text-purple-950 placeholder:font-normal placeholder:text-gray-400"
                       />
                     </div>
                   )}
@@ -1226,9 +1278,11 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
                       <label className="block text-gray-700 font-bold mb-1">ਬੀ-ਕਲਾਸ ਗੱਟੇ (B-Class Bags):</label>
                       <input
                         type="number"
+                        min="0"
                         value={oldBags}
-                        onChange={(e) => setOldBags(Number(e.target.value))}
-                        className="w-full p-2 bg-white border border-purple-300 rounded-lg font-mono font-bold text-purple-950"
+                        onChange={(e) => setOldBags(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
+                        placeholder="ਪੁਰਾਣੇ ਗੱਟੇ ਦਰਜ ਕਰੋ..."
+                        className="w-full p-2 bg-white border border-purple-300 rounded-lg font-mono font-bold text-purple-950 placeholder:font-normal placeholder:text-gray-400"
                       />
                     </div>
                   )}
@@ -1258,9 +1312,11 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
                   <label className="block text-gray-600 font-semibold mb-1">ਫੜ੍ਹ ਵਿੱਚ ਬਾਕੀ (Yard Stock):</label>
                   <input
                     type="number"
+                    min="0"
                     value={pendingYardBags}
-                    onChange={(e) => setPendingYardBags(Number(e.target.value))}
-                    className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-xl font-mono font-bold text-amber-950"
+                    onChange={(e) => setPendingYardBags(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
+                    placeholder="ਫੜ੍ਹ ਵਿੱਚ ਬਾਕੀ ਗੱਟੇ..."
+                    className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-xl font-mono font-bold text-amber-950 placeholder:font-normal placeholder:text-gray-400"
                   />
                 </div>
               </div>
@@ -1895,7 +1951,7 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
                           <td className="p-2 border-r border-gray-200 font-sans text-center">{idx + 1}</td>
                           <td className="p-2 border-r border-gray-200 font-bold text-gray-900">
                             <div>{item.challan_no}</div>
-                            <div className="text-[9px] text-gray-400 font-normal">{item.date_time}</div>
+                            <div className="text-[9px] text-gray-600 font-normal font-mono">{formatDayMonthYear(item.date_time)}</div>
                           </td>
                           <td className="p-2 border-r border-gray-200 font-sans font-semibold text-[10px]">
                             {item.firm_name}

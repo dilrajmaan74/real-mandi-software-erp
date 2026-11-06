@@ -121,17 +121,46 @@ export const SingleTruckGatePassModal: React.FC<SingleTruckGatePassModalProps> =
   const pendingYardQtl = Number(((entry.pending_yard_bags || 0) * 0.375).toFixed(2));
   const isDelivered = entry.delivery_status === 'Delivered';
 
-  // Format date and time
+  // Format date and time in strict Day/Month/Year (DD/MM/YYYY) format
   const formattedDateTime = entry.date_time 
-    ? new Date(entry.date_time).toLocaleString('en-IN', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true
-      })
-    : new Date().toLocaleString('en-IN');
+    ? (() => {
+        try {
+          const d = new Date(entry.date_time);
+          if (isNaN(d.getTime())) return entry.date_time;
+          const day = String(d.getDate()).padStart(2, '0');
+          const month = String(d.getMonth() + 1).padStart(2, '0');
+          const year = d.getFullYear();
+          const time = d.toLocaleTimeString('en-IN', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+          });
+          return `${day}/${month}/${year} (${time})`;
+        } catch {
+          return entry.date_time;
+        }
+      })()
+    : '—';
+
+  const formattedDeliveredDateTime = entry.delivered_date_time
+    ? (() => {
+        try {
+          const d = new Date(entry.delivered_date_time);
+          if (isNaN(d.getTime())) return entry.delivered_date_time;
+          const day = String(d.getDate()).padStart(2, '0');
+          const month = String(d.getMonth() + 1).padStart(2, '0');
+          const year = d.getFullYear();
+          const time = d.toLocaleTimeString('en-IN', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+          });
+          return `${day}/${month}/${year} (${time})`;
+        } catch {
+          return entry.delivered_date_time;
+        }
+      })()
+    : '—';
 
   const copyTitle = 
     activeCopy === 'mandi' ? 'ਮੰਡੀ ਆੜ੍ਹਤੀਆ ਕਾਪੀ (Mandi Office Copy)' :
@@ -857,7 +886,7 @@ ${firmInfo.name}
                     <span>ਸ਼ੈਲਰ ਪਹੁੰਚ ਤੇ ਤਸਦੀਕ ਰਿਪੋਰਟ</span>
                   </h4>
                   <span className="text-[9.5px] text-gray-700 font-mono">
-                    ਪਹੁੰਚ ਸਮਾਂ: {entry.delivered_date_time || '—'}
+                    ਪਹੁੰਚ ਸਮਾਂ: {formattedDeliveredDateTime}
                   </span>
                 </div>
 
