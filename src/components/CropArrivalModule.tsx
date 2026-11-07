@@ -38,7 +38,8 @@ import {
   TrendingUp,
   Printer,
   FileDown,
-  Copy
+  Copy,
+  BookOpen
 } from 'lucide-react';
 import { appendCropArrivalToSheets } from '../lib/sheets';
 import { getSavedVillages, registerVillage, VillageItem } from '../lib/villages';
@@ -58,6 +59,7 @@ interface CropArrivalModuleProps {
   token: string | null;
   sheetConfig: GoogleSheetConfig | null;
   onOpenSheetModal: () => void;
+  onViewFarmerLedger?: (farmerId: string) => void;
 }
 
 export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
@@ -72,6 +74,7 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
   token,
   sheetConfig,
   onOpenSheetModal,
+  onViewFarmerLedger,
 }) => {
   // Navigation tabs within Crop Arrival
   const [activeTab, setActiveTab] = useState<'list' | 'batch' | 'comparison'>('list');
@@ -83,6 +86,7 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
   const [selectedParchiEntry, setSelectedParchiEntry] = useState<CropArrivalEntry | null>(null);
   const [search, setSearch] = useState('');
   const [cropFilter, setCropFilter] = useState('All');
+  const [farmerFilter, setFarmerFilter] = useState('All');
   const [isSyncing, setIsSyncing] = useState<string | null>(null);
 
   // Duplicate Detection & Filtering States
@@ -569,10 +573,39 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
     }
   };
 
+  // Discovered unique farmers from all arrivals for the farmer filter dropdown
+  const uniqueArrivalFarmers = useMemo(() => {
+    const map = new Map<string, { id?: string; name: string; namePa?: string; village?: string; count: number; bags: number; quintals: number }>();
+    entries.forEach((e) => {
+      const key = (e.farmer_name || '').trim();
+      if (!key) return;
+      const existing = map.get(key);
+      const bags = Number(e.total_bags_arrived) || (Number(e.new_jute_bags || 0) + Number(e.old_jute_bags || 0));
+      const qtl = Number(e.weight_quintals) || 0;
+      if (existing) {
+        existing.count += 1;
+        existing.bags += bags;
+        existing.quintals += qtl;
+        if (!existing.id && e.farmer_id) existing.id = e.farmer_id;
+      } else {
+        map.set(key, {
+          id: e.farmer_id,
+          name: e.farmer_name,
+          namePa: e.farmer_name_pa,
+          village: e.village,
+          count: 1,
+          bags,
+          quintals: qtl,
+        });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => b.bags - a.bags);
+  }, [entries]);
+
   // AUTOMATIC CHRONOLOGICAL SORTING BY DATE DESCENDING:
   // If an entry for 10/10/2026 is added after 12/10/2026, it will automatically place into date order!
   const sortedAndFilteredEntries = useMemo(() => {
-    const q = search.toLowerCase();
+    const q = search.toLowerCase().trim();
     return [...entries]
       .sort((a, b) => {
         const timeA = new Date(a.date).getTime();
@@ -583,6 +616,7 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
       .filter((e) => {
         const pNo = e.parchi_no || e.gate_pass_no || '';
         const matchSearch =
+          !q ||
           e.farmer_name.toLowerCase().includes(q) ||
           (e.farmer_name_pa && e.farmer_name_pa.includes(q)) ||
           e.village.toLowerCase().includes(q) ||
@@ -590,9 +624,14 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
           (e.mandi_name && e.mandi_name.toLowerCase().includes(q));
         if (showOnlyDuplicates && !duplicateArrivalIdSet.has(e.id)) return false;
         const matchCrop = cropFilter === 'All' || e.crop_type.includes(cropFilter) || e.crop_variety.includes(cropFilter);
-        return matchSearch && matchCrop;
+        const matchFarmer =
+          farmerFilter === 'All' ||
+          e.farmer_name.toLowerCase().trim() === farmerFilter.toLowerCase().trim() ||
+          (e.farmer_id && e.farmer_id === farmerFilter) ||
+          (e.farmer_name_pa && e.farmer_name_pa.trim() === farmerFilter.trim());
+        return matchSearch && matchCrop && matchFarmer;
       });
-  }, [entries, search, cropFilter, showOnlyDuplicates, duplicateArrivalIdSet]);
+  }, [entries, search, cropFilter, farmerFilter, showOnlyDuplicates, duplicateArrivalIdSet]);
 
   const totalQuintals = entries.reduce((acc, curr) => acc + (curr.weight_quintals || 0), 0);
   const totalBagsCount = entries.reduce((acc, curr) => acc + (curr.total_bags_arrived || 0), 0);
@@ -1448,15 +1487,33 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
         </div>
       </div>
 
-      {/* KPI Stats (Always Visible for Overview) */}
+      {/* KPI Stats (Always Visible for Overview & Live Filtered Totals) */}
       <div className="px-5 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
-          <span className="text-gray-500 block text-[11px]">ਕੁੱਲ ਆਵਕ ਵਜ਼ਨ (Weight)</span>
-          <div className="text-lg font-bold font-mono text-emerald-900">{totalQuintals.toFixed(2)} Qtl</div>
+        <div className="bg-emerald-50 border-2 border-emerald-300 rounded-xl p-3 shadow-2xs">
+          <div className="flex items-center justify-between">
+            <span className="text-gray-600 font-bold block text-[11px]">ਕੁੱਲ ਆਵਕ ਵਜ਼ਨ (Weight)</span>
+            {(search.trim() || cropFilter !== 'All' || farmerFilter !== 'All' || showOnlyDuplicates) && (
+              <span className="text-[10px] bg-emerald-200 text-emerald-900 px-1.5 py-0.2 rounded font-bold font-mono">
+                ਫਿਲਟਰ ਮੁਤਾਬਕ
+              </span>
+            )}
+          </div>
+          <div className="text-lg font-black font-mono text-emerald-950 mt-0.5">
+            {(search.trim() || cropFilter !== 'All' || farmerFilter !== 'All' || showOnlyDuplicates ? filteredTotalQuintals : totalQuintals).toFixed(2)} Qtl
+          </div>
         </div>
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
-          <span className="text-gray-500 block text-[11px]">ਕੁੱਲ ਆਏ ਗੱਟੇ (Total Bags)</span>
-          <div className="text-lg font-bold font-mono text-amber-900">{totalBagsCount} Bags</div>
+        <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-3 shadow-2xs">
+          <div className="flex items-center justify-between">
+            <span className="text-gray-600 font-bold block text-[11px]">ਕੁੱਲ ਆਏ ਗੱਟੇ (Total Bags)</span>
+            {(search.trim() || cropFilter !== 'All' || farmerFilter !== 'All' || showOnlyDuplicates) && (
+              <span className="text-[10px] bg-amber-200 text-amber-950 px-1.5 py-0.2 rounded font-bold font-mono">
+                ਫਿਲਟਰ ਮੁਤਾਬਕ
+              </span>
+            )}
+          </div>
+          <div className="text-lg font-black font-mono text-amber-950 mt-0.5">
+            {(search.trim() || cropFilter !== 'All' || farmerFilter !== 'All' || showOnlyDuplicates ? filteredTotalBags : totalBagsCount).toLocaleString()} Bags
+          </div>
         </div>
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
           <span className="text-gray-500 block text-[11px]">ਲੜੀਬੱਧ ਕ੍ਰਮ (Sorting)</span>
@@ -1478,23 +1535,52 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
         <div className="space-y-3">
           {/* Search & Filter */}
           <div className="px-5 py-1 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="relative w-full sm:w-96">
+            <div className="relative w-full sm:w-80">
               <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="ਕਿਸਾਨ, ਪਿੰਡ, ਦਾਣਾ ਮੰਡੀ, ਪਰਚੀ ਨੰਬਰ (Parchi No) ਖੋਜੋ..."
+                placeholder="ਕਿਸਾਨ, ਪਿੰਡ, ਦਾਣਾ ਮੰਡੀ, ਪਰਚੀ ਨੰਬਰ ਖੋਜੋ..."
                 className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-900 focus:outline-none focus:border-emerald-600 focus:bg-white"
               />
             </div>
 
             <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
+              {/* Farmer Selection Dropdown */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-gray-700 whitespace-nowrap">ਕਿਸਾਨ:</span>
+                <select
+                  value={farmerFilter}
+                  onChange={(e) => setFarmerFilter(e.target.value)}
+                  className="px-2.5 py-1.5 bg-emerald-50 border-2 border-emerald-600 rounded-lg text-xs text-gray-950 font-bold focus:outline-none cursor-pointer max-w-[200px] truncate"
+                >
+                  <option value="All">ਸਾਰੇ ਕਿਸਾਨ ({uniqueArrivalFarmers.length})</option>
+                  {uniqueArrivalFarmers.map((f) => (
+                    <option key={f.name} value={f.name}>
+                      {f.name} {f.namePa ? `(${f.namePa})` : ''} — {f.village || 'ਪਿੰਡ N/A'} ({f.bags} ਬੋਰੇ)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {farmerFilter !== 'All' && onViewFarmerLedger && (
+                <button
+                  type="button"
+                  onClick={() => onViewFarmerLedger(farmerFilter)}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-700 hover:bg-blue-800 text-white rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
+                  title="ਇਸ ਕਿਸਾਨ ਦਾ ਪੂਰਾ ਖਾਤਾ ਅਤੇ ਸਟੇਟਮੈਂਟ ਦੇਖੋ"
+                >
+                  <BookOpen className="w-3.5 h-3.5 text-amber-300" />
+                  <span>ਖਾਤਾ ਵੇਖੋ</span>
+                </button>
+              )}
+
               <span className="text-xs text-gray-500">ਕਿਸਮ:</span>
               <select
                 value={cropFilter}
                 onChange={(e) => setCropFilter(e.target.value)}
-                className="px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-700 font-semibold focus:outline-none cursor-pointer"
+                className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-700 font-semibold focus:outline-none cursor-pointer"
               >
                 <option value="All">ਸਾਰੀਆਂ ਕਿਸਮਾਂ (All Varieties)</option>
                 <option value="Paddy Grade A">Paddy Grade A</option>
@@ -1687,6 +1773,17 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
                               <Printer className="w-3.5 h-3.5" />
                               <span>ਪਰਚੀ</span>
                             </button>
+                            {onViewFarmerLedger && (
+                              <button
+                                type="button"
+                                onClick={() => onViewFarmerLedger(item.farmer_id || item.farmer_name)}
+                                title="ਇਸ ਕਿਸਾਨ ਦਾ ਪੂਰਾ ਖਾਤਾ / ਪਾਸਬੁੱਕ ਦੇਖੋ"
+                                className="p-1.5 text-blue-700 hover:text-blue-900 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer font-bold inline-flex items-center gap-1 text-[11px]"
+                              >
+                                <BookOpen className="w-3.5 h-3.5 text-blue-600" />
+                                <span>ਖਾਤਾ</span>
+                              </button>
+                            )}
                             <button
                               onClick={() => openEditModal(item)}
                               title="ਐਡਿਟ ਕਰੋ"
@@ -2942,8 +3039,19 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
                         </div>
                       </div>
 
-                      {/* Right Status Badge */}
-                      <div className="shrink-0 sm:self-start">
+                      {/* Right Status Badge & Ledger Button */}
+                      <div className="shrink-0 sm:self-start flex items-center gap-2 flex-wrap">
+                        {onViewFarmerLedger && (
+                          <button
+                            type="button"
+                            onClick={() => onViewFarmerLedger(rec.farmer_id || rec.name_en)}
+                            className="inline-flex items-center gap-1.5 text-xs font-bold bg-blue-700 hover:bg-blue-800 text-white px-3 py-1.5 rounded-full shadow-2xs transition cursor-pointer"
+                            title="ਇਸ ਕਿਸਾਨ ਦਾ ਪੂਰਾ ਖਾਤਾ / ਪਾਸਬੁੱਕ ਸਟੇਟਮੈਂਟ ਦੇਖੋ"
+                          >
+                            <BookOpen className="w-3.5 h-3.5 text-amber-300" />
+                            <span>ਖਾਤਾ ਦੇਖੋ</span>
+                          </button>
+                        )}
                         {isCleared ? (
                           <span className="inline-flex items-center gap-1.5 text-xs font-black bg-emerald-100 text-emerald-950 px-3.5 py-1.5 rounded-full border border-emerald-300">
                             <CheckCircle2 className="w-4 h-4 text-emerald-600" />

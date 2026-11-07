@@ -1613,6 +1613,10 @@ export default function App() {
             token={token}
             sheetConfig={sheetConfig}
             onOpenSheetModal={() => setIsSheetModalOpen(true)}
+            onViewFarmerLedger={(farmerId) => {
+              setActiveLedgerFarmerId(farmerId);
+              setActiveModule('farmer_ledger');
+            }}
           />
         )}
 
@@ -1719,6 +1723,7 @@ export default function App() {
             onNavigateModule={(mod) => setActiveModule(mod)}
             currentMandi={currentMandi}
             selectedFarmerIdProp={activeLedgerFarmerId}
+            onSelectFarmer={(id) => setActiveLedgerFarmerId(id)}
           />
         )}
 

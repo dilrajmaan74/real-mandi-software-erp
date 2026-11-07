@@ -54,6 +54,7 @@ interface FarmerLedgerModuleProps {
   onNavigateModule: (module: 'farmers' | 'arrivals' | 'bardana' | 'agency' | 'lifting' | 'letterpad' | 'ai_assistant' | 'dashboard' | 'farmer_ledger') => void;
   currentMandi: string;
   selectedFarmerIdProp?: string | null;
+  onSelectFarmer?: (farmerId: string) => void;
 }
 
 interface FarmerAdjustments {
@@ -80,6 +81,7 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
   onNavigateModule,
   currentMandi,
   selectedFarmerIdProp,
+  onSelectFarmer,
 }) => {
   const [search, setSearch] = useState('');
   const [selectedFarmerId, setSelectedFarmerId] = useState<string>(
@@ -87,12 +89,21 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
   );
   const [activeTab, setActiveTab] = useState<'purchases' | 'arrivals' | 'advances' | 'bardana'>('purchases');
   
-  // Keep selectedFarmerId in sync when selectedFarmerIdProp updates (e.g. clicking 'ਖਾਤਾ ਵੇਖੋ' in Farmer Directory)
+  // Track previous external selectedFarmerIdProp so internal selections are never wiped or reverted
+  const lastPropFarmerIdRef = useRef<string | null | undefined>(selectedFarmerIdProp);
   useEffect(() => {
-    if (selectedFarmerIdProp) {
+    if (selectedFarmerIdProp && selectedFarmerIdProp !== lastPropFarmerIdRef.current) {
+      lastPropFarmerIdRef.current = selectedFarmerIdProp;
       setSelectedFarmerId(selectedFarmerIdProp);
     }
   }, [selectedFarmerIdProp]);
+
+  // Handle active farmer change with bidirectional sync to parent App.tsx
+  const handleFarmerChange = (newFarmerId: string) => {
+    setSelectedFarmerId(newFarmerId);
+    lastPropFarmerIdRef.current = newFarmerId;
+    onSelectFarmer?.(newFarmerId);
+  };
 
   // Advance/Cash Transaction Modal
   const [isAddEntryModalOpen, setIsAddEntryModalOpen] = useState(false);
@@ -160,7 +171,9 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
       });
       if (existing) return;
 
-      const genId = a.farmer_id || `ARR-FARMER-${aNorm.replace(/[^a-z0-9]/g, '')}-${aVillage.replace(/[^a-z0-9]/g, '') || 'v'}`;
+      const safeFarmerSlug = (aNorm.replace(/\s+/g, '_') || 'f').slice(0, 30);
+      const safeVillageSlug = (aVillage.replace(/\s+/g, '_') || 'v').slice(0, 20);
+      const genId = a.farmer_id || `ARR-FARMER-${safeFarmerSlug}-${safeVillageSlug}`;
       if (seenIds.has(genId)) return;
 
       seenKeys.add(aKey);
@@ -203,7 +216,9 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
       });
       if (existing) return;
 
-      const genId = p.farmer_id || `PUR-FARMER-${pNorm.replace(/[^a-z0-9]/g, '')}-${pVillage.replace(/[^a-z0-9]/g, '') || 'v'}`;
+      const safeFarmerSlug = (pNorm.replace(/\s+/g, '_') || 'f').slice(0, 30);
+      const safeVillageSlug = (pVillage.replace(/\s+/g, '_') || 'v').slice(0, 20);
+      const genId = p.farmer_id || `PUR-FARMER-${safeFarmerSlug}-${safeVillageSlug}`;
       if (seenIds.has(genId)) return;
 
       seenKeys.add(pKey);
@@ -227,12 +242,21 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
     return list;
   }, [farmers, cropArrivals, agencyPurchases]);
 
-  // Selected Farmer (from all discovered farmers)
+  // Selected Farmer (from all discovered farmers - resilient to IDs and Names)
   const currentFarmer = useMemo(() => {
     if (!allMasterFarmers || allMasterFarmers.length === 0) return null;
     if (selectedFarmerId) {
-      const found = allMasterFarmers.find((f) => f.id === selectedFarmerId);
-      if (found) return found;
+      // 1. Exact ID Match
+      const foundById = allMasterFarmers.find((f) => f.id === selectedFarmerId);
+      if (foundById) return foundById;
+
+      // 2. Exact Name Match (English or Punjabi)
+      const selNorm = normalizeCleanStr(selectedFarmerId);
+      const foundByName = allMasterFarmers.find((f) => 
+        normalizeCleanStr(f.name_en) === selNorm ||
+        (f.name_pa && f.name_pa.trim() === selectedFarmerId.trim())
+      );
+      if (foundByName) return foundByName;
     }
     return allMasterFarmers[0] || null;
   }, [allMasterFarmers, selectedFarmerId]);
@@ -944,7 +968,7 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
             id="top-farmer-select"
             value={currentFarmer?.id || ''}
             onChange={(e) => {
-              setSelectedFarmerId(e.target.value);
+              handleFarmerChange(e.target.value);
             }}
             className="w-full px-3.5 py-2.5 bg-emerald-50 border-2 border-emerald-600 rounded-xl text-xs font-black text-gray-950 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer shadow-inner"
           >
@@ -1000,7 +1024,7 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
                     <button
                       key={f.id}
                       type="button"
-                      onClick={() => setSelectedFarmerId(f.id)}
+                      onClick={() => handleFarmerChange(f.id)}
                       className={`w-full p-2.5 rounded-xl text-left transition-all cursor-pointer flex flex-col justify-between ${
                         isSelected 
                           ? 'bg-emerald-900 text-white shadow-md' 
