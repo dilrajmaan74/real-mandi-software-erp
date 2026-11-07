@@ -597,6 +597,55 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
   const totalQuintals = entries.reduce((acc, curr) => acc + (curr.weight_quintals || 0), 0);
   const totalBagsCount = entries.reduce((acc, curr) => acc + (curr.total_bags_arrived || 0), 0);
 
+  // Dynamic totals for currently filtered arrivals (when searching farmer name or filtering)
+  const filteredTotalBags = useMemo(() => {
+    return sortedAndFilteredEntries.reduce((acc, curr) => acc + (curr.total_bags_arrived || 0), 0);
+  }, [sortedAndFilteredEntries]);
+
+  const filteredNewBags = useMemo(() => {
+    return sortedAndFilteredEntries.reduce((acc, curr) => {
+      const tot = curr.total_bags_arrived || 0;
+      const nb = curr.new_jute_bags !== undefined && curr.new_jute_bags !== null ? curr.new_jute_bags : Math.round(tot / 2);
+      return acc + nb;
+    }, 0);
+  }, [sortedAndFilteredEntries]);
+
+  const filteredOldBags = useMemo(() => {
+    return sortedAndFilteredEntries.reduce((acc, curr) => {
+      const tot = curr.total_bags_arrived || 0;
+      const ob = curr.old_jute_bags !== undefined && curr.old_jute_bags !== null ? curr.old_jute_bags : Math.floor(tot / 2);
+      return acc + ob;
+    }, 0);
+  }, [sortedAndFilteredEntries]);
+
+  const filteredLooseKg = useMemo(() => {
+    return sortedAndFilteredEntries.reduce((acc, curr) => acc + (curr.loose_weight_kg || 0), 0);
+  }, [sortedAndFilteredEntries]);
+
+  const filteredTotalQuintals = useMemo(() => {
+    return sortedAndFilteredEntries.reduce((acc, curr) => acc + (curr.weight_quintals || 0), 0);
+  }, [sortedAndFilteredEntries]);
+
+  const filteredTotalLabor = useMemo(() => {
+    return sortedAndFilteredEntries.reduce((acc, curr) => {
+      const l = curr.labor_total || 0;
+      const s = curr.sukhi_kiti_total || 0;
+      const d = curr.double_pakha_total || 0;
+      const tot = (curr.total_labor_deductions !== undefined && curr.total_labor_deductions !== null && curr.total_labor_deductions > 0)
+        ? curr.total_labor_deductions
+        : (l + s + d > 0 ? l + s + d : (curr.total_bags_arrived || 0) * (curr.labor_rate ?? 8));
+      return acc + tot;
+    }, 0);
+  }, [sortedAndFilteredEntries]);
+
+  const filteredEstMspValue = filteredTotalQuintals * 2461;
+
+  const avgMoisture = useMemo(() => {
+    const withMoisture = sortedAndFilteredEntries.filter((e) => e.moisture_percentage && e.moisture_percentage > 0);
+    if (withMoisture.length === 0) return 0;
+    return withMoisture.reduce((acc, curr) => acc + (curr.moisture_percentage || 0), 0) / withMoisture.length;
+  }, [sortedAndFilteredEntries]);
+
   // --- FARMER ARRIVAL VS PURCHASE COMPARISON DATA ---
   // Calculates for each farmer: Arrived bags, Own purchased bags, Linked family member purchased bags, and remaining balance bags
   // 100% collision-free, distinguishes duplicate names by father/husband name & village, and properly attributes linked farmer purchases
@@ -1660,7 +1709,133 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
                   })
                 )}
               </tbody>
+              <tfoot className="bg-amber-100/90 font-bold border-t-2 border-amber-400 text-amber-950 text-xs">
+                <tr>
+                  <td colSpan={5} className="py-3 px-3 text-left">
+                    <div className="font-black text-amber-950 flex items-center gap-1.5 flex-wrap">
+                      <Wheat className="w-4 h-4 text-amber-700" />
+                      <span>ਕੁੱਲ ਜੋੜ (Filtered Total): {sortedAndFilteredEntries.length} ਆਵਕ ਪਰਚੀਆਂ</span>
+                      {search.trim() && (
+                        <span className="bg-amber-200 text-amber-900 px-2 py-0.5 rounded text-[11px] font-mono border border-amber-300">
+                          ਕਿਸਾਨ / ਖੋਜ: "{search}"
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="py-3 px-3 text-right font-mono font-black text-amber-950">
+                    <div>{filteredTotalBags.toLocaleString()} Bags</div>
+                    <div className="text-[10px] text-amber-800 font-normal">
+                      {filteredNewBags.toLocaleString()}N + {filteredOldBags.toLocaleString()}O
+                      {filteredLooseKg > 0 && <span className="ml-1 text-emerald-800 font-bold">+{filteredLooseKg}kg ਤੋਟਾ</span>}
+                    </div>
+                  </td>
+                  <td className="py-3 px-3 text-right font-mono font-black text-emerald-950">
+                    {filteredTotalQuintals.toFixed(2)} Qtl
+                  </td>
+                  <td className="py-3 px-3 text-right font-mono font-black text-rose-900">
+                    -₹{filteredTotalLabor.toLocaleString('en-IN')}
+                  </td>
+                  <td className="py-3 px-3 text-center font-mono font-bold text-blue-900">
+                    {avgMoisture > 0 ? `${avgMoisture.toFixed(1)}%` : '—'}
+                  </td>
+                  <td colSpan={2} className="py-3 px-4 text-right font-mono font-black text-emerald-950">
+                    <span className="text-[10px] text-emerald-800 block font-sans">ਕੁੱਲ MSP ਵੈਲਿਊ:</span>
+                    ₹{filteredEstMspValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                  </td>
+                </tr>
+              </tfoot>
             </table>
+          </div>
+
+          {/* Bottom Filter / Search Summary Totals Card ("ਫਿਲਟਰ / ਸਰਚ ਬਾਕਸ ਲਿਖਣ 'ਤੇ ਥੱਲੇ ਟੋਟਲ ਆਵੇ") */}
+          <div className="p-4 sm:p-5 bg-gradient-to-r from-emerald-950 via-teal-900 to-emerald-900 text-white rounded-2xl shadow-lg border-2 border-amber-400 mt-4 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-emerald-800/80">
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-3 py-1 rounded-full bg-amber-400 text-emerald-950 font-black text-xs uppercase tracking-wide flex items-center gap-1.5 shadow-xs">
+                    <Wheat className="w-3.5 h-3.5" />
+                    <span>ਫਸਲ ਆਵਕ ਕੁੱਲ ਨਿਚੋੜ (Arrivals Summary Total)</span>
+                  </span>
+                  {search.trim() && (
+                    <span className="text-xs bg-emerald-800 text-amber-200 px-2.5 py-0.5 rounded-lg font-mono border border-amber-300/40">
+                      ਕਿਸਾਨ / ਖੋਜ: "{search}"
+                    </span>
+                  )}
+                  {cropFilter !== 'All' && (
+                    <span className="text-xs bg-emerald-800 text-emerald-200 px-2 py-0.5 rounded-md font-medium">
+                      ਫਸਲ: {cropFilter}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-emerald-200 mt-1.5">
+                  {search.trim()
+                    ? `ਚੁਣੇ ਹੋਏ ਕਿਸਾਨ / ਖੋਜ ਮੁਤਾਬਕ ਕੁੱਲ ${sortedAndFilteredEntries.length} ਆਵਕ ਪਰਚੀਆਂ ਦਾ ਸੰਪੂਰਨ ਹਿਸਾਬ:`
+                    : `ਮੰਡੀ ਆਵਕ ਦੀਆਂ ਕੁੱਲ ${sortedAndFilteredEntries.length} ਐਂਟਰੀਆਂ ਦਾ ਲਾਈਵ ਨਿਚੋੜ:`}
+                </p>
+              </div>
+
+              <div className="text-left sm:text-right bg-emerald-900/60 p-3 rounded-xl border border-emerald-700/60">
+                <span className="text-[11px] text-emerald-300 block font-medium">ਸਰਕਾਰੀ MSP ਰੇਟ (@ ₹2,461 / ਕੁਇੰਟਲ)</span>
+                <span className="text-lg sm:text-2xl font-mono font-black text-amber-300">
+                  ₹{filteredEstMspValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                </span>
+              </div>
+            </div>
+
+            {/* 6 Metric Breakdown Badges */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-center">
+              <div className="bg-emerald-900/70 p-3 rounded-xl border border-emerald-700/60 shadow-2xs">
+                <span className="text-[11px] text-emerald-300 block">ਕੁੱਲ ਪਰਚੀਆਂ</span>
+                <span className="text-lg font-black font-mono text-white mt-0.5 block">
+                  {sortedAndFilteredEntries.length}
+                </span>
+                <span className="text-[10px] text-emerald-400 block mt-0.5">ਆਵਕ ਰਿਕਾਰਡ</span>
+              </div>
+
+              <div className="bg-emerald-900/70 p-3 rounded-xl border border-emerald-700/60 shadow-2xs">
+                <span className="text-[11px] text-emerald-300 block">ਕੁੱਲ ਗੱਟੇ (Bags)</span>
+                <span className="text-lg font-black font-mono text-amber-300 mt-0.5 block">
+                  {filteredTotalBags.toLocaleString()}
+                </span>
+                <span className="text-[10px] text-emerald-200 block mt-0.5">
+                  {filteredNewBags.toLocaleString()} ਨਵੇਂ + {filteredOldBags.toLocaleString()} ਪੁਰਾਣੇ
+                </span>
+              </div>
+
+              <div className="bg-emerald-900/70 p-3 rounded-xl border border-emerald-700/60 shadow-2xs">
+                <span className="text-[11px] text-emerald-300 block">ਕੁੱਲ ਵਜ਼ਨ (Quintals)</span>
+                <span className="text-lg font-black font-mono text-white mt-0.5 block">
+                  {filteredTotalQuintals.toFixed(2)} Qtl
+                </span>
+                <span className="text-[10px] text-amber-300 block mt-0.5">
+                  {filteredLooseKg > 0 ? `+${filteredLooseKg} kg ਤੋਟਾ ਸ਼ਾਮਲ` : 'ਕੁੱਲ ਤੋਲ'}
+                </span>
+              </div>
+
+              <div className="bg-emerald-900/70 p-3 rounded-xl border border-emerald-700/60 shadow-2xs">
+                <span className="text-[11px] text-emerald-300 block">3 ਲੇਬਰ ਕਟੌਤੀਆਂ</span>
+                <span className="text-lg font-black font-mono text-rose-300 mt-0.5 block">
+                  -₹{filteredTotalLabor.toLocaleString('en-IN')}
+                </span>
+                <span className="text-[10px] text-emerald-300 block mt-0.5">ਪੱਲੇਦਾਰੀ+ਸੁਕੀ+ਪੱਖਾ</span>
+              </div>
+
+              <div className="bg-emerald-900/70 p-3 rounded-xl border border-emerald-700/60 shadow-2xs">
+                <span className="text-[11px] text-emerald-300 block">ਨੈੱਟ ਫਸਲ ਰਕਮ</span>
+                <span className="text-lg font-black font-mono text-emerald-300 mt-0.5 block">
+                  ₹{Math.max(0, filteredEstMspValue - filteredTotalLabor).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                </span>
+                <span className="text-[10px] text-emerald-400 block mt-0.5">ਲੇਬਰ ਖਰਚੇ ਕੱਟ ਕੇ</span>
+              </div>
+
+              <div className="bg-emerald-900/70 p-3 rounded-xl border border-emerald-700/60 shadow-2xs">
+                <span className="text-[11px] text-emerald-300 block">ਔਸਤ ਨਮੀ (Moisture)</span>
+                <span className="text-lg font-black font-mono text-white mt-0.5 block">
+                  {avgMoisture > 0 ? `${avgMoisture.toFixed(1)}%` : '—'}
+                </span>
+                <span className="text-[10px] text-emerald-300 block mt-0.5">ਸਰਕਾਰੀ ਮਿਆਰ 17%</span>
+              </div>
+            </div>
           </div>
         </div>
       )}

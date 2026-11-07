@@ -103,43 +103,52 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
     return digits.length >= 10 ? digits.slice(-10) : digits;
   };
 
-  // Extract normalized name tokens for fuzzy/token matching
-  const getNameTokens = (name?: string): string[] => {
-    if (!name) return [];
-    return name
-      .toLowerCase()
-      .replace(/[.,/#!$%^&*;:{}=\-_`~()]/g, ' ')
-      .replace(/\b(s\/o|d\/o|w\/o|so|do|wo|sardar|bhai|ji|singh|kaur|shri|sm|pb)\b/gi, ' ')
-      .split(/\s+/)
-      .map((t) => t.trim())
-      .filter((t) => t.length >= 2);
+  // Normalized clean string for matching
+  const normalizeCleanStr = (s?: string) => (s || '').toLowerCase().trim().replace(/\s+/g, ' ');
+
+  // Format date in Day/Month/Year (DD/MM/YYYY) format
+  const formatDmy = (rawDate?: string): string => {
+    if (!rawDate) return '—';
+    try {
+      const d = new Date(rawDate);
+      if (isNaN(d.getTime())) return rawDate;
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+      return `${day}/${month}/${year}`;
+    } catch {
+      return rawDate;
+    }
   };
 
   // 1. Comprehensive list of all farmers across Directory + Arrivals + Purchases + Ledger
-  // This ensures that even if a farmer was only entered in Arrivals or Purchases without being pre-registered,
-  // they 100% appear in the Farmer Ledger and can never be missed!
   const allMasterFarmers = useMemo(() => {
     const list: FarmerMaster[] = [...farmers];
-    const seenNames = new Set(farmers.map((f) => f.name_en.toLowerCase().trim()));
     const seenIds = new Set(farmers.map((f) => f.id));
+    const seenKeys = new Set(
+      farmers.map((f) => `${normalizeCleanStr(f.name_en)}|${normalizeCleanStr(f.village_en)}|${cleanPhone(f.mobile_number)}`)
+    );
 
     // Discover any farmers from Crop Arrivals
     cropArrivals.forEach((a) => {
       const aName = (a.farmer_name || '').trim();
       if (!aName) return;
-      const cleanA = aName.toLowerCase();
-      if (seenNames.has(cleanA)) return;
-
       const aPhone = cleanPhone(a.mobile);
+      const aVillage = normalizeCleanStr(a.village);
+      const aKey = `${normalizeCleanStr(aName)}|${aVillage}|${aPhone}`;
+
+      if (a.farmer_id && seenIds.has(a.farmer_id)) return;
+      if (seenKeys.has(aKey)) return;
+
       if (aPhone.length >= 10) {
         const phoneMatch = list.find((f) => cleanPhone(f.mobile_number) === aPhone);
         if (phoneMatch) return;
       }
 
-      const genId = a.farmer_id || `ARR-FARMER-${cleanA.replace(/[^a-z0-9]/g, '')}`;
+      const genId = a.farmer_id || `ARR-FARMER-${normalizeCleanStr(aName).replace(/[^a-z0-9]/g, '')}-${aVillage.replace(/[^a-z0-9]/g, '') || 'v'}`;
       if (seenIds.has(genId)) return;
 
-      seenNames.add(cleanA);
+      seenKeys.add(aKey);
       seenIds.add(genId);
 
       list.push({
@@ -161,19 +170,22 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
     agencyPurchases.forEach((p) => {
       const pName = (p.farmer_name || '').trim();
       if (!pName) return;
-      const cleanP = pName.toLowerCase();
-      if (seenNames.has(cleanP)) return;
-
       const pPhone = cleanPhone(p.mobile);
+      const pVillage = normalizeCleanStr(p.address_village || p.village);
+      const pKey = `${normalizeCleanStr(pName)}|${pVillage}|${pPhone}`;
+
+      if (p.farmer_id && seenIds.has(p.farmer_id)) return;
+      if (seenKeys.has(pKey)) return;
+
       if (pPhone.length >= 10) {
         const phoneMatch = list.find((f) => cleanPhone(f.mobile_number) === pPhone);
         if (phoneMatch) return;
       }
 
-      const genId = p.farmer_id || `PUR-FARMER-${cleanP.replace(/[^a-z0-9]/g, '')}`;
+      const genId = p.farmer_id || `PUR-FARMER-${normalizeCleanStr(pName).replace(/[^a-z0-9]/g, '')}-${pVillage.replace(/[^a-z0-9]/g, '') || 'v'}`;
       if (seenIds.has(genId)) return;
 
-      seenNames.add(cleanP);
+      seenKeys.add(pKey);
       seenIds.add(genId);
 
       list.push({
@@ -229,100 +241,131 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
       if (lf.id) ids.push(lf.id);
     });
 
-    const normalizedNames = names.map((n) => getNameTokens(n).join(' ')).filter(Boolean);
+    const normalizedNames = names.map((n) => normalizeCleanStr(n)).filter(Boolean);
 
     return { names, normalizedNames, phones, aadhaars, ids };
   }, [currentFarmer]);
 
-  // 1. Farmer's Crop Arrivals (100% Comprehensive Multi-Factor Matching)
+  // 100% Strict, Collision-Free Matching for Crop Inward Arrivals
+  const isArrivalForFarmer = (a: CropArrivalEntry, f: FarmerMaster): boolean => {
+    // 1. Explicit ID Match (highest authority)
+    if (a.farmer_id) {
+      if (a.farmer_id === f.id) return true;
+      if (f.linked_farmers && f.linked_farmers.some((l) => l.id === a.farmer_id)) return true;
+      // If a.farmer_id is set to a different registered farmer, it can NEVER belong to f!
+      const isOtherRegisteredFarmer = allMasterFarmers.some((other) => other.id === a.farmer_id && other.id !== f.id);
+      if (isOtherRegisteredFarmer) return false;
+    }
+
+    const fPhone = cleanPhone(f.mobile_number);
+    const aPhone = cleanPhone(a.mobile);
+    const linkedPhones = (f.linked_farmers || []).map((l) => cleanPhone(l.mobile_number)).filter((p) => p.length >= 10);
+
+    // 2. Exact 10-Digit Mobile Match
+    if (aPhone.length >= 10 && fPhone.length >= 10) {
+      if (aPhone === fPhone || linkedPhones.includes(aPhone)) return true;
+      // If both have 10-digit mobile numbers and they do NOT match, they are different farmers!
+      return false;
+    }
+
+    // 3. Exact Full Name Match (English or Punjabi or Linked Member)
+    const aNameEn = normalizeCleanStr(a.farmer_name);
+    const aNamePa = (a.farmer_name_pa || '').trim();
+    const fNameEn = normalizeCleanStr(f.name_en);
+    const fNamePa = (f.name_pa || '').trim();
+
+    const linkedNamesEn = (f.linked_farmers || []).map((l) => normalizeCleanStr(l.name_en)).filter(Boolean);
+    const linkedNamesPa = (f.linked_farmers || []).map((l) => (l.name_pa || '').trim()).filter(Boolean);
+
+    const matchesName = 
+      (aNameEn && (aNameEn === fNameEn || linkedNamesEn.includes(aNameEn))) ||
+      (aNamePa && (aNamePa === fNamePa || linkedNamesPa.includes(aNamePa)));
+
+    if (!matchesName) return false;
+
+    // 4. Disambiguate if village or father name is provided on both
+    const aVillage = normalizeCleanStr(a.village);
+    const fVillage = normalizeCleanStr(f.village_en);
+    if (aVillage && fVillage && aVillage !== fVillage && !aVillage.includes(fVillage) && !fVillage.includes(aVillage)) {
+      return false;
+    }
+
+    const aFather = normalizeCleanStr(a.father_husband_name);
+    const fFather = normalizeCleanStr(f.father_husband_name_en);
+    if (aFather && fFather && aFather !== fFather && !aFather.includes(fFather) && !fFather.includes(aFather)) {
+      return false;
+    }
+
+    return true;
+  };
+
+  // 100% Strict, Collision-Free Matching for Agency Purchases / J-Forms
+  const isPurchaseForFarmer = (p: AgencyPurchaseEntry, f: FarmerMaster): boolean => {
+    // 1. Explicit ID Match
+    if (p.farmer_id) {
+      if (p.farmer_id === f.id) return true;
+      if (f.linked_farmers && f.linked_farmers.some((l) => l.id === p.farmer_id)) return true;
+      const isOtherRegisteredFarmer = allMasterFarmers.some((other) => other.id === p.farmer_id && other.id !== f.id);
+      if (isOtherRegisteredFarmer) return false;
+    }
+
+    const fPhone = cleanPhone(f.mobile_number);
+    const pPhone = cleanPhone(p.mobile);
+    const linkedPhones = (f.linked_farmers || []).map((l) => cleanPhone(l.mobile_number)).filter((phone) => phone.length >= 10);
+
+    // 2. Exact 10-Digit Mobile Match
+    if (pPhone.length >= 10 && fPhone.length >= 10) {
+      if (pPhone === fPhone || linkedPhones.includes(pPhone)) return true;
+      return false;
+    }
+
+    // 3. Exact Name Match on farmer_name or billed_to_name
+    const pFarmer = normalizeCleanStr(p.farmer_name);
+    const pBilled = normalizeCleanStr(p.billed_to_name);
+    const fNameEn = normalizeCleanStr(f.name_en);
+    const fNamePa = (f.name_pa || '').trim();
+
+    const linkedNamesEn = (f.linked_farmers || []).map((l) => normalizeCleanStr(l.name_en)).filter(Boolean);
+    const linkedNamesPa = (f.linked_farmers || []).map((l) => (l.name_pa || '').trim()).filter(Boolean);
+
+    const matchesName = 
+      (pFarmer && (pFarmer === fNameEn || linkedNamesEn.includes(pFarmer))) ||
+      (pBilled && (pBilled === fNameEn || linkedNamesEn.includes(pBilled))) ||
+      (fNamePa && (p.farmer_name === fNamePa || p.billed_to_name === fNamePa || linkedNamesPa.includes(p.farmer_name) || linkedNamesPa.includes(p.billed_to_name)));
+
+    if (!matchesName) return false;
+
+    // 4. Disambiguate if village or father name is provided on both
+    const pVillage = normalizeCleanStr(p.address_village || p.village);
+    const fVillage = normalizeCleanStr(f.village_en);
+    if (pVillage && fVillage && pVillage !== fVillage && !pVillage.includes(fVillage) && !fVillage.includes(pVillage)) {
+      return false;
+    }
+
+    const pFather = normalizeCleanStr(p.father_husband_name);
+    const fFather = normalizeCleanStr(f.father_husband_name_en);
+    if (pFather && fFather && pFather !== fFather && !pFather.includes(fFather) && !fFather.includes(pFather)) {
+      return false;
+    }
+
+    return true;
+  };
+
+  // 1. Farmer's Crop Arrivals (Strictly verified and sorted Date-Wise)
   const farmerArrivals = useMemo(() => {
     if (!currentFarmer) return [];
+    return cropArrivals
+      .filter((a) => isArrivalForFarmer(a, currentFarmer))
+      .sort((a, b) => new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime());
+  }, [cropArrivals, currentFarmer, allMasterFarmers]);
 
-    const fId = currentFarmer.id;
-    const fPhone = cleanPhone(currentFarmer.mobile_number);
-    const fNameEn = (currentFarmer.name_en || '').toLowerCase().trim();
-    const fNamePa = (currentFarmer.name_pa || '').trim();
-    const fVillageEn = (currentFarmer.village_en || '').toLowerCase().trim();
-    const fVillagePa = (currentFarmer.village_pa || '').trim();
-    const fFatherEn = (currentFarmer.father_husband_name_en || '').toLowerCase().trim();
-    const fTokens = getNameTokens(currentFarmer.name_en);
-
-    return cropArrivals.filter((a) => {
-      // 1. ID Match (direct or linked)
-      if (a.farmer_id && currentFarmerIdentifiers.ids.includes(a.farmer_id)) return true;
-
-      // 2. Phone Number Match (10 digit exact mobile)
-      const aPhone = cleanPhone(a.mobile);
-      if (aPhone && fPhone && aPhone.length >= 10 && aPhone === fPhone) return true;
-
-      // 3. Name Exact Match
-      const aName = (a.farmer_name || '').toLowerCase().trim();
-      const aNamePa = (a.farmer_name_pa || '').trim();
-      if (aName && (aName === fNameEn || currentFarmerIdentifiers.names.includes(aName))) return true;
-      if (aNamePa && (aNamePa === fNamePa || currentFarmerIdentifiers.names.includes(aNamePa))) return true;
-
-      // 4. Token / Substring Matching with Village or Father
-      const aVillage = (a.village || '').toLowerCase().trim();
-      const aVillagePa = (a.village_pa || '').trim();
-      const villageMatches = (aVillage && fVillageEn && (aVillage === fVillageEn || aVillage.includes(fVillageEn) || fVillageEn.includes(aVillage))) ||
-                             (aVillagePa && fVillagePa && aVillagePa === fVillagePa);
-
-      const aFather = (a.father_husband_name || '').toLowerCase().trim();
-      const fatherMatches = aFather && fFatherEn && (aFather === fFatherEn || aFather.includes(fFatherEn) || fFatherEn.includes(aFather));
-
-      const aTokens = getNameTokens(a.farmer_name);
-      const hasSharedCoreName = aTokens.some((t) => fTokens.includes(t));
-
-      if (hasSharedCoreName && (villageMatches || fatherMatches)) return true;
-      if (fatherMatches && villageMatches) return true;
-
-      return false;
-    });
-  }, [cropArrivals, currentFarmer, currentFarmerIdentifiers]);
-
-  // 2. Farmer's Agency Purchases / J-Forms (100% Comprehensive Multi-Factor Matching)
+  // 2. Farmer's Agency Purchases / J-Forms (Strictly verified and sorted Date-Wise)
   const farmerPurchases = useMemo(() => {
     if (!currentFarmer) return [];
-
-    const fId = currentFarmer.id;
-    const fPhone = cleanPhone(currentFarmer.mobile_number);
-    const fNameEn = (currentFarmer.name_en || '').toLowerCase().trim();
-    const fNamePa = (currentFarmer.name_pa || '').trim();
-    const fVillageEn = (currentFarmer.village_en || '').toLowerCase().trim();
-    const fFatherEn = (currentFarmer.father_husband_name_en || '').toLowerCase().trim();
-    const fTokens = getNameTokens(currentFarmer.name_en);
-
-    return agencyPurchases.filter((p) => {
-      // 1. ID Match
-      if (p.farmer_id && currentFarmerIdentifiers.ids.includes(p.farmer_id)) return true;
-
-      // 2. Phone Match
-      const pPhone = cleanPhone(p.mobile);
-      if (pPhone && fPhone && pPhone.length >= 10 && pPhone === fPhone) return true;
-
-      // 3. Farmer Name or Billed To Name exact match
-      const pFarmer = (p.farmer_name || '').toLowerCase().trim();
-      const pBilled = (p.billed_to_name || '').toLowerCase().trim();
-      if (pFarmer && (pFarmer === fNameEn || currentFarmerIdentifiers.names.includes(pFarmer))) return true;
-      if (pBilled && (pBilled === fNameEn || currentFarmerIdentifiers.names.includes(pBilled))) return true;
-
-      // 4. Token Matching with Village or Father
-      const pVillage = (p.address_village || p.village || '').toLowerCase().trim();
-      const villageMatches = pVillage && fVillageEn && (pVillage === fVillageEn || pVillage.includes(fVillageEn) || fVillageEn.includes(pVillage));
-
-      const pFather = (p.father_husband_name || '').toLowerCase().trim();
-      const fatherMatches = pFather && fFatherEn && (pFather === fFatherEn || pFather.includes(fFatherEn) || fFatherEn.includes(pFather));
-
-      const pFarmerTokens = getNameTokens(p.farmer_name);
-      const pBilledTokens = getNameTokens(p.billed_to_name);
-      const hasCoreToken = pFarmerTokens.some((t) => fTokens.includes(t)) || pBilledTokens.some((t) => fTokens.includes(t));
-
-      if (hasCoreToken && (villageMatches || fatherMatches)) return true;
-      if (fatherMatches && villageMatches) return true;
-
-      return false;
-    });
-  }, [agencyPurchases, currentFarmer, currentFarmerIdentifiers]);
+    return agencyPurchases
+      .filter((p) => isPurchaseForFarmer(p, currentFarmer))
+      .sort((a, b) => new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime());
+  }, [agencyPurchases, currentFarmer, allMasterFarmers]);
 
   // 1. Farmer Arrival bags & quintals (ਮੰਡੀ ਆਵਕ - ਜੋ ਕਿਸਾਨ ਮੰਡੀ ਵਿੱਚ ਲੈ ਕੇ ਆਇਆ)
   const farmerArrivalBags = useMemo(() => {
@@ -367,31 +410,33 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
     return 0;
   }, [farmerArrivalQuintals, farmerPurchasedQuintals, totalFarmerBags]);
 
-  // 3. Farmer's Manual Cash / Advance Ledger Transactions
+  // 3. Farmer's Manual Cash / Advance Ledger Transactions (Sorted Date-Wise)
   const farmerCustomEntries = useMemo(() => {
     if (!currentFarmer) return [];
-    const fNameEn = (currentFarmer.name_en || '').toLowerCase().trim();
+    const fNameEn = normalizeCleanStr(currentFarmer.name_en);
     const fNamePa = (currentFarmer.name_pa || '').trim();
-    return ledgerEntries.filter((l) => {
-      if (l.farmer_id && (l.farmer_id === currentFarmer.id || currentFarmerIdentifiers.ids.includes(l.farmer_id))) return true;
-      const lName = (l.farmer_name || '').toLowerCase().trim();
-      return lName && (lName === fNameEn || lName === fNamePa.toLowerCase() || currentFarmerIdentifiers.names.includes(lName));
-    });
-  }, [ledgerEntries, currentFarmer, currentFarmerIdentifiers]);
+    return ledgerEntries
+      .filter((l) => {
+        if (l.farmer_id && (l.farmer_id === currentFarmer.id || (currentFarmer.linked_farmers || []).some((lf) => lf.id === l.farmer_id))) return true;
+        const lName = normalizeCleanStr(l.farmer_name);
+        return lName && (lName === fNameEn || lName === fNamePa.toLowerCase());
+      })
+      .sort((a, b) => new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime());
+  }, [ledgerEntries, currentFarmer]);
 
   // 4. Farmer's Bardana
   const farmerBardanaIssued = useMemo(() => {
     if (!currentFarmer) return 0;
-    const fTokens = getNameTokens(currentFarmer.name_en);
+    const fNameEn = normalizeCleanStr(currentFarmer.name_en);
     return bardanaEntries
       .filter((b) => b.transaction_type === 'Issued to Farmer' && (
         b.farmer_name && (
-          currentFarmerIdentifiers.names.includes(b.farmer_name.toLowerCase().trim()) ||
-          getNameTokens(b.farmer_name).some((t) => fTokens.includes(t))
+          normalizeCleanStr(b.farmer_name) === fNameEn ||
+          (currentFarmer.linked_farmers || []).some((lf) => normalizeCleanStr(lf.name_en) === normalizeCleanStr(b.farmer_name))
         )
       ))
       .reduce((s, b) => s + (Number(b.quantity_bags) || 0), 0);
-  }, [bardanaEntries, currentFarmer, currentFarmerIdentifiers]);
+  }, [bardanaEntries, currentFarmer]);
 
   const farmerBardanaReturned = useMemo(() => {
     return farmerArrivals.reduce((s, a) => s + (Number(a.total_bags_arrived) || 0), 0);
@@ -896,31 +941,9 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
               ) : (
                 filteredFarmers.map((f) => {
                   const isSelected = f.id === currentFarmer?.id;
-                  const fPhone = cleanPhone(f.mobile_number);
-                  const fNameEn = (f.name_en || '').toLowerCase().trim();
-                  const fTokens = getNameTokens(f.name_en);
 
-                  const fPurchases = agencyPurchases.filter(p => {
-                    if (p.farmer_id && p.farmer_id === f.id) return true;
-                    const pPhone = cleanPhone(p.mobile);
-                    if (pPhone && fPhone && pPhone === fPhone) return true;
-                    const pFarmer = (p.farmer_name || '').toLowerCase().trim();
-                    const pBilled = (p.billed_to_name || '').toLowerCase().trim();
-                    if (pFarmer && pFarmer === fNameEn) return true;
-                    if (pBilled && pBilled === fNameEn) return true;
-                    const pTokens = getNameTokens(p.farmer_name);
-                    return pTokens.some(t => fTokens.includes(t));
-                  });
-
-                  const fArrivals = cropArrivals.filter(a => {
-                    if (a.farmer_id && a.farmer_id === f.id) return true;
-                    const aPhone = cleanPhone(a.mobile);
-                    if (aPhone && fPhone && aPhone === fPhone) return true;
-                    const aName = (a.farmer_name || '').toLowerCase().trim();
-                    if (aName && aName === fNameEn) return true;
-                    const aTokens = getNameTokens(a.farmer_name);
-                    return aTokens.some(t => fTokens.includes(t));
-                  });
+                  const fPurchases = agencyPurchases.filter((p) => isPurchaseForFarmer(p, f));
+                  const fArrivals = cropArrivals.filter((a) => isArrivalForFarmer(a, f));
 
                   const fGross = fPurchases.reduce((s, p) => s + (p.total_amount || 0), 0);
                   const fArrivalBags = fArrivals.reduce((s, a) => s + (Number(a.total_bags_arrived) || 0), 0);
@@ -1521,7 +1544,7 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
                               return (
                                 <tr key={a.id || idx} className="hover:bg-amber-50/30">
                                   <td className="py-1.5 px-2.5 text-gray-400 font-mono text-[10px]">{idx + 1}</td>
-                                  <td className="py-1.5 px-2.5 font-mono">{a.date}</td>
+                                  <td className="py-1.5 px-2.5 font-mono">{formatDmy(a.date)}</td>
                                   <td className="py-1.5 px-2.5 font-mono font-bold text-amber-900">{a.parchi_no || a.gate_pass_no || '—'}</td>
                                   <td className="py-1.5 px-2.5 font-medium text-gray-800">{a.vehicle_trolley_no || 'ਟਰਾਲੀ'}</td>
                                   <td className="py-1.5 px-2.5 text-gray-700">{a.crop_variety || a.crop_type || 'ਝੋਨਾ'}</td>
@@ -1583,7 +1606,7 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
                             {farmerPurchases.map((p, idx) => (
                               <tr key={p.id || idx} className="hover:bg-blue-50/30">
                                 <td className="py-1.5 px-2.5 text-gray-400 font-mono text-[10px]">{idx + 1}</td>
-                                <td className="py-1.5 px-2.5 font-mono">{p.date}</td>
+                                <td className="py-1.5 px-2.5 font-mono">{formatDmy(p.date)}</td>
                                 <td className="py-1.5 px-2.5 font-bold text-blue-900">{p.purchasing_agency}</td>
                                 <td className="py-1.5 px-2.5 text-gray-700">{p.firm_name}</td>
                                 <td className="py-1.5 px-2.5 font-medium text-gray-900">
@@ -1654,7 +1677,7 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
                             {farmerCustomEntries.map((e, idx) => (
                               <tr key={e.id || idx} className="hover:bg-emerald-50/30">
                                 <td className="py-1.5 px-2.5 text-gray-400 font-mono text-[10px]">{idx + 1}</td>
-                                <td className="py-1.5 px-2.5 font-mono">{e.date}</td>
+                                <td className="py-1.5 px-2.5 font-mono">{formatDmy(e.date)}</td>
                                 <td className="py-1.5 px-2.5 font-bold text-gray-900">{e.transaction_type}</td>
                                 <td className="py-1.5 px-2.5 font-mono font-bold text-rose-700 text-right">
                                   {e.entry_type === 'debit' ? `₹${Number(e.amount).toLocaleString('en-IN')}` : '—'}
@@ -1823,7 +1846,7 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
                         <tbody className="divide-y divide-gray-100">
                           {farmerPurchases.map((p) => (
                             <tr key={p.id} className="hover:bg-gray-50">
-                              <td className="py-2.5 px-3 font-mono font-medium">{p.date}</td>
+                              <td className="py-2.5 px-3 font-mono font-medium">{formatDmy(p.date)}</td>
                               <td className="py-2.5 px-3 font-bold text-blue-900">{p.purchasing_agency}</td>
                               <td className="py-2.5 px-3 text-gray-700">{p.firm_name}</td>
                               <td className="py-2.5 px-3 font-medium">
@@ -1869,7 +1892,7 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
                         <tbody className="divide-y divide-gray-100">
                           {farmerArrivals.map((a) => (
                             <tr key={a.id} className="hover:bg-gray-50">
-                              <td className="py-2.5 px-3 font-mono font-medium">{a.date}</td>
+                              <td className="py-2.5 px-3 font-mono font-medium">{formatDmy(a.date)}</td>
                               <td className="py-2.5 px-3 font-mono font-bold text-amber-800">{a.parchi_no || a.gate_pass_no}</td>
                               <td className="py-2.5 px-3 font-medium">{a.vehicle_trolley_no || 'ਟਰਾਲੀ'}</td>
                               <td className="py-2.5 px-3 text-gray-700">{a.crop_variety || a.crop_type}</td>
@@ -1918,7 +1941,7 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
                         <tbody className="divide-y divide-gray-100">
                           {farmerCustomEntries.map((e) => (
                             <tr key={e.id} className="hover:bg-gray-50">
-                              <td className="py-2.5 px-3 font-mono font-medium">{e.date}</td>
+                              <td className="py-2.5 px-3 font-mono font-medium">{formatDmy(e.date)}</td>
                               <td className="py-2.5 px-3 font-bold text-gray-900">{e.transaction_type}</td>
                               <td className="py-2.5 px-3 font-mono font-bold text-rose-700">
                                 {e.entry_type === 'debit' ? `₹${e.amount.toLocaleString()}` : '—'}
