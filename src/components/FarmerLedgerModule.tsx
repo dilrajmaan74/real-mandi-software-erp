@@ -87,6 +87,13 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
   );
   const [activeTab, setActiveTab] = useState<'purchases' | 'arrivals' | 'advances' | 'bardana'>('purchases');
   
+  // Keep selectedFarmerId in sync when selectedFarmerIdProp updates (e.g. clicking 'ਖਾਤਾ ਵੇਖੋ' in Farmer Directory)
+  useEffect(() => {
+    if (selectedFarmerIdProp) {
+      setSelectedFarmerId(selectedFarmerIdProp);
+    }
+  }, [selectedFarmerIdProp]);
+
   // Advance/Cash Transaction Modal
   const [isAddEntryModalOpen, setIsAddEntryModalOpen] = useState(false);
   const [newEntryDate, setNewEntryDate] = useState(new Date().toISOString().split('T')[0]);
@@ -122,30 +129,38 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
   };
 
   // 1. Comprehensive list of all farmers across Directory + Arrivals + Purchases + Ledger
+  // Never drops farmers due to phone numbers (shared phones or shop phones)
   const allMasterFarmers = useMemo(() => {
     const list: FarmerMaster[] = [...farmers];
     const seenIds = new Set(farmers.map((f) => f.id));
     const seenKeys = new Set(
-      farmers.map((f) => `${normalizeCleanStr(f.name_en)}|${normalizeCleanStr(f.village_en)}|${cleanPhone(f.mobile_number)}`)
+      farmers.map((f) => `${normalizeCleanStr(f.name_en)}|${normalizeCleanStr(f.village_en)}`)
     );
 
     // Discover any farmers from Crop Arrivals
     cropArrivals.forEach((a) => {
       const aName = (a.farmer_name || '').trim();
       if (!aName) return;
-      const aPhone = cleanPhone(a.mobile);
+      const aNorm = normalizeCleanStr(aName);
       const aVillage = normalizeCleanStr(a.village);
-      const aKey = `${normalizeCleanStr(aName)}|${aVillage}|${aPhone}`;
+      const aKey = `${aNorm}|${aVillage}`;
 
       if (a.farmer_id && seenIds.has(a.farmer_id)) return;
       if (seenKeys.has(aKey)) return;
 
-      if (aPhone.length >= 10) {
-        const phoneMatch = list.find((f) => cleanPhone(f.mobile_number) === aPhone);
-        if (phoneMatch) return;
-      }
+      // Check if this farmer is already present in list by exact name & village
+      const existing = list.find((f) => {
+        const fNorm = normalizeCleanStr(f.name_en);
+        const fPa = (f.name_pa || '').trim();
+        const fVil = normalizeCleanStr(f.village_en);
+        const nameMatch = fNorm === aNorm || (fPa && fPa === aName) || (a.farmer_name_pa && fPa === a.farmer_name_pa);
+        if (!nameMatch) return false;
+        if (aVillage && fVil && aVillage !== fVil) return false;
+        return true;
+      });
+      if (existing) return;
 
-      const genId = a.farmer_id || `ARR-FARMER-${normalizeCleanStr(aName).replace(/[^a-z0-9]/g, '')}-${aVillage.replace(/[^a-z0-9]/g, '') || 'v'}`;
+      const genId = a.farmer_id || `ARR-FARMER-${aNorm.replace(/[^a-z0-9]/g, '')}-${aVillage.replace(/[^a-z0-9]/g, '') || 'v'}`;
       if (seenIds.has(genId)) return;
 
       seenKeys.add(aKey);
@@ -170,19 +185,25 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
     agencyPurchases.forEach((p) => {
       const pName = (p.farmer_name || '').trim();
       if (!pName) return;
-      const pPhone = cleanPhone(p.mobile);
+      const pNorm = normalizeCleanStr(pName);
       const pVillage = normalizeCleanStr(p.address_village || p.village);
-      const pKey = `${normalizeCleanStr(pName)}|${pVillage}|${pPhone}`;
+      const pKey = `${pNorm}|${pVillage}`;
 
       if (p.farmer_id && seenIds.has(p.farmer_id)) return;
       if (seenKeys.has(pKey)) return;
 
-      if (pPhone.length >= 10) {
-        const phoneMatch = list.find((f) => cleanPhone(f.mobile_number) === pPhone);
-        if (phoneMatch) return;
-      }
+      const existing = list.find((f) => {
+        const fNorm = normalizeCleanStr(f.name_en);
+        const fPa = (f.name_pa || '').trim();
+        const fVil = normalizeCleanStr(f.village_en);
+        const nameMatch = fNorm === pNorm || (fPa && fPa === pName);
+        if (!nameMatch) return false;
+        if (pVillage && fVil && pVillage !== fVil) return false;
+        return true;
+      });
+      if (existing) return;
 
-      const genId = p.farmer_id || `PUR-FARMER-${normalizeCleanStr(pName).replace(/[^a-z0-9]/g, '')}-${pVillage.replace(/[^a-z0-9]/g, '') || 'v'}`;
+      const genId = p.farmer_id || `PUR-FARMER-${pNorm.replace(/[^a-z0-9]/g, '')}-${pVillage.replace(/[^a-z0-9]/g, '') || 'v'}`;
       if (seenIds.has(genId)) return;
 
       seenKeys.add(pKey);
@@ -208,7 +229,12 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
 
   // Selected Farmer (from all discovered farmers)
   const currentFarmer = useMemo(() => {
-    return allMasterFarmers.find((f) => f.id === selectedFarmerId) || allMasterFarmers[0] || null;
+    if (!allMasterFarmers || allMasterFarmers.length === 0) return null;
+    if (selectedFarmerId) {
+      const found = allMasterFarmers.find((f) => f.id === selectedFarmerId);
+      if (found) return found;
+    }
+    return allMasterFarmers[0] || null;
   }, [allMasterFarmers, selectedFarmerId]);
 
   // Filtered farmers list for search
@@ -252,23 +278,12 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
     if (a.farmer_id) {
       if (a.farmer_id === f.id) return true;
       if (f.linked_farmers && f.linked_farmers.some((l) => l.id === a.farmer_id)) return true;
-      // If a.farmer_id is set to a different registered farmer, it can NEVER belong to f!
+      // If a.farmer_id is explicitly set to another registered farmer, it can never belong to f!
       const isOtherRegisteredFarmer = allMasterFarmers.some((other) => other.id === a.farmer_id && other.id !== f.id);
       if (isOtherRegisteredFarmer) return false;
     }
 
-    const fPhone = cleanPhone(f.mobile_number);
-    const aPhone = cleanPhone(a.mobile);
-    const linkedPhones = (f.linked_farmers || []).map((l) => cleanPhone(l.mobile_number)).filter((p) => p.length >= 10);
-
-    // 2. Exact 10-Digit Mobile Match
-    if (aPhone.length >= 10 && fPhone.length >= 10) {
-      if (aPhone === fPhone || linkedPhones.includes(aPhone)) return true;
-      // If both have 10-digit mobile numbers and they do NOT match, they are different farmers!
-      return false;
-    }
-
-    // 3. Exact Full Name Match (English or Punjabi or Linked Member)
+    // 2. Exact Full Name Match (English or Punjabi or Linked Member)
     const aNameEn = normalizeCleanStr(a.farmer_name);
     const aNamePa = (a.farmer_name_pa || '').trim();
     const fNameEn = normalizeCleanStr(f.name_en);
@@ -279,17 +294,19 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
 
     const matchesName = 
       (aNameEn && (aNameEn === fNameEn || linkedNamesEn.includes(aNameEn))) ||
-      (aNamePa && (aNamePa === fNamePa || linkedNamesPa.includes(aNamePa)));
+      (aNamePa && (aNamePa === fNamePa || linkedNamesPa.includes(aNamePa))) ||
+      (a.farmer_name && (a.farmer_name.trim() === f.name_en.trim() || a.farmer_name.trim() === f.name_pa?.trim()));
 
     if (!matchesName) return false;
 
-    // 4. Disambiguate if village or father name is provided on both
+    // 3. Disambiguate if village is provided on both and conflicts
     const aVillage = normalizeCleanStr(a.village);
     const fVillage = normalizeCleanStr(f.village_en);
     if (aVillage && fVillage && aVillage !== fVillage && !aVillage.includes(fVillage) && !fVillage.includes(aVillage)) {
       return false;
     }
 
+    // 4. Disambiguate if father's name is provided on both and conflicts
     const aFather = normalizeCleanStr(a.father_husband_name);
     const fFather = normalizeCleanStr(f.father_husband_name_en);
     if (aFather && fFather && aFather !== fFather && !aFather.includes(fFather) && !fFather.includes(aFather)) {
@@ -309,17 +326,7 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
       if (isOtherRegisteredFarmer) return false;
     }
 
-    const fPhone = cleanPhone(f.mobile_number);
-    const pPhone = cleanPhone(p.mobile);
-    const linkedPhones = (f.linked_farmers || []).map((l) => cleanPhone(l.mobile_number)).filter((phone) => phone.length >= 10);
-
-    // 2. Exact 10-Digit Mobile Match
-    if (pPhone.length >= 10 && fPhone.length >= 10) {
-      if (pPhone === fPhone || linkedPhones.includes(pPhone)) return true;
-      return false;
-    }
-
-    // 3. Exact Name Match on farmer_name or billed_to_name
+    // 2. Exact Name Match on farmer_name or billed_to_name
     const pFarmer = normalizeCleanStr(p.farmer_name);
     const pBilled = normalizeCleanStr(p.billed_to_name);
     const fNameEn = normalizeCleanStr(f.name_en);
@@ -331,17 +338,20 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
     const matchesName = 
       (pFarmer && (pFarmer === fNameEn || linkedNamesEn.includes(pFarmer))) ||
       (pBilled && (pBilled === fNameEn || linkedNamesEn.includes(pBilled))) ||
-      (fNamePa && (p.farmer_name === fNamePa || p.billed_to_name === fNamePa || linkedNamesPa.includes(p.farmer_name) || linkedNamesPa.includes(p.billed_to_name)));
+      (fNamePa && (p.farmer_name === fNamePa || p.billed_to_name === fNamePa || linkedNamesPa.includes(p.farmer_name) || linkedNamesPa.includes(p.billed_to_name))) ||
+      (p.farmer_name && (p.farmer_name.trim() === f.name_en.trim() || p.farmer_name.trim() === f.name_pa?.trim())) ||
+      (p.billed_to_name && (p.billed_to_name.trim() === f.name_en.trim() || p.billed_to_name.trim() === f.name_pa?.trim()));
 
     if (!matchesName) return false;
 
-    // 4. Disambiguate if village or father name is provided on both
+    // 3. Disambiguate if village is provided on both and conflicts
     const pVillage = normalizeCleanStr(p.address_village || p.village);
     const fVillage = normalizeCleanStr(f.village_en);
     if (pVillage && fVillage && pVillage !== fVillage && !pVillage.includes(fVillage) && !fVillage.includes(pVillage)) {
       return false;
     }
 
+    // 4. Disambiguate if father's name is provided on both and conflicts
     const pFather = normalizeCleanStr(p.father_husband_name);
     const fFather = normalizeCleanStr(f.father_husband_name_en);
     if (pFather && fFather && pFather !== fFather && !pFather.includes(fFather) && !fFather.includes(pFather)) {
@@ -369,16 +379,20 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
 
   // 1. Farmer Arrival bags & quintals (ਮੰਡੀ ਆਵਕ - ਜੋ ਕਿਸਾਨ ਮੰਡੀ ਵਿੱਚ ਲੈ ਕੇ ਆਇਆ)
   const farmerArrivalBags = useMemo(() => {
-    return farmerArrivals.reduce((s, a) => s + (Number(a.total_bags_arrived) || 0), 0);
+    return farmerArrivals.reduce((s, a) => {
+      const bags = Number(a.total_bags_arrived) || (Number(a.new_jute_bags || 0) + Number(a.old_jute_bags || 0));
+      return s + bags;
+    }, 0);
   }, [farmerArrivals]);
 
   const farmerArrivalQuintals = useMemo(() => {
     return farmerArrivals.reduce((s, a) => {
       const qtl = Number(a.weight_quintals) || 0;
       if (qtl > 0) return s + qtl;
-      const bags = Number(a.total_bags_arrived) || 0;
+      const bags = Number(a.total_bags_arrived) || (Number(a.new_jute_bags || 0) + Number(a.old_jute_bags || 0));
       const packing = Number(a.bag_packing_kg) || 37.5;
-      return s + (bags * packing) / 100;
+      const loose = Number(a.loose_weight_kg) || 0;
+      return s + (((bags * packing) + loose) / 100);
     }, 0);
   }, [farmerArrivals]);
 
@@ -906,6 +920,40 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
             <Printer className="w-4 h-4 text-emerald-700" />
             <span>🖨️ ਪ੍ਰਿੰਟ</span>
           </button>
+        </div>
+      </div>
+
+      {/* Prominent Farmer Selection Bar with Dropdown */}
+      <div className="print:hidden bg-white rounded-2xl border-2 border-emerald-700/60 p-3 sm:p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-xl bg-emerald-800 text-amber-300 flex items-center justify-center font-bold shadow-xs shrink-0">
+            <Users className="w-5 h-5" />
+          </div>
+          <div>
+            <label htmlFor="top-farmer-select" className="text-xs font-black text-gray-900 uppercase tracking-wide block">
+              ਕਿਸਾਨ ਖਾਤਾ ਚੁਣੋ (Select Farmer Account):
+            </label>
+            <span className="text-[11px] text-gray-500">
+              ਇਸ ਡ੍ਰੌਪਡਾਊਨ ਜਾਂ ਖੱਬੇ ਪਾਸੇ ਸੂਚੀ ਵਿੱਚੋਂ ਕਿਸੇ ਵੀ ਕਿਸਾਨ ਨੂੰ ਚੁਣੋ — ਖਾਤਾ ਤੇ ਸਟੇਟਮੈਂਟ ਤੁਰੰਤ ਬਦਲ ਜਾਵੇਗੀ
+            </span>
+          </div>
+        </div>
+
+        <div className="w-full md:w-96">
+          <select
+            id="top-farmer-select"
+            value={currentFarmer?.id || ''}
+            onChange={(e) => {
+              setSelectedFarmerId(e.target.value);
+            }}
+            className="w-full px-3.5 py-2.5 bg-emerald-50 border-2 border-emerald-600 rounded-xl text-xs font-black text-gray-950 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer shadow-inner"
+          >
+            {allMasterFarmers.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.name_en} {f.name_pa ? `(${f.name_pa})` : ''} — {f.village_en || f.village_pa || 'ਪਿੰਡ N/A'}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -1538,8 +1586,10 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
                           </thead>
                           <tbody className="divide-y divide-gray-100 bg-white">
                             {farmerArrivals.map((a, idx) => {
-                              const bags = Number(a.total_bags_arrived) || 0;
-                              const weight = Number(a.weight_quintals) || ((bags * (Number(a.bag_packing_kg) || 37.5)) / 100);
+                              const bags = Number(a.total_bags_arrived) || (Number(a.new_jute_bags || 0) + Number(a.old_jute_bags || 0));
+                              const packing = Number(a.bag_packing_kg) || 37.5;
+                              const loose = Number(a.loose_weight_kg) || 0;
+                              const weight = Number(a.weight_quintals) || (((bags * packing) + loose) / 100);
                               const labor = Number(a.labor_total) || (bags * (adjustments.palledariRate || 8));
                               return (
                                 <tr key={a.id || idx} className="hover:bg-amber-50/30">
@@ -1562,7 +1612,12 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
                               <td className="py-2 px-2.5 font-mono font-black text-center">{farmerArrivalBags.toLocaleString()} ਗੱਟੇ</td>
                               <td className="py-2 px-2.5 font-mono font-black text-right">{farmerArrivalQuintals.toFixed(2)} Qtl</td>
                               <td className="py-2 px-2.5 text-center">—</td>
-                              <td className="py-2 px-2.5 font-mono font-black text-rose-800 text-right">₹{totalPalledariLabor.toLocaleString('en-IN')}</td>
+                              <td className="py-2 px-2.5 font-mono font-black text-rose-800 text-right">
+                                ₹{farmerArrivals.reduce((s, a) => {
+                                  const bags = Number(a.total_bags_arrived) || (Number(a.new_jute_bags || 0) + Number(a.old_jute_bags || 0));
+                                  return s + (Number(a.labor_total) || (bags * (adjustments.palledariRate || 8)));
+                                }, 0).toLocaleString('en-IN')}
+                              </td>
                             </tr>
                           </tfoot>
                         </table>
