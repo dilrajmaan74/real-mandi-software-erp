@@ -99,10 +99,20 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
   }, [selectedFarmerIdProp]);
 
   // Handle active farmer change with immediate state update and parent sync
-  const handleFarmerChange = (newFarmerId: string) => {
-    setSelectedFarmerId(newFarmerId);
-    lastPropFarmerIdRef.current = newFarmerId;
-    onSelectFarmer?.(newFarmerId);
+  const handleFarmerChange = (newFarmerIdOrName: string) => {
+    if (!newFarmerIdOrName) return;
+    // Find matched farmer if passed an ID, English Name, or Punjabi Name
+    const cleanTarget = normalizeCleanStr(newFarmerIdOrName);
+    const matched = allMasterFarmers.find((f) => 
+      f.id === newFarmerIdOrName || 
+      normalizeCleanStr(f.name_en) === cleanTarget ||
+      (f.name_pa && normalizeCleanStr(f.name_pa) === cleanTarget) ||
+      (f.name_pa && f.name_pa.trim() === newFarmerIdOrName.trim())
+    );
+    const targetId = matched ? matched.id : newFarmerIdOrName;
+    setSelectedFarmerId(targetId);
+    lastPropFarmerIdRef.current = targetId;
+    onSelectFarmer?.(targetId);
   };
 
   // Advance/Cash Transaction Modal
@@ -257,17 +267,14 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
     return list;
   }, [farmers, cropArrivals, agencyPurchases]);
 
-  // Ensure selectedFarmerId always points to an existing farmer in allMasterFarmers
+  // Ensure selectedFarmerId is initialized if empty
   useEffect(() => {
-    if (allMasterFarmers.length > 0) {
-      const exists = allMasterFarmers.some((f) => f.id === selectedFarmerId);
-      if (!selectedFarmerId || !exists) {
-        setSelectedFarmerId(allMasterFarmers[0].id);
-      }
+    if (allMasterFarmers.length > 0 && !selectedFarmerId) {
+      setSelectedFarmerId(allMasterFarmers[0].id);
     }
   }, [allMasterFarmers, selectedFarmerId]);
 
-  // Selected Farmer (from all discovered farmers - resilient to IDs and Names)
+  // Selected Farmer (from all discovered farmers - resilient to IDs, Names, and Slugs)
   const currentFarmer = useMemo(() => {
     if (!allMasterFarmers || allMasterFarmers.length === 0) return null;
     if (selectedFarmerId) {
@@ -283,6 +290,15 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
         (f.name_pa && f.name_pa.trim() === selectedFarmerId.trim())
       );
       if (foundByName) return foundByName;
+
+      // 3. Partial / Slug Match
+      const foundByFuzzy = allMasterFarmers.find((f) => {
+        const fNorm = normalizeCleanStr(f.name_en);
+        return f.id.toLowerCase().includes(selectedFarmerId.toLowerCase()) ||
+          selectedFarmerId.toLowerCase().includes(f.id.toLowerCase()) ||
+          (fNorm && selNorm && (selNorm.includes(fNorm) || fNorm.includes(selNorm)));
+      });
+      if (foundByFuzzy) return foundByFuzzy;
     }
     return allMasterFarmers[0] || null;
   }, [allMasterFarmers, selectedFarmerId]);
@@ -333,38 +349,32 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
     const linkedNamesPa = (f.linked_farmers || []).map((l) => (l.name_pa || '').trim()).filter(Boolean);
     const linkedIds = (f.linked_farmers || []).map((l) => l.id).filter(Boolean);
 
-    // Exact or Linked Full Name Match
+    // Exact, Linked, or Cross-Script (English / Punjabi) Full Name Match
     const matchesName = 
       (aNameEn && (aNameEn === fNameEn || linkedNamesEn.includes(aNameEn))) ||
       (aNamePa && (aNamePa === fNamePa || linkedNamesPa.includes(aNamePa))) ||
+      (aNameEn && (aNameEn === fNamePa || linkedNamesPa.includes(aNameEn))) ||
+      (aNamePa && (aNamePa === fNameEn || linkedNamesEn.includes(aNamePa))) ||
       (a.farmer_name && (a.farmer_name.trim() === f.name_en.trim() || a.farmer_name.trim() === f.name_pa?.trim()));
 
     const idMatches = Boolean(a.farmer_id && (a.farmer_id === f.id || linkedIds.includes(a.farmer_id)));
 
-    // CRITICAL FIX: If arrival has a farmer name that contradicts f, NEVER assign it solely due to a stale/default farmer_id!
-    if (aNameEn && !matchesName) {
-      return false;
+    if (matchesName) {
+      // Disambiguate if village is provided on both and clearly conflicts
+      const aVillage = normalizeCleanStr(a.village);
+      const fVillage = normalizeCleanStr(f.village_en);
+      if (aVillage && fVillage && aVillage !== fVillage && !aVillage.includes(fVillage) && !fVillage.includes(aVillage)) {
+        if (!idMatches) return false;
+      }
+      return true;
     }
 
-    if (!matchesName && !idMatches) {
-      return false;
+    if (idMatches) {
+      // Disambiguate if arrival farmer name clearly points to another registered farmer
+      return true;
     }
 
-    // Disambiguate if village is provided on both and conflicts
-    const aVillage = normalizeCleanStr(a.village);
-    const fVillage = normalizeCleanStr(f.village_en);
-    if (aVillage && fVillage && aVillage !== fVillage && !aVillage.includes(fVillage) && !fVillage.includes(aVillage)) {
-      if (!idMatches) return false;
-    }
-
-    // Disambiguate if father's name is provided on both and conflicts
-    const aFather = normalizeCleanStr(a.father_husband_name);
-    const fFather = normalizeCleanStr(f.father_husband_name_en);
-    if (aFather && fFather && aFather !== fFather && !aFather.includes(fFather) && !fFather.includes(aFather)) {
-      if (!idMatches) return false;
-    }
-
-    return true;
+    return false;
   };
 
   // 100% Strict, Collision-Free Matching for Agency Purchases / J-Forms
@@ -381,36 +391,28 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
     const matchesName = 
       (pFarmer && (pFarmer === fNameEn || linkedNamesEn.includes(pFarmer))) ||
       (pBilled && (pBilled === fNameEn || linkedNamesEn.includes(pBilled))) ||
+      (pFarmer && (pFarmer === fNamePa || linkedNamesPa.includes(pFarmer))) ||
+      (pBilled && (pBilled === fNamePa || linkedNamesPa.includes(pBilled))) ||
       (fNamePa && (p.farmer_name === fNamePa || p.billed_to_name === fNamePa || linkedNamesPa.includes(p.farmer_name) || linkedNamesPa.includes(p.billed_to_name))) ||
       (p.farmer_name && (p.farmer_name.trim() === f.name_en.trim() || p.farmer_name.trim() === f.name_pa?.trim())) ||
       (p.billed_to_name && (p.billed_to_name.trim() === f.name_en.trim() || p.billed_to_name.trim() === f.name_pa?.trim()));
 
     const idMatches = Boolean(p.farmer_id && (p.farmer_id === f.id || linkedIds.includes(p.farmer_id)));
 
-    // CRITICAL FIX: If purchase has a farmer name that contradicts f, NEVER assign it solely due to a stale/default farmer_id!
-    if (pFarmer && !matchesName) {
-      return false;
+    if (matchesName) {
+      const pVillage = normalizeCleanStr(p.address_village || p.village);
+      const fVillage = normalizeCleanStr(f.village_en);
+      if (pVillage && fVillage && pVillage !== fVillage && !pVillage.includes(fVillage) && !fVillage.includes(pVillage)) {
+        if (!idMatches) return false;
+      }
+      return true;
     }
 
-    if (!matchesName && !idMatches) {
-      return false;
+    if (idMatches) {
+      return true;
     }
 
-    // Disambiguate if village is provided on both and conflicts
-    const pVillage = normalizeCleanStr(p.address_village || p.village);
-    const fVillage = normalizeCleanStr(f.village_en);
-    if (pVillage && fVillage && pVillage !== fVillage && !pVillage.includes(fVillage) && !fVillage.includes(pVillage)) {
-      if (!idMatches) return false;
-    }
-
-    // Disambiguate if father's name is provided on both and conflicts
-    const pFather = normalizeCleanStr(p.father_husband_name);
-    const fFather = normalizeCleanStr(f.father_husband_name_en);
-    if (pFather && fFather && pFather !== fFather && !pFather.includes(fFather) && !fFather.includes(pFather)) {
-      if (!idMatches) return false;
-    }
-
-    return true;
+    return false;
   };
 
   // 1. Farmer's Crop Arrivals (Strictly verified and sorted Date-Wise)
@@ -994,7 +996,7 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
         <div className="w-full md:w-96">
           <select
             id="top-farmer-select"
-            value={currentFarmer?.id || ''}
+            value={currentFarmer?.id || selectedFarmerId || ''}
             onChange={(e) => {
               handleFarmerChange(e.target.value);
             }}
@@ -1040,7 +1042,8 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
                 <div className="p-4 text-center text-xs text-gray-500">ਕੋਈ ਕਿਸਾਨ ਨਹੀਂ ਮਿਲਿਆ।</div>
               ) : (
                 filteredFarmers.map((f) => {
-                  const isSelected = f.id === currentFarmer?.id;
+                  const isSelected = f.id === currentFarmer?.id || 
+                    (currentFarmer && normalizeCleanStr(f.name_en) === normalizeCleanStr(currentFarmer.name_en));
 
                   const fPurchases = agencyPurchases.filter((p) => isPurchaseForFarmer(p, f));
                   const fArrivals = cropArrivals.filter((a) => isArrivalForFarmer(a, f));
@@ -1055,7 +1058,7 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
                       onClick={() => handleFarmerChange(f.id)}
                       className={`w-full p-2.5 rounded-xl text-left transition-all cursor-pointer flex flex-col justify-between ${
                         isSelected 
-                          ? 'bg-emerald-900 text-white shadow-md' 
+                          ? 'bg-emerald-900 text-white shadow-md ring-2 ring-amber-400' 
                           : 'hover:bg-gray-100 text-gray-800'
                       }`}
                     >
@@ -1190,7 +1193,7 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
                   </p>
                   <div className="mt-2 text-[11px] text-gray-600 flex justify-between border-t border-gray-200 pt-1.5 font-medium flex-wrap gap-2">
                     <span>ਤਾਰੀਖ: <b>{new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</b></span>
-                    <span>ਸੀਜ਼ਨ: <b>ਪੈਡੀ ਸੀਜ਼ਨ 2025-26</b></span>
+                    <span>ਸੀਜ਼ਨ: <b>ਪੈਡੀ ਸੀਜ਼ਨ 2026-2027</b></span>
                     <span>ਸਰਕਾਰੀ MSP ਰੇਟ: <b className="font-mono text-emerald-900 font-bold">₹2,461 / ਕੁਇੰਟਲ</b></span>
                   </div>
                 </div>

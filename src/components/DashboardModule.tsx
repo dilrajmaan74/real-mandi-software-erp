@@ -267,7 +267,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
               </span>
               <span className="px-2.5 py-0.5 rounded-full bg-emerald-700/80 text-emerald-100 text-xs font-medium border border-emerald-600/60 flex items-center gap-1">
                 <Clock className="w-3 h-3 text-amber-300" />
-                <span>ਲਾਈਵ ਸੀਜ਼ਨ 2025-26 (ਝੋਨਾ / ਪੈਡੀ)</span>
+                <span>ਲਾਈਵ ਸੀਜ਼ਨ 2026-2027 (ਝੋਨਾ / ਪੈਡੀ)</span>
               </span>
             </div>
 

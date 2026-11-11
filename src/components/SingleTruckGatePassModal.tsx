@@ -668,7 +668,7 @@ ${firmInfo.name}
                   🌾 ਅਧਿਕਾਰਤ ਟਰੱਕ ਲਿਫਟਿੰਗ ਗੇਟ ਪਾਸ ਤੇ ਰਵਾਨਗੀ ਚਲਾਨ (TRUCK OUTWARD GATE PASS)
                 </span>
                 <span className="text-gray-700">
-                  ਸੀਜ਼ਨ: <b>ਪੈਡੀ ਸੀਜ਼ਨ 2025-26</b> | ਆਈ.ਡੀ: <b className="font-mono">{entry.id}</b>
+                  ਸੀਜ਼ਨ: <b>ਪੈਡੀ ਸੀਜ਼ਨ 2026-2027</b> | ਆਈ.ਡੀ: <b className="font-mono">{entry.id}</b>
                 </span>
               </div>
             </div>
