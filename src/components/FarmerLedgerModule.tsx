@@ -338,39 +338,87 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
     return { names, normalizedNames, phones, aadhaars, ids };
   }, [currentFarmer]);
 
+  // Phonetic & clean normalization for robust Punjabi and English name matching
+  const normalizeCleanName = (s?: string) => {
+    if (!s) return '';
+    return s
+      .toLowerCase()
+      .trim()
+      .replace(/[\s\-_.,()]+/g, '')
+      .replace(/ee/g, 'i')
+      .replace(/oo/g, 'u')
+      .replace(/w/g, 'v')
+      .replace(/kh/g, 'k')
+      .replace(/gh/g, 'g')
+      .replace(/bh/g, 'b')
+      .replace(/dh/g, 'd');
+  };
+
+  const getFarmerNameVariants = (f: FarmerMaster): string[] => {
+    const list: string[] = [];
+    if (f.name_en) list.push(f.name_en);
+    if (f.name_pa) list.push(f.name_pa);
+    if (f.linked_farmers && Array.isArray(f.linked_farmers)) {
+      for (const lf of f.linked_farmers) {
+        if (lf.name_en) list.push(lf.name_en);
+        if (lf.name_pa) list.push(lf.name_pa);
+      }
+    }
+    return list;
+  };
+
+  const doesNameMatchFarmer = (rawName: string | undefined, f: FarmerMaster): boolean => {
+    if (!rawName) return false;
+    const cleanRaw = normalizeCleanName(rawName);
+    if (!cleanRaw) return false;
+
+    const variants = getFarmerNameVariants(f);
+    return variants.some((v) => {
+      const cleanV = normalizeCleanName(v);
+      if (!cleanV) return false;
+      if (cleanRaw === cleanV) return true;
+      if (cleanRaw.length >= 5 && cleanV.length >= 5) {
+        if (cleanRaw.includes(cleanV) || cleanV.includes(cleanRaw)) return true;
+      }
+      return false;
+    });
+  };
+
+  const doesNameMatchAnotherRegisteredFarmer = (rawName: string | undefined, currentFId: string): boolean => {
+    if (!rawName) return false;
+    const cleanRaw = normalizeCleanName(rawName);
+    if (!cleanRaw) return false;
+
+    return allMasterFarmers.some((other) => {
+      if (other.id === currentFId) return false;
+      return doesNameMatchFarmer(rawName, other);
+    });
+  };
+
   // 100% Strict, Collision-Free Matching for Crop Inward Arrivals
   const isArrivalForFarmer = (a: CropArrivalEntry, f: FarmerMaster): boolean => {
-    const aNameEn = normalizeCleanStr(a.farmer_name);
-    const aNamePa = (a.farmer_name_pa || '').trim();
-    const fNameEn = normalizeCleanStr(f.name_en);
-    const fNamePa = (f.name_pa || '').trim();
-
-    const linkedNamesEn = (f.linked_farmers || []).map((l) => normalizeCleanStr(l.name_en)).filter(Boolean);
-    const linkedNamesPa = (f.linked_farmers || []).map((l) => (l.name_pa || '').trim()).filter(Boolean);
     const linkedIds = (f.linked_farmers || []).map((l) => l.id).filter(Boolean);
-
-    // Exact, Linked, or Cross-Script (English / Punjabi) Full Name Match
-    const matchesName = 
-      (aNameEn && (aNameEn === fNameEn || linkedNamesEn.includes(aNameEn))) ||
-      (aNamePa && (aNamePa === fNamePa || linkedNamesPa.includes(aNamePa))) ||
-      (aNameEn && (aNameEn === fNamePa || linkedNamesPa.includes(aNameEn))) ||
-      (aNamePa && (aNamePa === fNameEn || linkedNamesEn.includes(aNamePa))) ||
-      (a.farmer_name && (a.farmer_name.trim() === f.name_en.trim() || a.farmer_name.trim() === f.name_pa?.trim()));
-
     const idMatches = Boolean(a.farmer_id && (a.farmer_id === f.id || linkedIds.includes(a.farmer_id)));
 
-    if (matchesName) {
-      // Disambiguate if village is provided on both and clearly conflicts
-      const aVillage = normalizeCleanStr(a.village);
-      const fVillage = normalizeCleanStr(f.village_en);
+    const nameMatches = doesNameMatchFarmer(a.farmer_name, f) || doesNameMatchFarmer(a.farmer_name_pa, f);
+    const nameMatchesOther = doesNameMatchAnotherRegisteredFarmer(a.farmer_name, f.id) || doesNameMatchAnotherRegisteredFarmer(a.farmer_name_pa, f.id);
+
+    // If the arrival clearly specifies the name of ANOTHER registered farmer, never match this farmer!
+    if (nameMatchesOther && !nameMatches) {
+      return false;
+    }
+
+    if (nameMatches) {
+      const aVillage = normalizeCleanName(a.village);
+      const fVillage = normalizeCleanName(f.village_en);
       if (aVillage && fVillage && aVillage !== fVillage && !aVillage.includes(fVillage) && !fVillage.includes(aVillage)) {
         if (!idMatches) return false;
       }
       return true;
     }
 
-    if (idMatches) {
-      // Disambiguate if arrival farmer name clearly points to another registered farmer
+    const hasName = Boolean(a.farmer_name?.trim() || a.farmer_name_pa?.trim());
+    if (!hasName && idMatches) {
       return true;
     }
 
@@ -379,36 +427,28 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
 
   // 100% Strict, Collision-Free Matching for Agency Purchases / J-Forms
   const isPurchaseForFarmer = (p: AgencyPurchaseEntry, f: FarmerMaster): boolean => {
-    const pFarmer = normalizeCleanStr(p.farmer_name);
-    const pBilled = normalizeCleanStr(p.billed_to_name);
-    const fNameEn = normalizeCleanStr(f.name_en);
-    const fNamePa = (f.name_pa || '').trim();
-
-    const linkedNamesEn = (f.linked_farmers || []).map((l) => normalizeCleanStr(l.name_en)).filter(Boolean);
-    const linkedNamesPa = (f.linked_farmers || []).map((l) => (l.name_pa || '').trim()).filter(Boolean);
     const linkedIds = (f.linked_farmers || []).map((l) => l.id).filter(Boolean);
-
-    const matchesName = 
-      (pFarmer && (pFarmer === fNameEn || linkedNamesEn.includes(pFarmer))) ||
-      (pBilled && (pBilled === fNameEn || linkedNamesEn.includes(pBilled))) ||
-      (pFarmer && (pFarmer === fNamePa || linkedNamesPa.includes(pFarmer))) ||
-      (pBilled && (pBilled === fNamePa || linkedNamesPa.includes(pBilled))) ||
-      (fNamePa && (p.farmer_name === fNamePa || p.billed_to_name === fNamePa || linkedNamesPa.includes(p.farmer_name) || linkedNamesPa.includes(p.billed_to_name))) ||
-      (p.farmer_name && (p.farmer_name.trim() === f.name_en.trim() || p.farmer_name.trim() === f.name_pa?.trim())) ||
-      (p.billed_to_name && (p.billed_to_name.trim() === f.name_en.trim() || p.billed_to_name.trim() === f.name_pa?.trim()));
-
     const idMatches = Boolean(p.farmer_id && (p.farmer_id === f.id || linkedIds.includes(p.farmer_id)));
 
-    if (matchesName) {
-      const pVillage = normalizeCleanStr(p.address_village || p.village);
-      const fVillage = normalizeCleanStr(f.village_en);
+    const nameMatches = doesNameMatchFarmer(p.farmer_name, f) || doesNameMatchFarmer(p.billed_to_name, f);
+    const nameMatchesOther = doesNameMatchAnotherRegisteredFarmer(p.farmer_name, f.id) || doesNameMatchAnotherRegisteredFarmer(p.billed_to_name, f.id);
+
+    // If the purchase clearly specifies the name of ANOTHER registered farmer, never match this farmer!
+    if (nameMatchesOther && !nameMatches) {
+      return false;
+    }
+
+    if (nameMatches) {
+      const pVillage = normalizeCleanName(p.address_village || p.village);
+      const fVillage = normalizeCleanName(f.village_en);
       if (pVillage && fVillage && pVillage !== fVillage && !pVillage.includes(fVillage) && !fVillage.includes(pVillage)) {
         if (!idMatches) return false;
       }
       return true;
     }
 
-    if (idMatches) {
+    const hasName = Boolean(p.farmer_name?.trim() || p.billed_to_name?.trim());
+    if (!hasName && idMatches) {
       return true;
     }
 
@@ -431,7 +471,7 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
       .sort((a, b) => new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime());
   }, [agencyPurchases, currentFarmer, allMasterFarmers]);
 
-  // 1. Farmer Arrival bags & quintals (ਮੰਡੀ ਆਵਕ - ਜੋ ਕਿਸਾਨ ਮੰਡੀ ਵਿੱਚ ਲੈ ਕੇ ਆਇਆ)
+  // 1. Farmer Arrival bags, quintals & labor (ਮੰਡੀ ਆਵਕ - ਜੋ ਕਿਸਾਨ ਮੰਡੀ ਵਿੱਚ ਲੈ ਕੇ ਆਇਆ)
   const farmerArrivalBags = useMemo(() => {
     return farmerArrivals.reduce((s, a) => {
       const bags = Number(a.total_bags_arrived) || (Number(a.new_jute_bags || 0) + Number(a.old_jute_bags || 0));
@@ -441,26 +481,40 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
 
   const farmerArrivalQuintals = useMemo(() => {
     return farmerArrivals.reduce((s, a) => {
-      const qtl = Number(a.weight_quintals) || 0;
-      if (qtl > 0) return s + qtl;
       const bags = Number(a.total_bags_arrived) || (Number(a.new_jute_bags || 0) + Number(a.old_jute_bags || 0));
       const packing = Number(a.bag_packing_kg) || 37.5;
       const loose = Number(a.loose_weight_kg) || 0;
-      return s + (((bags * packing) + loose) / 100);
+      const weight = Number(a.weight_quintals) || (((bags * packing) + loose) / 100);
+      return s + weight;
     }, 0);
   }, [farmerArrivals]);
 
   // 2. Farmer's Agency Purchases / J-Forms (ਸਰਕਾਰੀ ਖਰੀਦ)
   const farmerPurchasedBags = useMemo(() => {
-    return farmerPurchases.reduce((s, p) => s + (Number(p.total_bags) || 0), 0);
+    return farmerPurchases.reduce((s, p) => {
+      const bags = Number(p.total_bags) || (Number(p.new_jute_bags || 0) + Number(p.old_jute_bags || 0));
+      return s + bags;
+    }, 0);
   }, [farmerPurchases]);
 
   const farmerPurchasedQuintals = useMemo(() => {
-    return farmerPurchases.reduce((s, p) => s + (Number(p.weight_quintals) || 0), 0);
+    return farmerPurchases.reduce((s, p) => {
+      const bags = Number(p.total_bags) || (Number(p.new_jute_bags || 0) + Number(p.old_jute_bags || 0));
+      const packing = Number(p.bag_packing_kg) || 37.5;
+      const weight = Number(p.weight_quintals) || ((bags * packing) / 100);
+      return s + weight;
+    }, 0);
   }, [farmerPurchases]);
 
   const jFormPurchaseTotal = useMemo(() => {
-    return farmerPurchases.reduce((s, p) => s + (Number(p.total_amount) || 0), 0);
+    return farmerPurchases.reduce((s, p) => {
+      const bags = Number(p.total_bags) || (Number(p.new_jute_bags || 0) + Number(p.old_jute_bags || 0));
+      const packing = Number(p.bag_packing_kg) || 37.5;
+      const weight = Number(p.weight_quintals) || ((bags * packing) / 100);
+      const rate = Number(p.rate_per_quintal) || 2461;
+      const amount = Number(p.total_amount) || (weight * rate);
+      return s + amount;
+    }, 0);
   }, [farmerPurchases]);
 
   // Total Bags & Quintals that the farmer brought to the mandi (ਮੰਡੀ ਆਵਕ ਕੁੱਲ)
@@ -531,6 +585,13 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
     directAdvance: 0,
     directPreviousKhata: 0,
   });
+
+  const farmerArrivalLaborTotal = useMemo(() => {
+    return farmerArrivals.reduce((s, a) => {
+      const bags = Number(a.total_bags_arrived) || (Number(a.new_jute_bags || 0) + Number(a.old_jute_bags || 0));
+      return s + (Number(a.labor_total) || (bags * (adjustments.palledariRate || 8)));
+    }, 0);
+  }, [farmerArrivals, adjustments.palledariRate]);
 
   // Financial Calculations: ਕੁੱਲ ਫਸਲ ਰਕਮ (MSP @ ₹2461)
   // This is the total value of what the farmer brought to the mandi (ਜੋ ਕਿਸਾਨ ਮੰਡੀ ਵਿੱਚ ਲੈ ਕੇ ਆਇਆ ਉਹਦਾ ਟੋਟਲ)
@@ -606,10 +667,10 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
       return Number(adjustments.directAdvance);
     }
     if (jFormPurchaseTotal > 0) return jFormPurchaseTotal;
-    return grossCropValue > 0 ? grossCropValue : defaultPurchaseAdvances;
-  }, [adjustments.directAdvance, jFormPurchaseTotal, grossCropValue, defaultPurchaseAdvances]);
+    return defaultPurchaseAdvances > 0 ? defaultPurchaseAdvances : 0;
+  }, [adjustments.directAdvance, jFormPurchaseTotal, defaultPurchaseAdvances]);
 
-  const defaultJFormTotal = jFormPurchaseTotal > 0 ? jFormPurchaseTotal : grossCropValue;
+  const defaultJFormTotal = jFormPurchaseTotal;
 
   // 1. Palledari Labor: Auto bags × ₹8 (or rate), or custom
   const totalPalledariLabor = useMemo(() => {
@@ -1048,8 +1109,14 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
                   const fPurchases = agencyPurchases.filter((p) => isPurchaseForFarmer(p, f));
                   const fArrivals = cropArrivals.filter((a) => isArrivalForFarmer(a, f));
 
-                  const fGross = fPurchases.reduce((s, p) => s + (p.total_amount || 0), 0);
-                  const fArrivalBags = fArrivals.reduce((s, a) => s + (Number(a.total_bags_arrived) || 0), 0);
+                  const fGross = fPurchases.reduce((s, p) => {
+                    const bags = Number(p.total_bags) || (Number(p.new_jute_bags || 0) + Number(p.old_jute_bags || 0));
+                    const packing = Number(p.bag_packing_kg) || 37.5;
+                    const weight = Number(p.weight_quintals) || ((bags * packing) / 100);
+                    const rate = Number(p.rate_per_quintal) || 2461;
+                    return s + (Number(p.total_amount) || (weight * rate));
+                  }, 0);
+                  const fArrivalBags = fArrivals.reduce((s, a) => s + (Number(a.total_bags_arrived) || (Number(a.new_jute_bags || 0) + Number(a.old_jute_bags || 0))), 0);
 
                   return (
                     <button
@@ -1668,10 +1735,7 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
                               <td className="py-2 px-2.5 font-mono font-black text-right">{farmerArrivalQuintals.toFixed(2)} Qtl</td>
                               <td className="py-2 px-2.5 text-center">—</td>
                               <td className="py-2 px-2.5 font-mono font-black text-rose-800 text-right">
-                                ₹{farmerArrivals.reduce((s, a) => {
-                                  const bags = Number(a.total_bags_arrived) || (Number(a.new_jute_bags || 0) + Number(a.old_jute_bags || 0));
-                                  return s + (Number(a.labor_total) || (bags * (adjustments.palledariRate || 8)));
-                                }, 0).toLocaleString('en-IN')}
+                                ₹{farmerArrivalLaborTotal.toLocaleString('en-IN')}
                               </td>
                             </tr>
                           </tfoot>
@@ -1688,7 +1752,7 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
                         <span>2. ਸਰਕਾਰੀ ਖਰੀਦ ਤੇ J-Form ਦਾ ਵੇਰਵਾ (Agency Purchases / J-Forms - {farmerPurchases.length})</span>
                       </h4>
                       <span className="text-[10.5px] font-bold text-gray-600 font-mono">
-                        ਕੁੱਲ: {farmerPurchasedBags.toLocaleString()} ਗੱਟੇ | ₹{defaultJFormTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        ਕੁੱਲ: {farmerPurchasedBags.toLocaleString()} ਗੱਟੇ | ₹{jFormPurchaseTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </div>
 
@@ -1713,26 +1777,33 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-100 bg-white">
-                            {farmerPurchases.map((p, idx) => (
-                              <tr key={p.id || idx} className="hover:bg-blue-50/30">
-                                <td className="py-1.5 px-2.5 text-gray-400 font-mono text-[10px]">{idx + 1}</td>
-                                <td className="py-1.5 px-2.5 font-mono">{formatDmy(p.date)}</td>
-                                <td className="py-1.5 px-2.5 font-bold text-blue-900">{p.purchasing_agency}</td>
-                                <td className="py-1.5 px-2.5 text-gray-700">{p.firm_name}</td>
-                                <td className="py-1.5 px-2.5 font-medium text-gray-900">
-                                  {p.billed_to_name}
-                                  {p.relation_with_main && (
-                                    <span className="text-[10px] text-gray-500 ml-1">({p.relation_with_main})</span>
-                                  )}
-                                </td>
-                                <td className="py-1.5 px-2.5 font-mono font-bold text-center">{p.total_bags}</td>
-                                <td className="py-1.5 px-2.5 font-mono text-right">{Number(p.weight_quintals || 0).toFixed(2)}</td>
-                                <td className="py-1.5 px-2.5 font-mono text-right">₹{p.rate_per_quintal || 2461}</td>
-                                <td className="py-1.5 px-2.5 font-mono font-black text-emerald-900 text-right">
-                                  ₹{Number(p.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </td>
-                              </tr>
-                            ))}
+                            {farmerPurchases.map((p, idx) => {
+                              const bags = Number(p.total_bags) || (Number(p.new_jute_bags || 0) + Number(p.old_jute_bags || 0));
+                              const packing = Number(p.bag_packing_kg) || 37.5;
+                              const weight = Number(p.weight_quintals) || ((bags * packing) / 100);
+                              const rate = Number(p.rate_per_quintal) || 2461;
+                              const amount = Number(p.total_amount) || (weight * rate);
+                              return (
+                                <tr key={p.id || idx} className="hover:bg-blue-50/30">
+                                  <td className="py-1.5 px-2.5 text-gray-400 font-mono text-[10px]">{idx + 1}</td>
+                                  <td className="py-1.5 px-2.5 font-mono">{formatDmy(p.date)}</td>
+                                  <td className="py-1.5 px-2.5 font-bold text-blue-900">{p.purchasing_agency}</td>
+                                  <td className="py-1.5 px-2.5 text-gray-700">{p.firm_name}</td>
+                                  <td className="py-1.5 px-2.5 font-medium text-gray-900">
+                                    {p.billed_to_name}
+                                    {p.relation_with_main && (
+                                      <span className="text-[10px] text-gray-500 ml-1">({p.relation_with_main})</span>
+                                    )}
+                                  </td>
+                                  <td className="py-1.5 px-2.5 font-mono font-bold text-center">{bags}</td>
+                                  <td className="py-1.5 px-2.5 font-mono text-right">{weight.toFixed(2)}</td>
+                                  <td className="py-1.5 px-2.5 font-mono text-right">₹{rate}</td>
+                                  <td className="py-1.5 px-2.5 font-mono font-black text-emerald-900 text-right">
+                                    ₹{amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </td>
+                                </tr>
+                              );
+                            })}
                           </tbody>
                           <tfoot className="bg-blue-100/60 font-bold border-t-2 border-blue-300 text-blue-950">
                             <tr>
@@ -1741,7 +1812,7 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
                               <td className="py-2 px-2.5 font-mono font-black text-right">{farmerPurchasedQuintals.toFixed(2)} Qtl</td>
                               <td className="py-2 px-2.5 text-right">—</td>
                               <td className="py-2 px-2.5 font-mono font-black text-emerald-950 text-right">
-                                ₹{defaultJFormTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                ₹{jFormPurchaseTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </td>
                             </tr>
                           </tfoot>
