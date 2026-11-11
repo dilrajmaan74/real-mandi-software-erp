@@ -1776,7 +1776,15 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
                             {onViewFarmerLedger && (
                               <button
                                 type="button"
-                                onClick={() => onViewFarmerLedger(item.farmer_id || item.farmer_name)}
+                                onClick={() => {
+                                  const matchingReg = registeredFarmers.find((rf) => 
+                                    rf.id === item.farmer_id && (
+                                      rf.name_en.toLowerCase().trim() === item.farmer_name.toLowerCase().trim() ||
+                                      (rf.name_pa && rf.name_pa.trim() === item.farmer_name.trim())
+                                    )
+                                  );
+                                  onViewFarmerLedger(matchingReg ? matchingReg.id : (item.farmer_name || item.farmer_id || ''));
+                                }}
                                 title="ਇਸ ਕਿਸਾਨ ਦਾ ਪੂਰਾ ਖਾਤਾ / ਪਾਸਬੁੱਕ ਦੇਖੋ"
                                 className="p-1.5 text-blue-700 hover:text-blue-900 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer font-bold inline-flex items-center gap-1 text-[11px]"
                               >
@@ -3044,7 +3052,15 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
                         {onViewFarmerLedger && (
                           <button
                             type="button"
-                            onClick={() => onViewFarmerLedger(rec.farmer_id || rec.name_en)}
+                            onClick={() => {
+                              const matchingReg = registeredFarmers.find((rf) => 
+                                rf.id === rec.farmer_id && (
+                                  rf.name_en.toLowerCase().trim() === rec.name_en.toLowerCase().trim() ||
+                                  (rf.name_pa && rf.name_pa.trim() === rec.name_pa.trim())
+                                )
+                              );
+                              onViewFarmerLedger(matchingReg ? matchingReg.id : (rec.name_en || rec.farmer_id || ''));
+                            }}
                             className="inline-flex items-center gap-1.5 text-xs font-bold bg-blue-700 hover:bg-blue-800 text-white px-3 py-1.5 rounded-full shadow-2xs transition cursor-pointer"
                             title="ਇਸ ਕਿਸਾਨ ਦਾ ਪੂਰਾ ਖਾਤਾ / ਪਾਸਬੁੱਕ ਸਟੇਟਮੈਂਟ ਦੇਖੋ"
                           >

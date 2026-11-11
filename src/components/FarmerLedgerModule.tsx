@@ -98,7 +98,7 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
     }
   }, [selectedFarmerIdProp]);
 
-  // Handle active farmer change with bidirectional sync to parent App.tsx
+  // Handle active farmer change with immediate state update and parent sync
   const handleFarmerChange = (newFarmerId: string) => {
     setSelectedFarmerId(newFarmerId);
     lastPropFarmerIdRef.current = newFarmerId;
@@ -156,24 +156,32 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
       const aVillage = normalizeCleanStr(a.village);
       const aKey = `${aNorm}|${aVillage}`;
 
-      if (a.farmer_id && seenIds.has(a.farmer_id)) return;
-      if (seenKeys.has(aKey)) return;
-
-      // Check if this farmer is already present in list by exact name & village
+      // Check if this farmer is already present in list by exact name & village or linked member
       const existing = list.find((f) => {
         const fNorm = normalizeCleanStr(f.name_en);
         const fPa = (f.name_pa || '').trim();
         const fVil = normalizeCleanStr(f.village_en);
         const nameMatch = fNorm === aNorm || (fPa && fPa === aName) || (a.farmer_name_pa && fPa === a.farmer_name_pa);
-        if (!nameMatch) return false;
-        if (aVillage && fVil && aVillage !== fVil) return false;
+        const linkedMatch = (f.linked_farmers || []).some((lf) => {
+          const lfNorm = normalizeCleanStr(lf.name_en);
+          const lfPa = (lf.name_pa || '').trim();
+          return lfNorm === aNorm || (lfPa && lfPa === aName);
+        });
+        if (!nameMatch && !linkedMatch) return false;
+        if (aVillage && fVil && aVillage !== fVil && !aVillage.includes(fVil) && !fVil.includes(aVillage)) return false;
         return true;
       });
       if (existing) return;
 
+      if (seenKeys.has(aKey)) return;
+
       const safeFarmerSlug = (aNorm.replace(/\s+/g, '_') || 'f').slice(0, 30);
       const safeVillageSlug = (aVillage.replace(/\s+/g, '_') || 'v').slice(0, 20);
-      const genId = a.farmer_id || `ARR-FARMER-${safeFarmerSlug}-${safeVillageSlug}`;
+      // Only reuse a.farmer_id if not already owned by another farmer in seenIds
+      const genId = (a.farmer_id && !seenIds.has(a.farmer_id))
+        ? a.farmer_id
+        : `ARR-FARMER-${safeFarmerSlug}-${safeVillageSlug}`;
+
       if (seenIds.has(genId)) return;
 
       seenKeys.add(aKey);
@@ -202,23 +210,30 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
       const pVillage = normalizeCleanStr(p.address_village || p.village);
       const pKey = `${pNorm}|${pVillage}`;
 
-      if (p.farmer_id && seenIds.has(p.farmer_id)) return;
-      if (seenKeys.has(pKey)) return;
-
       const existing = list.find((f) => {
         const fNorm = normalizeCleanStr(f.name_en);
         const fPa = (f.name_pa || '').trim();
         const fVil = normalizeCleanStr(f.village_en);
         const nameMatch = fNorm === pNorm || (fPa && fPa === pName);
-        if (!nameMatch) return false;
-        if (pVillage && fVil && pVillage !== fVil) return false;
+        const linkedMatch = (f.linked_farmers || []).some((lf) => {
+          const lfNorm = normalizeCleanStr(lf.name_en);
+          const lfPa = (lf.name_pa || '').trim();
+          return lfNorm === pNorm || (lfPa && lfPa === pName);
+        });
+        if (!nameMatch && !linkedMatch) return false;
+        if (pVillage && fVil && pVillage !== fVil && !pVillage.includes(fVil) && !fVil.includes(pVillage)) return false;
         return true;
       });
       if (existing) return;
 
+      if (seenKeys.has(pKey)) return;
+
       const safeFarmerSlug = (pNorm.replace(/\s+/g, '_') || 'f').slice(0, 30);
       const safeVillageSlug = (pVillage.replace(/\s+/g, '_') || 'v').slice(0, 20);
-      const genId = p.farmer_id || `PUR-FARMER-${safeFarmerSlug}-${safeVillageSlug}`;
+      const genId = (p.farmer_id && !seenIds.has(p.farmer_id))
+        ? p.farmer_id
+        : `PUR-FARMER-${safeFarmerSlug}-${safeVillageSlug}`;
+
       if (seenIds.has(genId)) return;
 
       seenKeys.add(pKey);
@@ -242,6 +257,16 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
     return list;
   }, [farmers, cropArrivals, agencyPurchases]);
 
+  // Ensure selectedFarmerId always points to an existing farmer in allMasterFarmers
+  useEffect(() => {
+    if (allMasterFarmers.length > 0) {
+      const exists = allMasterFarmers.some((f) => f.id === selectedFarmerId);
+      if (!selectedFarmerId || !exists) {
+        setSelectedFarmerId(allMasterFarmers[0].id);
+      }
+    }
+  }, [allMasterFarmers, selectedFarmerId]);
+
   // Selected Farmer (from all discovered farmers - resilient to IDs and Names)
   const currentFarmer = useMemo(() => {
     if (!allMasterFarmers || allMasterFarmers.length === 0) return null;
@@ -254,6 +279,7 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
       const selNorm = normalizeCleanStr(selectedFarmerId);
       const foundByName = allMasterFarmers.find((f) => 
         normalizeCleanStr(f.name_en) === selNorm ||
+        (f.name_pa && normalizeCleanStr(f.name_pa) === selNorm) ||
         (f.name_pa && f.name_pa.trim() === selectedFarmerId.trim())
       );
       if (foundByName) return foundByName;
@@ -298,16 +324,6 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
 
   // 100% Strict, Collision-Free Matching for Crop Inward Arrivals
   const isArrivalForFarmer = (a: CropArrivalEntry, f: FarmerMaster): boolean => {
-    // 1. Explicit ID Match (highest authority)
-    if (a.farmer_id) {
-      if (a.farmer_id === f.id) return true;
-      if (f.linked_farmers && f.linked_farmers.some((l) => l.id === a.farmer_id)) return true;
-      // If a.farmer_id is explicitly set to another registered farmer, it can never belong to f!
-      const isOtherRegisteredFarmer = allMasterFarmers.some((other) => other.id === a.farmer_id && other.id !== f.id);
-      if (isOtherRegisteredFarmer) return false;
-    }
-
-    // 2. Exact Full Name Match (English or Punjabi or Linked Member)
     const aNameEn = normalizeCleanStr(a.farmer_name);
     const aNamePa = (a.farmer_name_pa || '').trim();
     const fNameEn = normalizeCleanStr(f.name_en);
@@ -315,26 +331,37 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
 
     const linkedNamesEn = (f.linked_farmers || []).map((l) => normalizeCleanStr(l.name_en)).filter(Boolean);
     const linkedNamesPa = (f.linked_farmers || []).map((l) => (l.name_pa || '').trim()).filter(Boolean);
+    const linkedIds = (f.linked_farmers || []).map((l) => l.id).filter(Boolean);
 
+    // Exact or Linked Full Name Match
     const matchesName = 
       (aNameEn && (aNameEn === fNameEn || linkedNamesEn.includes(aNameEn))) ||
       (aNamePa && (aNamePa === fNamePa || linkedNamesPa.includes(aNamePa))) ||
       (a.farmer_name && (a.farmer_name.trim() === f.name_en.trim() || a.farmer_name.trim() === f.name_pa?.trim()));
 
-    if (!matchesName) return false;
+    const idMatches = Boolean(a.farmer_id && (a.farmer_id === f.id || linkedIds.includes(a.farmer_id)));
 
-    // 3. Disambiguate if village is provided on both and conflicts
-    const aVillage = normalizeCleanStr(a.village);
-    const fVillage = normalizeCleanStr(f.village_en);
-    if (aVillage && fVillage && aVillage !== fVillage && !aVillage.includes(fVillage) && !fVillage.includes(aVillage)) {
+    // CRITICAL FIX: If arrival has a farmer name that contradicts f, NEVER assign it solely due to a stale/default farmer_id!
+    if (aNameEn && !matchesName) {
       return false;
     }
 
-    // 4. Disambiguate if father's name is provided on both and conflicts
+    if (!matchesName && !idMatches) {
+      return false;
+    }
+
+    // Disambiguate if village is provided on both and conflicts
+    const aVillage = normalizeCleanStr(a.village);
+    const fVillage = normalizeCleanStr(f.village_en);
+    if (aVillage && fVillage && aVillage !== fVillage && !aVillage.includes(fVillage) && !fVillage.includes(aVillage)) {
+      if (!idMatches) return false;
+    }
+
+    // Disambiguate if father's name is provided on both and conflicts
     const aFather = normalizeCleanStr(a.father_husband_name);
     const fFather = normalizeCleanStr(f.father_husband_name_en);
     if (aFather && fFather && aFather !== fFather && !aFather.includes(fFather) && !fFather.includes(aFather)) {
-      return false;
+      if (!idMatches) return false;
     }
 
     return true;
@@ -342,15 +369,6 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
 
   // 100% Strict, Collision-Free Matching for Agency Purchases / J-Forms
   const isPurchaseForFarmer = (p: AgencyPurchaseEntry, f: FarmerMaster): boolean => {
-    // 1. Explicit ID Match
-    if (p.farmer_id) {
-      if (p.farmer_id === f.id) return true;
-      if (f.linked_farmers && f.linked_farmers.some((l) => l.id === p.farmer_id)) return true;
-      const isOtherRegisteredFarmer = allMasterFarmers.some((other) => other.id === p.farmer_id && other.id !== f.id);
-      if (isOtherRegisteredFarmer) return false;
-    }
-
-    // 2. Exact Name Match on farmer_name or billed_to_name
     const pFarmer = normalizeCleanStr(p.farmer_name);
     const pBilled = normalizeCleanStr(p.billed_to_name);
     const fNameEn = normalizeCleanStr(f.name_en);
@@ -358,6 +376,7 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
 
     const linkedNamesEn = (f.linked_farmers || []).map((l) => normalizeCleanStr(l.name_en)).filter(Boolean);
     const linkedNamesPa = (f.linked_farmers || []).map((l) => (l.name_pa || '').trim()).filter(Boolean);
+    const linkedIds = (f.linked_farmers || []).map((l) => l.id).filter(Boolean);
 
     const matchesName = 
       (pFarmer && (pFarmer === fNameEn || linkedNamesEn.includes(pFarmer))) ||
@@ -366,20 +385,29 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
       (p.farmer_name && (p.farmer_name.trim() === f.name_en.trim() || p.farmer_name.trim() === f.name_pa?.trim())) ||
       (p.billed_to_name && (p.billed_to_name.trim() === f.name_en.trim() || p.billed_to_name.trim() === f.name_pa?.trim()));
 
-    if (!matchesName) return false;
+    const idMatches = Boolean(p.farmer_id && (p.farmer_id === f.id || linkedIds.includes(p.farmer_id)));
 
-    // 3. Disambiguate if village is provided on both and conflicts
-    const pVillage = normalizeCleanStr(p.address_village || p.village);
-    const fVillage = normalizeCleanStr(f.village_en);
-    if (pVillage && fVillage && pVillage !== fVillage && !pVillage.includes(fVillage) && !fVillage.includes(pVillage)) {
+    // CRITICAL FIX: If purchase has a farmer name that contradicts f, NEVER assign it solely due to a stale/default farmer_id!
+    if (pFarmer && !matchesName) {
       return false;
     }
 
-    // 4. Disambiguate if father's name is provided on both and conflicts
+    if (!matchesName && !idMatches) {
+      return false;
+    }
+
+    // Disambiguate if village is provided on both and conflicts
+    const pVillage = normalizeCleanStr(p.address_village || p.village);
+    const fVillage = normalizeCleanStr(f.village_en);
+    if (pVillage && fVillage && pVillage !== fVillage && !pVillage.includes(fVillage) && !fVillage.includes(pVillage)) {
+      if (!idMatches) return false;
+    }
+
+    // Disambiguate if father's name is provided on both and conflicts
     const pFather = normalizeCleanStr(p.father_husband_name);
     const fFather = normalizeCleanStr(f.father_husband_name_en);
     if (pFather && fFather && pFather !== fFather && !pFather.includes(fFather) && !fFather.includes(pFather)) {
-      return false;
+      if (!idMatches) return false;
     }
 
     return true;
