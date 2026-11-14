@@ -56,9 +56,9 @@ export const MphWhatsAppModal: React.FC<MphWhatsAppModalProps> = ({
   }, [open, summary, lang]);
 
   const generatedText = useMemo(() => {
-    if (!summary) return '';
+    if (!open || !summary) return '';
     return buildFarmerPuraHisabWhatsAppText(summary, settings, msgLang, mode);
-  }, [summary, settings, msgLang, mode]);
+  }, [open, summary, settings, msgLang, mode]);
 
   useEffect(() => {
     if (!isEdited) {

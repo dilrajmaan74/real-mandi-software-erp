@@ -6,6 +6,7 @@ import {
   formatINR,
   formatLooseKgGm,
   formatWeightQKG,
+  safeStr,
 } from './mandiPaddyHisabUtils';
 
 export type MphWhatsappMessageMode = 'full' | 'summary';
@@ -15,11 +16,11 @@ function trPaddyType(type: string, lang: MphLang): string {
     if (type === 'Hybrid Paddy') return 'ਹਾਈਬ੍ਰਿਡ ਝੋਨਾ';
     if (type === 'Paddy A Gurde') return 'ਝੋਨਾ ਏ ਗ੍ਰੇਡ';
   }
-  return type;
+  return safeStr(type);
 }
 
 function trRelation(rel: string, lang: MphLang): string {
-  if (lang !== 'pa') return rel;
+  if (lang !== 'pa') return safeStr(rel, 'Self');
   switch (rel) {
     case 'Self':
       return 'ਖੁਦ';
@@ -36,12 +37,12 @@ function trRelation(rel: string, lang: MphLang): string {
     case 'Other':
       return 'ਹੋਰ';
     default:
-      return rel;
+      return safeStr(rel, 'Self');
   }
 }
 
 export function normalizeWhatsAppPhone(phone?: string): string {
-  const digits = (phone || '').replace(/\D/g, '');
+  const digits = safeStr(phone).replace(/\D/g, '');
   if (!digits) return '';
   if (digits.length === 10) return `91${digits}`;
   if (digits.length === 11 && digits.startsWith('0')) return `91${digits.slice(1)}`;
@@ -51,7 +52,7 @@ export function normalizeWhatsAppPhone(phone?: string): string {
 
 export function buildWhatsAppUrl(phone: string, text: string): string {
   const normalized = normalizeWhatsAppPhone(phone);
-  const encoded = encodeURIComponent(text);
+  const encoded = encodeURIComponent(safeStr(text));
   return normalized
     ? `https://wa.me/${normalized}?text=${encoded}`
     : `https://wa.me/?text=${encoded}`;
@@ -63,6 +64,7 @@ export function buildFarmerPuraHisabWhatsAppText(
   lang: MphLang,
   mode: MphWhatsappMessageMode = 'full'
 ): string {
+  if (!summary || !summary.farmer) return '';
   const isPa = lang === 'pa';
   const todayStr = formatDateDMY(new Date().toISOString().split('T')[0]);
   const f = summary.farmer;
@@ -73,10 +75,10 @@ export function buildFarmerPuraHisabWhatsAppText(
     lines.push('🌾 *ਮੰਡੀ ਝੋਨਾ ਹਿਸਾਬ — ਪੂਰਾ ਖਾਤਾ ਸਟੇਟਮੈਂਟ*');
     lines.push(`*ਤਾਰੀਖ:* ${todayStr}`);
     lines.push('─────────────────────');
-    lines.push(`*ਕਿਸਾਨ:* ${f.name}`);
-    if (f.fatherName) lines.push(`*ਪਿਤਾ ਦਾ ਨਾਮ:* ${f.fatherName}`);
-    lines.push(`*ਪਿੰਡ:* ${f.village}`);
-    if (f.mobile) lines.push(`*ਮੋਬਾਈਲ:* ${f.mobile}`);
+    lines.push(`*ਕਿਸਾਨ:* ${safeStr(f.name)}`);
+    if (f.fatherName) lines.push(`*ਪਿਤਾ ਦਾ ਨਾਮ:* ${safeStr(f.fatherName)}`);
+    lines.push(`*ਪਿੰਡ:* ${safeStr(f.village)}`);
+    if (f.mobile) lines.push(`*ਮੋਬਾਈਲ:* ${safeStr(f.mobile)}`);
   } else {
     lines.push('🌾 *Mandi Paddy Hisab — Complete Account Statement*');
     lines.push(`*Date:* ${todayStr}`);

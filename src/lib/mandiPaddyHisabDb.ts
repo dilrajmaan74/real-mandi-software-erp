@@ -25,6 +25,8 @@ import {
   MphSettings,
 } from '../types/mandiPaddyHisab';
 
+import { safeDateStr, safeNum, safeStr } from './mandiPaddyHisabUtils';
+
 // Completely separate localStorage keys for Mandi Paddy Hisab module
 export const MPH_STORAGE_KEYS = {
   FARMERS: 'mph_farmers_v1',
@@ -35,6 +37,137 @@ export const MPH_STORAGE_KEYS = {
   SETTINGS: 'mph_settings_v1',
 } as const;
 
+function normalizeIso(val: unknown, fallback = ''): string {
+  const d = safeDateStr(val);
+  if (typeof val === 'string') return val;
+  if (d) return d;
+  return fallback;
+}
+
+export function normalizeMphFarmer(raw: any, fallbackId = ''): MphFarmer | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const id = safeStr(raw.id, fallbackId).trim();
+  if (!id) return null;
+  return {
+    id,
+    ownerId: raw.ownerId ? safeStr(raw.ownerId) : undefined,
+    name: safeStr(raw.name, 'Farmer'),
+    fatherName: safeStr(raw.fatherName),
+    village: safeStr(raw.village),
+    mobile: safeStr(raw.mobile),
+    createdAt: normalizeIso(raw.createdAt),
+    updatedAt: normalizeIso(raw.updatedAt),
+  };
+}
+
+export function normalizeMphArrival(raw: any, fallbackId = ''): MphArrival | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const id = safeStr(raw.id, fallbackId).trim();
+  if (!id) return null;
+  return {
+    id,
+    ownerId: raw.ownerId ? safeStr(raw.ownerId) : undefined,
+    farmerId: safeStr(raw.farmerId),
+    farmerName: safeStr(raw.farmerName),
+    date: safeDateStr(raw.date),
+    paddyType: raw.paddyType === 'Hybrid Paddy' ? 'Hybrid Paddy' : 'Paddy A Gurde',
+    ratePerQuintal: safeNum(raw.ratePerQuintal),
+    bags: Math.max(0, Math.floor(safeNum(raw.bags))),
+    looseKg: Math.max(0, Math.floor(safeNum(raw.looseKg))),
+    looseGm: Math.max(0, Math.floor(safeNum(raw.looseGm))),
+    totalQuintals: safeNum(raw.totalQuintals),
+    weightQtlPart: Math.max(0, Math.floor(safeNum(raw.weightQtlPart))),
+    weightKgPart: Math.max(0, Math.floor(safeNum(raw.weightKgPart))),
+    weightGmPart: Math.max(0, Math.floor(safeNum(raw.weightGmPart))),
+    paddyAmount: safeNum(raw.paddyAmount),
+    applyDryingLabor: raw.applyDryingLabor !== false,
+    notes: safeStr(raw.notes),
+    createdAt: normalizeIso(raw.createdAt),
+    updatedAt: normalizeIso(raw.updatedAt),
+  };
+}
+
+export function normalizeMphJForm(raw: any, fallbackId = ''): MphJForm | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const id = safeStr(raw.id, fallbackId).trim();
+  if (!id) return null;
+  const farmerName = safeStr(raw.farmerName);
+  return {
+    id,
+    ownerId: raw.ownerId ? safeStr(raw.ownerId) : undefined,
+    farmerId: safeStr(raw.farmerId),
+    farmerName,
+    jFormHolderName: safeStr(raw.jFormHolderName, farmerName),
+    holderRelation: safeStr(raw.holderRelation, 'Self') || 'Self',
+    date: safeDateStr(raw.date),
+    jFormNo: safeStr(raw.jFormNo),
+    bags: Math.max(0, Math.floor(safeNum(raw.bags))),
+    rate: safeNum(raw.rate),
+    jFormAmount: safeNum(raw.jFormAmount),
+    notes: safeStr(raw.notes),
+    createdAt: normalizeIso(raw.createdAt),
+    updatedAt: normalizeIso(raw.updatedAt),
+  };
+}
+
+export function normalizeMphOtherEntry(raw: any, fallbackId = ''): MphOtherEntry | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const id = safeStr(raw.id, fallbackId).trim();
+  if (!id) return null;
+  return {
+    id,
+    ownerId: raw.ownerId ? safeStr(raw.ownerId) : undefined,
+    farmerId: safeStr(raw.farmerId),
+    farmerName: safeStr(raw.farmerName),
+    date: safeDateStr(raw.date),
+    entryType: raw.entryType === 'add' ? 'add' : 'deduct',
+    description: safeStr(raw.description),
+    amount: safeNum(raw.amount),
+    createdAt: normalizeIso(raw.createdAt),
+    updatedAt: normalizeIso(raw.updatedAt),
+  };
+}
+
+export function normalizeMphAdvance(raw: any, fallbackId = ''): MphAdvance | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const id = safeStr(raw.id, fallbackId).trim();
+  if (!id) return null;
+  return {
+    id,
+    ownerId: raw.ownerId ? safeStr(raw.ownerId) : undefined,
+    farmerId: safeStr(raw.farmerId),
+    farmerName: safeStr(raw.farmerName),
+    startDate: safeDateStr(raw.startDate),
+    endDate: safeDateStr(raw.endDate),
+    days: Math.max(0, Math.floor(safeNum(raw.days))),
+    purpose: safeStr(raw.purpose, 'Advance'),
+    principalAmount: Math.max(0, safeNum(raw.principalAmount)),
+    interestRateMonthly: Math.max(0, safeNum(raw.interestRateMonthly)),
+    interestBasis: raw.interestBasis === 'monthly_30' ? 'monthly_30' : 'daily_30',
+    monthlyInterestAmount: Math.max(0, safeNum(raw.monthlyInterestAmount)),
+    interestAmount: Math.max(0, safeNum(raw.interestAmount)),
+    totalAmount: Math.max(0, safeNum(raw.totalAmount)),
+    createdAt: normalizeIso(raw.createdAt),
+    updatedAt: normalizeIso(raw.updatedAt),
+  };
+}
+
+export function normalizeMphSettings(raw: any): MphSettings {
+  if (!raw || typeof raw !== 'object') return { ...DEFAULT_MPH_SETTINGS };
+  return {
+    id: safeStr(raw.id, 'default') || 'default',
+    ownerId: raw.ownerId ? safeStr(raw.ownerId) : undefined,
+    hybridPaddyRate: Math.max(0, safeNum(raw.hybridPaddyRate, DEFAULT_MPH_SETTINGS.hybridPaddyRate)),
+    paddyAGurdeRate: Math.max(0, safeNum(raw.paddyAGurdeRate, DEFAULT_MPH_SETTINGS.paddyAGurdeRate)),
+    jFormLaborRate: Math.max(0, safeNum(raw.jFormLaborRate, DEFAULT_MPH_SETTINGS.jFormLaborRate)),
+    paddyDryingLaborRate: Math.max(
+      0,
+      safeNum(raw.paddyDryingLaborRate, DEFAULT_MPH_SETTINGS.paddyDryingLaborRate)
+    ),
+    updatedAt: normalizeIso(raw.updatedAt, DEFAULT_MPH_SETTINGS.updatedAt),
+  };
+}
+
 export function loadLocalMphData(): {
   farmers: MphFarmer[];
   arrivals: MphArrival[];
@@ -43,23 +176,37 @@ export function loadLocalMphData(): {
   advances: MphAdvance[];
   settings: MphSettings;
 } {
-  const readJson = <T,>(key: string, fallback: T): T => {
+  const readArray = <T,>(key: string, normalize: (item: any) => T | null): T[] => {
     try {
       const raw = localStorage.getItem(key);
-      if (raw) return JSON.parse(raw) as T;
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.map((x) => normalize(x)).filter((x): x is T => x !== null);
     } catch (e) {
       console.warn(`Failed reading ${key}:`, e);
+      return [];
     }
-    return fallback;
+  };
+
+  const readSettings = (): MphSettings => {
+    try {
+      const raw = localStorage.getItem(MPH_STORAGE_KEYS.SETTINGS);
+      if (!raw) return { ...DEFAULT_MPH_SETTINGS };
+      return normalizeMphSettings(JSON.parse(raw));
+    } catch (e) {
+      console.warn(`Failed reading ${MPH_STORAGE_KEYS.SETTINGS}:`, e);
+      return { ...DEFAULT_MPH_SETTINGS };
+    }
   };
 
   return {
-    farmers: readJson<MphFarmer[]>(MPH_STORAGE_KEYS.FARMERS, []),
-    arrivals: readJson<MphArrival[]>(MPH_STORAGE_KEYS.ARRIVALS, []),
-    jForms: readJson<MphJForm[]>(MPH_STORAGE_KEYS.JFORMS, []),
-    otherEntries: readJson<MphOtherEntry[]>(MPH_STORAGE_KEYS.OTHER_ENTRIES, []),
-    advances: readJson<MphAdvance[]>(MPH_STORAGE_KEYS.ADVANCES, []),
-    settings: readJson<MphSettings>(MPH_STORAGE_KEYS.SETTINGS, DEFAULT_MPH_SETTINGS),
+    farmers: readArray(MPH_STORAGE_KEYS.FARMERS, normalizeMphFarmer),
+    arrivals: readArray(MPH_STORAGE_KEYS.ARRIVALS, normalizeMphArrival),
+    jForms: readArray(MPH_STORAGE_KEYS.JFORMS, normalizeMphJForm),
+    otherEntries: readArray(MPH_STORAGE_KEYS.OTHER_ENTRIES, normalizeMphOtherEntry),
+    advances: readArray(MPH_STORAGE_KEYS.ADVANCES, normalizeMphAdvance),
+    settings: readSettings(),
   };
 }
 
@@ -355,12 +502,12 @@ export async function syncMphLocalDataToCloud(
       payload: cleanForFirestore({
         id: docId,
         ownerId: userId,
-        name: f.name.trim().slice(0, 160),
-        fatherName: f.fatherName.trim().slice(0, 160),
-        village: f.village.trim().slice(0, 160),
-        mobile: f.mobile.trim().slice(0, 20),
-        createdAt: f.createdAt,
-        updatedAt: f.updatedAt,
+        name: safeStr(f.name).trim().slice(0, 160),
+        fatherName: safeStr(f.fatherName).trim().slice(0, 160),
+        village: safeStr(f.village).trim().slice(0, 160),
+        mobile: safeStr(f.mobile).trim().slice(0, 20),
+        createdAt: safeStr(f.createdAt),
+        updatedAt: safeStr(f.updatedAt),
       }),
     });
   }
@@ -368,9 +515,9 @@ export async function syncMphLocalDataToCloud(
   const farmerIdSet = new Set(data.farmers.map((f) => sanitizeDocId(f.id)));
 
   for (const a of data.arrivals) {
-    const fId = sanitizeDocId(a.farmerId);
+    const fId = sanitizeDocId(safeStr(a.farmerId));
     if (!farmerIdSet.has(fId)) continue;
-    const docId = sanitizeDocId(a.id);
+    const docId = sanitizeDocId(safeStr(a.id));
     ops.push({
       path: doc(db, 'users', userId, 'mph_arrivals', docId),
       payload: cleanForFirestore({
@@ -378,16 +525,16 @@ export async function syncMphLocalDataToCloud(
         id: docId,
         ownerId: userId,
         farmerId: fId,
-        farmerName: a.farmerName.trim().slice(0, 160),
-        notes: (a.notes || '').trim().slice(0, 400),
+        farmerName: safeStr(a.farmerName).trim().slice(0, 160),
+        notes: safeStr(a.notes).trim().slice(0, 400),
       }),
     });
   }
 
   for (const j of data.jForms) {
-    const fId = sanitizeDocId(j.farmerId);
+    const fId = sanitizeDocId(safeStr(j.farmerId));
     if (!farmerIdSet.has(fId)) continue;
-    const docId = sanitizeDocId(j.id);
+    const docId = sanitizeDocId(safeStr(j.id));
     ops.push({
       path: doc(db, 'users', userId, 'mph_jforms', docId),
       payload: cleanForFirestore({
@@ -395,19 +542,19 @@ export async function syncMphLocalDataToCloud(
         id: docId,
         ownerId: userId,
         farmerId: fId,
-        farmerName: j.farmerName.trim().slice(0, 160),
-        jFormHolderName: (j.jFormHolderName || j.farmerName || '').trim().slice(0, 160),
-        holderRelation: (j.holderRelation || 'Self').trim().slice(0, 64),
-        jFormNo: (j.jFormNo || '').trim().slice(0, 64),
-        notes: (j.notes || '').trim().slice(0, 400),
+        farmerName: safeStr(j.farmerName).trim().slice(0, 160),
+        jFormHolderName: safeStr(j.jFormHolderName || j.farmerName).trim().slice(0, 160),
+        holderRelation: safeStr(j.holderRelation, 'Self').trim().slice(0, 64),
+        jFormNo: safeStr(j.jFormNo).trim().slice(0, 64),
+        notes: safeStr(j.notes).trim().slice(0, 400),
       }),
     });
   }
 
   for (const o of data.otherEntries) {
-    const fId = sanitizeDocId(o.farmerId);
+    const fId = sanitizeDocId(safeStr(o.farmerId));
     if (!farmerIdSet.has(fId)) continue;
-    const docId = sanitizeDocId(o.id);
+    const docId = sanitizeDocId(safeStr(o.id));
     ops.push({
       path: doc(db, 'users', userId, 'mph_other_entries', docId),
       payload: cleanForFirestore({
@@ -415,16 +562,16 @@ export async function syncMphLocalDataToCloud(
         id: docId,
         ownerId: userId,
         farmerId: fId,
-        farmerName: o.farmerName.trim().slice(0, 160),
-        description: o.description.trim().slice(0, 300),
+        farmerName: safeStr(o.farmerName).trim().slice(0, 160),
+        description: safeStr(o.description).trim().slice(0, 300),
       }),
     });
   }
 
   for (const adv of data.advances || []) {
-    const fId = sanitizeDocId(adv.farmerId);
+    const fId = sanitizeDocId(safeStr(adv.farmerId));
     if (!farmerIdSet.has(fId)) continue;
-    const docId = sanitizeDocId(adv.id);
+    const docId = sanitizeDocId(safeStr(adv.id));
     ops.push({
       path: doc(db, 'users', userId, 'mph_advances', docId),
       payload: cleanForFirestore({
@@ -432,8 +579,8 @@ export async function syncMphLocalDataToCloud(
         id: docId,
         ownerId: userId,
         farmerId: fId,
-        farmerName: adv.farmerName.trim().slice(0, 160),
-        purpose: (adv.purpose || 'Season Advance').trim().slice(0, 300),
+        farmerName: safeStr(adv.farmerName).trim().slice(0, 160),
+        purpose: safeStr(adv.purpose, 'Season Advance').trim().slice(0, 300),
       }),
     });
   }
@@ -479,16 +626,23 @@ export function subscribeToMphCloudData(
 ): () => void {
   const unsubscribers: Array<() => void> = [];
 
+  const logSnapshotError = (path: string, err: unknown) => {
+    console.warn(`Firestore subscription warning (${path}):`, err);
+  };
+
   const farmersPath = `users/${userId}/mph_farmers`;
   unsubscribers.push(
     onSnapshot(
       query(collection(db, 'users', userId, 'mph_farmers'), where('ownerId', '==', userId)),
       (snap) => {
         const list: MphFarmer[] = [];
-        snap.forEach((d) => list.push(d.data() as MphFarmer));
+        snap.forEach((d) => {
+          const item = normalizeMphFarmer(d.data(), d.id);
+          if (item) list.push(item);
+        });
         callbacks.onFarmers(list);
       },
-      (err) => handleFirestoreError(err, OperationType.LIST, farmersPath)
+      (err) => logSnapshotError(farmersPath, err)
     )
   );
 
@@ -498,10 +652,13 @@ export function subscribeToMphCloudData(
       query(collection(db, 'users', userId, 'mph_arrivals'), where('ownerId', '==', userId)),
       (snap) => {
         const list: MphArrival[] = [];
-        snap.forEach((d) => list.push(d.data() as MphArrival));
+        snap.forEach((d) => {
+          const item = normalizeMphArrival(d.data(), d.id);
+          if (item) list.push(item);
+        });
         callbacks.onArrivals(list);
       },
-      (err) => handleFirestoreError(err, OperationType.LIST, arrivalsPath)
+      (err) => logSnapshotError(arrivalsPath, err)
     )
   );
 
@@ -511,10 +668,13 @@ export function subscribeToMphCloudData(
       query(collection(db, 'users', userId, 'mph_jforms'), where('ownerId', '==', userId)),
       (snap) => {
         const list: MphJForm[] = [];
-        snap.forEach((d) => list.push(d.data() as MphJForm));
+        snap.forEach((d) => {
+          const item = normalizeMphJForm(d.data(), d.id);
+          if (item) list.push(item);
+        });
         callbacks.onJForms(list);
       },
-      (err) => handleFirestoreError(err, OperationType.LIST, jFormsPath)
+      (err) => logSnapshotError(jFormsPath, err)
     )
   );
 
@@ -524,10 +684,13 @@ export function subscribeToMphCloudData(
       query(collection(db, 'users', userId, 'mph_other_entries'), where('ownerId', '==', userId)),
       (snap) => {
         const list: MphOtherEntry[] = [];
-        snap.forEach((d) => list.push(d.data() as MphOtherEntry));
+        snap.forEach((d) => {
+          const item = normalizeMphOtherEntry(d.data(), d.id);
+          if (item) list.push(item);
+        });
         callbacks.onOtherEntries(list);
       },
-      (err) => handleFirestoreError(err, OperationType.LIST, otherPath)
+      (err) => logSnapshotError(otherPath, err)
     )
   );
 
@@ -537,10 +700,13 @@ export function subscribeToMphCloudData(
       query(collection(db, 'users', userId, 'mph_advances'), where('ownerId', '==', userId)),
       (snap) => {
         const list: MphAdvance[] = [];
-        snap.forEach((d) => list.push(d.data() as MphAdvance));
+        snap.forEach((d) => {
+          const item = normalizeMphAdvance(d.data(), d.id);
+          if (item) list.push(item);
+        });
         callbacks.onAdvances?.(list);
       },
-      (err) => handleFirestoreError(err, OperationType.LIST, advancesPath)
+      (err) => logSnapshotError(advancesPath, err)
     )
   );
 
@@ -550,10 +716,10 @@ export function subscribeToMphCloudData(
       doc(db, 'users', userId, 'mph_settings', 'default'),
       (snap) => {
         if (snap.exists()) {
-          callbacks.onSettings(snap.data() as MphSettings);
+          callbacks.onSettings(normalizeMphSettings(snap.data()));
         }
       },
-      (err) => handleFirestoreError(err, OperationType.GET, settingsPath)
+      (err) => logSnapshotError(settingsPath, err)
     )
   );
 

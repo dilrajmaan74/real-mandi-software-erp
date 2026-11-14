@@ -1,4 +1,5 @@
 import {
+  DEFAULT_MPH_SETTINGS,
   MphAdvance,
   MphArrival,
   MphFarmer,
@@ -13,6 +14,48 @@ import {
 export const BAG_GRAMS = 37500;
 export const QUINTAL_GRAMS = 100000;
 export const KG_GRAMS = 1000;
+
+export function safeStr(value: unknown, fallback = ''): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return fallback;
+}
+
+export function safeNum(value: unknown, fallback = 0): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+export function safeDateStr(value: unknown, fallback = ''): string {
+  if (typeof value === 'string') return value;
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    return value.toISOString().split('T')[0];
+  }
+  if (value && typeof value === 'object') {
+    const obj = value as { toDate?: () => Date; seconds?: number };
+    if (typeof obj.toDate === 'function') {
+      try {
+        const d = obj.toDate();
+        if (d instanceof Date && !isNaN(d.getTime())) {
+          return d.toISOString().split('T')[0];
+        }
+      } catch {
+        // ignore conversion error
+      }
+    }
+    if (typeof obj.seconds === 'number' && Number.isFinite(obj.seconds)) {
+      const d = new Date(obj.seconds * 1000);
+      if (!isNaN(d.getTime())) {
+        return d.toISOString().split('T')[0];
+      }
+    }
+  }
+  return fallback;
+}
+
+function compareSafeStr(a: unknown, b: unknown): number {
+  return safeStr(a).localeCompare(safeStr(b));
+}
 
 export interface WeightBreakdown {
   totalGrams: number;
@@ -32,9 +75,9 @@ export function calculatePaddyWeight(
   looseKg: number,
   looseGm: number
 ): WeightBreakdown {
-  const safeBags = Math.max(0, Math.floor(Number(bags) || 0));
-  const safeLooseKg = Math.max(0, Math.floor(Number(looseKg) || 0));
-  const safeLooseGm = Math.max(0, Math.floor(Number(looseGm) || 0));
+  const safeBags = Math.max(0, Math.floor(safeNum(bags)));
+  const safeLooseKg = Math.max(0, Math.floor(safeNum(looseKg)));
+  const safeLooseGm = Math.max(0, Math.floor(safeNum(looseGm)));
 
   const bagGrams = safeBags * BAG_GRAMS;
   const looseGrams = safeLooseKg * KG_GRAMS + safeLooseGm;
@@ -63,10 +106,12 @@ export function sumPaddyWeights(arrivals: MphArrival[]) {
   let totalLooseGrams = 0;
   let totalGrams = 0;
 
-  for (const a of arrivals) {
-    const b = Math.max(0, Math.floor(Number(a.bags) || 0));
-    const lKg = Math.max(0, Math.floor(Number(a.looseKg) || 0));
-    const lGm = Math.max(0, Math.floor(Number(a.looseGm) || 0));
+  const list = Array.isArray(arrivals) ? arrivals : [];
+  for (const a of list) {
+    if (!a) continue;
+    const b = Math.max(0, Math.floor(safeNum(a.bags)));
+    const lKg = Math.max(0, Math.floor(safeNum(a.looseKg)));
+    const lGm = Math.max(0, Math.floor(safeNum(a.looseGm)));
     const looseG = lKg * KG_GRAMS + lGm;
     totalBags += b;
     totalLooseGrams += looseG;
@@ -95,18 +140,18 @@ export function sumPaddyWeights(arrivals: MphArrival[]) {
 }
 
 export function calculatePaddyAmount(totalQuintals: number, ratePerQuintal: number): number {
-  const qtl = Math.max(0, Number(totalQuintals) || 0);
-  const rate = Math.max(0, Number(ratePerQuintal) || 0);
+  const qtl = Math.max(0, safeNum(totalQuintals));
+  const rate = Math.max(0, safeNum(ratePerQuintal));
   return Math.round(qtl * rate * 100) / 100;
 }
 
 export function formatWeightQKG(qtl: number, kg: number, gm: number): string {
-  return `${qtl} Qtl ${kg} KG ${gm} GM`;
+  return `${Math.floor(safeNum(qtl))} Qtl ${Math.floor(safeNum(kg))} KG ${Math.floor(safeNum(gm))} GM`;
 }
 
 export function formatLooseKgGm(kg: number, gm: number): string {
-  const safeKg = Math.max(0, Math.floor(Number(kg) || 0));
-  const safeGm = Math.max(0, Math.floor(Number(gm) || 0));
+  const safeKg = Math.max(0, Math.floor(safeNum(kg)));
+  const safeGm = Math.max(0, Math.floor(safeNum(gm)));
   if (safeKg === 0 && safeGm === 0) return '0 KG';
   if (safeGm === 0) return `${safeKg} KG`;
   if (safeKg === 0) return `${safeGm} GM`;
@@ -114,30 +159,32 @@ export function formatLooseKgGm(kg: number, gm: number): string {
 }
 
 export function formatINR(value: number, showDecimals = true): string {
-  const num = Number(value) || 0;
+  const num = safeNum(value);
   return `₹${num.toLocaleString('en-IN', {
     minimumFractionDigits: showDecimals ? 2 : 0,
     maximumFractionDigits: showDecimals ? 2 : 0,
   })}`;
 }
 
-export function formatDateDMY(dateStr?: string): string {
-  if (!dateStr) return '—';
-  const parts = dateStr.split('-');
+export function formatDateDMY(dateStr?: unknown): string {
+  const normalized = safeDateStr(dateStr).trim();
+  if (!normalized) return '—';
+  const parts = normalized.split('-');
   if (parts.length === 3 && parts[0].length === 4) {
     return `${parts[2]}/${parts[1]}/${parts[0]}`;
   }
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return dateStr;
+  const d = new Date(normalized);
+  if (isNaN(d.getTime())) return normalized;
   const dd = String(d.getDate()).padStart(2, '0');
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const yyyy = d.getFullYear();
   return `${dd}/${mm}/${yyyy}`;
 }
 
-function parseUtcDate(dateStr?: string): Date | null {
-  if (!dateStr) return null;
-  const parts = dateStr.split('-').map(Number);
+function parseUtcDate(dateStr?: unknown): Date | null {
+  const normalized = safeDateStr(dateStr).trim();
+  if (!normalized) return null;
+  const parts = normalized.split('-').map(Number);
   if (parts.length !== 3 || parts.some((n) => isNaN(n))) return null;
   const [y, m, d] = parts;
   return new Date(Date.UTC(y, m - 1, d));
@@ -161,8 +208,8 @@ export function calculateAdvanceDaysAndInterest(
   interestAmount: number;
   totalAmount: number;
 } {
-  const principal = Math.max(0, Number(principalAmount) || 0);
-  const rate = Math.max(0, Number(interestRateMonthly) || 0);
+  const principal = Math.max(0, safeNum(principalAmount));
+  const rate = Math.max(0, safeNum(interestRateMonthly));
   const monthlyInterestAmount = Math.round(((principal * rate) / 100) * 100) / 100;
 
   const sDate = parseUtcDate(startDate);
@@ -218,56 +265,83 @@ export function computeFarmerAccountSummary(
   settings: MphSettings,
   allAdvances: MphAdvance[] = []
 ): MphFarmerAccountSummary {
-  const arrivals = allArrivals
-    .filter((a) => a.farmerId === farmer.id)
-    .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
+  const safeSettings = {
+    ...DEFAULT_MPH_SETTINGS,
+    ...(settings || {}),
+  };
 
-  const jForms = allJForms
-    .filter((j) => j.farmerId === farmer.id)
-    .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
+  const fId = safeStr(farmer?.id);
+  const arrivalsList = Array.isArray(allArrivals) ? allArrivals : [];
+  const jFormsList = Array.isArray(allJForms) ? allJForms : [];
+  const othersList = Array.isArray(allOtherEntries) ? allOtherEntries : [];
+  const advancesList = Array.isArray(allAdvances) ? allAdvances : [];
 
-  const otherEntries = allOtherEntries
-    .filter((o) => o.farmerId === farmer.id)
-    .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
-
-  const advances = allAdvances
-    .filter((adv) => adv.farmerId === farmer.id)
+  const arrivals = arrivalsList
+    .filter((a) => a && safeStr(a.farmerId) === fId)
     .sort(
       (a, b) =>
-        a.startDate.localeCompare(b.startDate) || a.createdAt.localeCompare(b.createdAt)
+        compareSafeStr(safeDateStr(a.date), safeDateStr(b.date)) ||
+        compareSafeStr(a.createdAt, b.createdAt)
+    );
+
+  const jForms = jFormsList
+    .filter((j) => j && safeStr(j.farmerId) === fId)
+    .sort(
+      (a, b) =>
+        compareSafeStr(safeDateStr(a.date), safeDateStr(b.date)) ||
+        compareSafeStr(a.createdAt, b.createdAt)
+    );
+
+  const otherEntries = othersList
+    .filter((o) => o && safeStr(o.farmerId) === fId)
+    .sort(
+      (a, b) =>
+        compareSafeStr(safeDateStr(a.date), safeDateStr(b.date)) ||
+        compareSafeStr(a.createdAt, b.createdAt)
+    );
+
+  const advances = advancesList
+    .filter((adv) => adv && safeStr(adv.farmerId) === fId)
+    .sort(
+      (a, b) =>
+        compareSafeStr(safeDateStr(a.startDate), safeDateStr(b.startDate)) ||
+        compareSafeStr(a.createdAt, b.createdAt)
     );
 
   const weights = sumPaddyWeights(arrivals);
   const totalPaddyAmount =
-    Math.round(arrivals.reduce((sum, a) => sum + (Number(a.paddyAmount) || 0), 0) * 100) / 100;
+    Math.round(arrivals.reduce((sum, a) => sum + safeNum(a.paddyAmount), 0) * 100) / 100;
 
-  const totalJFormBags = jForms.reduce((sum, j) => sum + Math.max(0, Math.floor(Number(j.bags) || 0)), 0);
+  const totalJFormBags = jForms.reduce(
+    (sum, j) => sum + Math.max(0, Math.floor(safeNum(j.bags))),
+    0
+  );
   const totalJFormAmount =
-    Math.round(jForms.reduce((sum, j) => sum + (Number(j.jFormAmount) || 0), 0) * 100) / 100;
+    Math.round(jForms.reduce((sum, j) => sum + safeNum(j.jFormAmount), 0) * 100) / 100;
 
-  const jFormLaborRate = Math.max(0, Number(settings.jFormLaborRate) || 0);
-  const dryingLaborRate = Math.max(0, Number(settings.paddyDryingLaborRate) || 0);
+  const jFormLaborRate = Math.max(0, safeNum(safeSettings.jFormLaborRate));
+  const dryingLaborRate = Math.max(0, safeNum(safeSettings.paddyDryingLaborRate));
 
   // J-Form Labour applies on total bags arrived in the Mandi (e.g., 1900 Arrival Bags × ₹8)
   const totalJFormLabor = Math.round(weights.totalBags * jFormLaborRate * 100) / 100;
 
   const totalDryingBags = arrivals
     .filter((a) => a.applyDryingLabor !== false)
-    .reduce((sum, a) => sum + Math.max(0, Math.floor(Number(a.bags) || 0)), 0);
+    .reduce((sum, a) => sum + Math.max(0, Math.floor(safeNum(a.bags))), 0);
   const totalDryingLabor = Math.round(totalDryingBags * dryingLaborRate * 100) / 100;
 
   const totalOtherAdditions =
     Math.round(
       otherEntries
         .filter((e) => e.entryType === 'add')
-        .reduce((sum, e) => sum + (Number(e.amount) || 0), 0) * 100
+        .reduce((sum, e) => sum + safeNum(e.amount), 0) * 100
     ) / 100;
 
   const totalOtherDeductions =
     Math.round(
       otherEntries
         .filter((e) => e.entryType === 'deduct')
-        .reduce((sum, e) => sum + (Number(e.amount) || 0), 0) * 100
+        .reduce((sum, e) => sum + safeNum(e.amount), 0) * 100
     ) / 100;
 
   const totalDeductions =
@@ -294,11 +368,9 @@ export function computeFarmerAccountSummary(
 
   // Advances (Principal + Interest)
   const totalAdvancePrincipal =
-    Math.round(advances.reduce((sum, adv) => sum + (Number(adv.principalAmount) || 0), 0) * 100) /
-    100;
+    Math.round(advances.reduce((sum, adv) => sum + safeNum(adv.principalAmount), 0) * 100) / 100;
   const totalAdvanceInterest =
-    Math.round(advances.reduce((sum, adv) => sum + (Number(adv.interestAmount) || 0), 0) * 100) /
-    100;
+    Math.round(advances.reduce((sum, adv) => sum + safeNum(adv.interestAmount), 0) * 100) / 100;
   const totalAdvanceWithInterest =
     Math.round((totalAdvancePrincipal + totalAdvanceInterest) * 100) / 100;
 
@@ -348,12 +420,12 @@ export function computeFarmerAccountSummary(
 }
 
 // Duplicate prevention helpers
-function normalizeText(s?: string): string {
-  return (s || '').toLowerCase().trim().replace(/\s+/g, ' ');
+function normalizeText(s?: unknown): string {
+  return safeStr(s).toLowerCase().trim().replace(/\s+/g, ' ');
 }
 
-function normalizePhone(s?: string): string {
-  const digits = (s || '').replace(/\D/g, '');
+function normalizePhone(s?: unknown): string {
+  const digits = safeStr(s).replace(/\D/g, '');
   return digits.length >= 10 ? digits.slice(-10) : digits;
 }
 
@@ -368,7 +440,8 @@ export function findDuplicateMphFarmer(
   const cMobile = normalizePhone(candidate.mobile);
 
   return (
-    existing.find((f) => {
+    (existing || []).find((f) => {
+      if (!f) return false;
       if (excludeId && f.id === excludeId) return false;
       const sameIdentity =
         normalizeText(f.name) === cName &&
@@ -394,15 +467,16 @@ export function findDuplicateMphArrival(
   excludeId?: string
 ): MphArrival | null {
   return (
-    existing.find((a) => {
+    (existing || []).find((a) => {
+      if (!a) return false;
       if (excludeId && a.id === excludeId) return false;
       return (
         a.farmerId === candidate.farmerId &&
-        a.date === candidate.date &&
+        safeDateStr(a.date) === candidate.date &&
         a.paddyType === candidate.paddyType &&
-        Number(a.bags) === Number(candidate.bags) &&
-        Number(a.looseKg) === Number(candidate.looseKg) &&
-        Number(a.looseGm) === Number(candidate.looseGm)
+        safeNum(a.bags) === safeNum(candidate.bags) &&
+        safeNum(a.looseKg) === safeNum(candidate.looseKg) &&
+        safeNum(a.looseGm) === safeNum(candidate.looseGm)
       );
     }) || null
   );
@@ -423,7 +497,8 @@ export function findDuplicateMphJForm(
   const cNo = normalizeText(candidate.jFormNo);
   const cHolder = normalizeText(candidate.jFormHolderName);
   return (
-    existing.find((j) => {
+    (existing || []).find((j) => {
+      if (!j) return false;
       if (excludeId && j.id === excludeId) return false;
       if (cNo && normalizeText(j.jFormNo) === cNo && j.farmerId === candidate.farmerId) {
         return true;
@@ -433,9 +508,9 @@ export function findDuplicateMphJForm(
       return (
         j.farmerId === candidate.farmerId &&
         sameHolder &&
-        j.date === candidate.date &&
-        Number(j.bags) === Number(candidate.bags) &&
-        Math.abs(Number(j.jFormAmount) - Number(candidate.jFormAmount)) < 0.01
+        safeDateStr(j.date) === candidate.date &&
+        safeNum(j.bags) === safeNum(candidate.bags) &&
+        Math.abs(safeNum(j.jFormAmount) - safeNum(candidate.jFormAmount)) < 0.01
       );
     }) || null
   );

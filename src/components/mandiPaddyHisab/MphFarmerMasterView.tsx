@@ -11,6 +11,7 @@ import {
   computeFarmerAccountSummary,
   findDuplicateMphFarmer,
   formatINR,
+  safeStr,
 } from '../../lib/mandiPaddyHisabUtils';
 import { useMphLang } from '../../lib/mandiPaddyHisabI18n';
 import { BookOpen, Edit3, Plus, Search, Trash2, UserPlus, X } from 'lucide-react';
@@ -124,14 +125,14 @@ export const MphFarmerMasterView: React.FC<MphFarmerMasterViewProps> = ({
   const filteredFarmers = useMemo(() => {
     const q = search.toLowerCase().trim();
     return [...farmers]
-      .sort((a, b) => a.name.localeCompare(b.name))
+      .sort((a, b) => safeStr(a.name).localeCompare(safeStr(b.name)))
       .filter((f) => {
         if (!q) return true;
         return (
-          f.name.toLowerCase().includes(q) ||
-          f.fatherName.toLowerCase().includes(q) ||
-          f.village.toLowerCase().includes(q) ||
-          f.mobile.includes(q)
+          safeStr(f.name).toLowerCase().includes(q) ||
+          safeStr(f.fatherName).toLowerCase().includes(q) ||
+          safeStr(f.village).toLowerCase().includes(q) ||
+          safeStr(f.mobile).includes(q)
         );
       });
   }, [farmers, search]);

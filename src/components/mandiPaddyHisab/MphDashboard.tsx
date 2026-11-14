@@ -12,6 +12,7 @@ import {
   formatDateDMY,
   formatINR,
   formatWeightQKG,
+  safeStr,
   sumPaddyWeights,
 } from '../../lib/mandiPaddyHisabUtils';
 import { useMphLang } from '../../lib/mandiPaddyHisabI18n';
@@ -134,7 +135,11 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
   const recentArrivals = useMemo(
     () =>
       [...arrivals]
-        .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt))
+        .sort(
+          (a, b) =>
+            safeStr(b.date).localeCompare(safeStr(a.date)) ||
+            safeStr(b.createdAt).localeCompare(safeStr(a.createdAt))
+        )
         .slice(0, 6),
     [arrivals]
   );

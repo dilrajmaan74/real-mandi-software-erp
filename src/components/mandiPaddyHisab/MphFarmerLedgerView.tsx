@@ -15,6 +15,7 @@ import {
   formatINR,
   formatLooseKgGm,
   formatWeightQKG,
+  safeStr,
 } from '../../lib/mandiPaddyHisabUtils';
 import { exportElementToPdf } from '../../lib/mandiPaddyHisabPdf';
 import {
@@ -174,8 +175,8 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
     if (!summary) return [] as Array<{ key: string; name: string; relation: string; bags: number; amount: number; count: number }>;
     const map = new Map<string, { key: string; name: string; relation: string; bags: number; amount: number; count: number }>();
     for (const j of summary.jForms) {
-      const name = (j.jFormHolderName || j.farmerName || '').trim();
-      const relation = (j.holderRelation || 'Self').trim();
+      const name = safeStr(j.jFormHolderName || j.farmerName).trim();
+      const relation = safeStr(j.holderRelation, 'Self').trim() || 'Self';
       const key = `${name.toLowerCase()}|${relation.toLowerCase()}`;
       const existing = map.get(key);
       if (existing) {
@@ -355,7 +356,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
     try {
       await exportElementToPdf(
         printRef.current,
-        `Mandi_Paddy_Hisab_${activeFarmer.name.replace(/\s+/g, '_')}.pdf`,
+        `Mandi_Paddy_Hisab_${safeStr(activeFarmer.name, 'Farmer').replace(/\s+/g, '_')}.pdf`,
         'landscape'
       );
     } catch (err) {
@@ -405,11 +406,15 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
             }}
             className="w-full sm:w-80 px-3 py-2 text-xs sm:text-sm font-semibold border border-slate-300 rounded-lg bg-white focus:outline-none focus:border-emerald-600"
           >
-            {farmers.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.name} {f.fatherName ? `${tr('S/O', 'ਪੁੱਤਰ')} ${f.fatherName}` : ''} — {f.village}
-              </option>
-            ))}
+            {farmers.map((f) => {
+              const fatherPart = f.fatherName ? ` ${tr('S/O', 'ਪੁੱਤਰ')} ${safeStr(f.fatherName)}` : '';
+              const villagePart = f.village ? ` — ${safeStr(f.village)}` : '';
+              return (
+                <option key={f.id} value={f.id}>
+                  {`${safeStr(f.name, 'Farmer')}${fatherPart}${villagePart}`}
+                </option>
+              );
+            })}
           </select>
         </div>
 
@@ -471,8 +476,12 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
         </div>
       </div>
 
-      {/* Printable Ledger & Final Account Container */}
-      <div ref={printRef} className="space-y-5 bg-white border border-slate-200 rounded-xl p-4 sm:p-6">
+      {/* Printable Ledger & Final Account Container (keyed by farmer ID for clean DOM switching) */}
+      <div
+        key={activeFarmer.id}
+        ref={printRef}
+        className="space-y-5 bg-white border border-slate-200 rounded-xl p-4 sm:p-6"
+      >
         {/* Statement Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200">
           <div>
@@ -783,11 +792,12 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {summary.jForms.map((j, idx) => {
-                      const holderName = j.jFormHolderName || j.farmerName;
-                      const holderRel = j.holderRelation || 'Self';
+                      const holderName = safeStr(j.jFormHolderName || j.farmerName);
+                      const holderRel = safeStr(j.holderRelation, 'Self') || 'Self';
                       const isOther =
                         holderRel !== 'Self' ||
-                        holderName.trim().toLowerCase() !== activeFarmer.name.trim().toLowerCase();
+                        holderName.trim().toLowerCase() !==
+                          safeStr(activeFarmer.name).trim().toLowerCase();
                       return (
                         <tr key={j.id} className="hover:bg-slate-50/70">
                           <td className="py-2 px-2 font-mono tabular-nums text-slate-400">

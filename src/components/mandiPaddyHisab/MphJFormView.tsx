@@ -4,6 +4,7 @@ import {
   findDuplicateMphJForm,
   formatDateDMY,
   formatINR,
+  safeStr,
 } from '../../lib/mandiPaddyHisabUtils';
 import { useMphLang } from '../../lib/mandiPaddyHisabI18n';
 import { Calculator, Edit3, FileSpreadsheet, Plus, Search, Trash2, X } from 'lucide-react';
@@ -68,15 +69,16 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
     if (!farmerId) return [] as Array<{ name: string; relation: string }>;
     const map = new Map<string, { name: string; relation: string }>();
     if (selectedMainFarmer) {
-      map.set(`${selectedMainFarmer.name.toLowerCase()}|self`, {
-        name: selectedMainFarmer.name,
+      const mName = safeStr(selectedMainFarmer.name);
+      map.set(`${mName.toLowerCase()}|self`, {
+        name: mName,
         relation: 'Self',
       });
     }
     for (const j of jForms) {
       if (j.farmerId !== farmerId) continue;
-      const hName = (j.jFormHolderName || j.farmerName || '').trim();
-      const hRel = (j.holderRelation || 'Self').trim();
+      const hName = safeStr(j.jFormHolderName || j.farmerName).trim();
+      const hRel = safeStr(j.holderRelation, 'Self').trim() || 'Self';
       if (!hName) continue;
       const key = `${hName.toLowerCase()}|${hRel.toLowerCase()}`;
       if (!map.has(key)) {
@@ -243,17 +245,21 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
   const filteredJForms = useMemo(() => {
     const q = search.toLowerCase().trim();
     return [...jForms]
-      .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt))
+      .sort(
+        (a, b) =>
+          safeStr(b.date).localeCompare(safeStr(a.date)) ||
+          safeStr(b.createdAt).localeCompare(safeStr(a.createdAt))
+      )
       .filter((j) => {
         if (filterFarmerId !== 'all' && j.farmerId !== filterFarmerId) return false;
         if (!q) return true;
         return (
-          j.farmerName.toLowerCase().includes(q) ||
-          (j.jFormHolderName || '').toLowerCase().includes(q) ||
-          (j.holderRelation || '').toLowerCase().includes(q) ||
-          (j.jFormNo || '').toLowerCase().includes(q) ||
-          j.date.includes(q) ||
-          (j.notes || '').toLowerCase().includes(q)
+          safeStr(j.farmerName).toLowerCase().includes(q) ||
+          safeStr(j.jFormHolderName).toLowerCase().includes(q) ||
+          safeStr(j.holderRelation).toLowerCase().includes(q) ||
+          safeStr(j.jFormNo).toLowerCase().includes(q) ||
+          safeStr(j.date).includes(q) ||
+          safeStr(j.notes).toLowerCase().includes(q)
         );
       });
   }, [jForms, filterFarmerId, search]);
@@ -325,7 +331,7 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
               >
                 {farmers.map((f) => (
                   <option key={f.id} value={f.id}>
-                    {f.name} ({f.village})
+                    {`${safeStr(f.name, 'Farmer')}${f.village ? ` (${safeStr(f.village)})` : ''}`}
                   </option>
                 ))}
               </select>
@@ -576,11 +582,12 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
               <tbody className="divide-y divide-slate-100">
                 {filteredJForms.map((j, idx) => {
                   const labor = Math.round(j.bags * (Number(settings.jFormLaborRate) || 0) * 100) / 100;
-                  const holderName = j.jFormHolderName || j.farmerName;
-                  const holderRel = j.holderRelation || 'Self';
+                  const holderName = safeStr(j.jFormHolderName || j.farmerName);
+                  const holderRel = safeStr(j.holderRelation, 'Self') || 'Self';
                   const isDifferentHolder =
                     holderRel !== 'Self' ||
-                    holderName.trim().toLowerCase() !== j.farmerName.trim().toLowerCase();
+                    holderName.trim().toLowerCase() !==
+                      safeStr(j.farmerName).trim().toLowerCase();
                   return (
                     <tr key={j.id} className="hover:bg-slate-50/80">
                       <td className="py-2 px-3 font-mono tabular-nums text-slate-400">

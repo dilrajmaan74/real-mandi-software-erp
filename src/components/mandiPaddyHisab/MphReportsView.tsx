@@ -13,6 +13,7 @@ import {
   formatINR,
   formatLooseKgGm,
   formatWeightQKG,
+  safeStr,
   sumPaddyWeights,
 } from '../../lib/mandiPaddyHisabUtils';
 import { exportElementToPdf } from '../../lib/mandiPaddyHisabPdf';
@@ -99,7 +100,7 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
         .map((f) =>
           computeFarmerAccountSummary(f, arrivals, jForms, otherEntries, settings, advances)
         )
-        .sort((a, b) => a.farmer.name.localeCompare(b.farmer.name)),
+        .sort((a, b) => safeStr(a.farmer.name).localeCompare(safeStr(b.farmer.name))),
     [farmers, arrivals, jForms, otherEntries, settings, advances]
   );
 
@@ -107,22 +108,30 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
     return [...arrivals]
       .filter((a) => {
         if (selectedFarmerId !== 'all' && a.farmerId !== selectedFarmerId) return false;
-        if (fromDate && a.date < fromDate) return false;
-        if (toDate && a.date > toDate) return false;
+        if (fromDate && safeStr(a.date) < fromDate) return false;
+        if (toDate && safeStr(a.date) > toDate) return false;
         return true;
       })
-      .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
+      .sort(
+        (a, b) =>
+          safeStr(a.date).localeCompare(safeStr(b.date)) ||
+          safeStr(a.createdAt).localeCompare(safeStr(b.createdAt))
+      );
   }, [arrivals, selectedFarmerId, fromDate, toDate]);
 
   const dateFilteredJForms = useMemo(() => {
     return [...jForms]
       .filter((j) => {
         if (selectedFarmerId !== 'all' && j.farmerId !== selectedFarmerId) return false;
-        if (fromDate && j.date < fromDate) return false;
-        if (toDate && j.date > toDate) return false;
+        if (fromDate && safeStr(j.date) < fromDate) return false;
+        if (toDate && safeStr(j.date) > toDate) return false;
         return true;
       })
-      .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
+      .sort(
+        (a, b) =>
+          safeStr(a.date).localeCompare(safeStr(b.date)) ||
+          safeStr(a.createdAt).localeCompare(safeStr(b.createdAt))
+      );
   }, [jForms, selectedFarmerId, fromDate, toDate]);
 
   const arrivalTotals = useMemo(() => {
@@ -285,7 +294,7 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
                 )}
                 {farmers.map((f) => (
                   <option key={f.id} value={f.id}>
-                    {f.name} ({f.village})
+                    {`${safeStr(f.name, 'Farmer')}${f.village ? ` (${safeStr(f.village)})` : ''}`}
                   </option>
                 ))}
               </select>
@@ -331,7 +340,11 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
       </div>
 
       {/* Printable Report Canvas */}
-      <div ref={reportRef} className="bg-white border border-slate-200 rounded-xl p-5 sm:p-6 space-y-5">
+      <div
+        key={`${reportType}_${activeFarmer?.id || 'all'}`}
+        ref={reportRef}
+        className="bg-white border border-slate-200 rounded-xl p-5 sm:p-6 space-y-5"
+      >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-200">
           <div>
             <h3 className="text-base font-bold text-slate-900">

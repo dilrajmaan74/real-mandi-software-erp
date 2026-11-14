@@ -13,6 +13,7 @@ import {
   formatINR,
   formatLooseKgGm,
   formatWeightQKG,
+  safeStr,
   sumPaddyWeights,
 } from '../../lib/mandiPaddyHisabUtils';
 import { useMphLang } from '../../lib/mandiPaddyHisabI18n';
@@ -216,16 +217,20 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
   const filteredArrivals = useMemo(() => {
     const q = search.toLowerCase().trim();
     return [...arrivals]
-      .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt))
+      .sort(
+        (a, b) =>
+          safeStr(b.date).localeCompare(safeStr(a.date)) ||
+          safeStr(b.createdAt).localeCompare(safeStr(a.createdAt))
+      )
       .filter((a) => {
         if (filterFarmerId !== 'all' && a.farmerId !== filterFarmerId) return false;
         if (filterType !== 'all' && a.paddyType !== filterType) return false;
         if (!q) return true;
         return (
-          a.farmerName.toLowerCase().includes(q) ||
-          a.paddyType.toLowerCase().includes(q) ||
-          a.date.includes(q) ||
-          (a.notes || '').toLowerCase().includes(q)
+          safeStr(a.farmerName).toLowerCase().includes(q) ||
+          safeStr(a.paddyType).toLowerCase().includes(q) ||
+          safeStr(a.date).includes(q) ||
+          safeStr(a.notes).toLowerCase().includes(q)
         );
       });
   }, [arrivals, filterFarmerId, filterType, search]);
@@ -296,7 +301,7 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
               >
                 {farmers.map((f) => (
                   <option key={f.id} value={f.id}>
-                    {f.name} ({f.village})
+                    {`${safeStr(f.name, 'Farmer')}${f.village ? ` (${safeStr(f.village)})` : ''}`}
                   </option>
                 ))}
               </select>

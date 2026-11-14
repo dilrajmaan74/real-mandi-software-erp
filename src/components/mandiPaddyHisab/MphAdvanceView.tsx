@@ -8,6 +8,7 @@ import {
   calculateAdvanceDaysAndInterest,
   formatDateDMY,
   formatINR,
+  safeStr,
 } from '../../lib/mandiPaddyHisabUtils';
 import { Calculator, Edit3, Percent, Plus, Search, Trash2, X } from 'lucide-react';
 import { useMphLang } from '../../lib/mandiPaddyHisabI18n';
@@ -207,15 +208,19 @@ export const MphAdvanceView: React.FC<MphAdvanceViewProps> = ({
   const filteredAdvances = useMemo(() => {
     const q = search.toLowerCase().trim();
     return [...advances]
-      .sort((a, b) => b.startDate.localeCompare(a.startDate) || b.createdAt.localeCompare(a.createdAt))
+      .sort(
+        (a, b) =>
+          safeStr(b.startDate).localeCompare(safeStr(a.startDate)) ||
+          safeStr(b.createdAt).localeCompare(safeStr(a.createdAt))
+      )
       .filter((adv) => {
         if (filterFarmerId !== 'all' && adv.farmerId !== filterFarmerId) return false;
         if (!q) return true;
         return (
-          adv.farmerName.toLowerCase().includes(q) ||
-          adv.purpose.toLowerCase().includes(q) ||
-          adv.startDate.includes(q) ||
-          adv.endDate.includes(q)
+          safeStr(adv.farmerName).toLowerCase().includes(q) ||
+          safeStr(adv.purpose).toLowerCase().includes(q) ||
+          safeStr(adv.startDate).includes(q) ||
+          safeStr(adv.endDate).includes(q)
         );
       });
   }, [advances, filterFarmerId, search]);
@@ -291,7 +296,7 @@ export const MphAdvanceView: React.FC<MphAdvanceViewProps> = ({
               >
                 {farmers.map((f) => (
                   <option key={f.id} value={f.id}>
-                    {f.name} ({f.village})
+                    {`${safeStr(f.name, 'Farmer')}${f.village ? ` (${safeStr(f.village)})` : ''}`}
                   </option>
                 ))}
               </select>
