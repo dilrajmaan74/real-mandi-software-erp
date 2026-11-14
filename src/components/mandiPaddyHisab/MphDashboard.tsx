@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import {
+  MphAdvance,
   MphArrival,
   MphFarmer,
   MphJForm,
@@ -18,6 +19,7 @@ import {
   BookOpen,
   FileSpreadsheet,
   FileText,
+  Percent,
   Plus,
   Scale,
   Settings,
@@ -30,6 +32,7 @@ export type MphTab =
   | 'farmers'
   | 'arrivals'
   | 'jforms'
+  | 'advances'
   | 'ledger'
   | 'reports'
   | 'settings';
@@ -39,6 +42,7 @@ interface MphDashboardProps {
   arrivals: MphArrival[];
   jForms: MphJForm[];
   otherEntries: MphOtherEntry[];
+  advances: MphAdvance[];
   settings: MphSettings;
   onNavigate: (tab: MphTab, farmerId?: string) => void;
 }
@@ -48,14 +52,15 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
   arrivals,
   jForms,
   otherEntries,
+  advances,
   settings,
   onNavigate,
 }) => {
   const summaries = useMemo(() => {
     return farmers.map((f) =>
-      computeFarmerAccountSummary(f, arrivals, jForms, otherEntries, settings)
+      computeFarmerAccountSummary(f, arrivals, jForms, otherEntries, settings, advances)
     );
-  }, [farmers, arrivals, jForms, otherEntries, settings]);
+  }, [farmers, arrivals, jForms, otherEntries, settings, advances]);
 
   const totalArrivalWeight = useMemo(() => sumPaddyWeights(arrivals), [arrivals]);
   const totalPaddyAmount = useMemo(
@@ -90,12 +95,23 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
     [totalDryingBags, settings.paddyDryingLaborRate]
   );
 
+  const totalAdvancePrincipal = useMemo(
+    () =>
+      Math.round(advances.reduce((s, a) => s + (Number(a.principalAmount) || 0), 0) * 100) / 100,
+    [advances]
+  );
+  const totalAdvanceInterest = useMemo(
+    () =>
+      Math.round(advances.reduce((s, a) => s + (Number(a.interestAmount) || 0), 0) * 100) / 100,
+    [advances]
+  );
+
   const totalPayableToFarmers = useMemo(
     () =>
       Math.round(
         summaries
-          .filter((s) => s.balanceStatus === 'payable')
-          .reduce((acc, s) => acc + s.finalBalance, 0)
+          .filter((s) => s.combinedBalanceStatus === 'payable')
+          .reduce((acc, s) => acc + s.combinedFinalBalance, 0)
       ),
     [summaries]
   );
@@ -104,8 +120,8 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
     () =>
       Math.round(
         summaries
-          .filter((s) => s.balanceStatus === 'receivable')
-          .reduce((acc, s) => acc + Math.abs(s.finalBalance), 0)
+          .filter((s) => s.combinedBalanceStatus === 'receivable')
+          .reduce((acc, s) => acc + Math.abs(s.combinedFinalBalance), 0)
       ),
     [summaries]
   );
@@ -154,6 +170,14 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
           >
             <FileSpreadsheet className="w-3.5 h-3.5" />
             <span>J-Form Entry (ਜੇ-ਫਾਰਮ)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigate('advances')}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors cursor-pointer whitespace-nowrap"
+          >
+            <Percent className="w-3.5 h-3.5" />
+            <span>Advance & Interest</span>
           </button>
           <button
             type="button"
@@ -246,6 +270,11 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
           <div className="text-xs font-bold font-mono tabular-nums text-rose-700 mt-1">
             Receivable: {formatINR(totalReceivableFromFarmers, false)}
           </div>
+          {(totalAdvancePrincipal > 0 || totalAdvanceInterest > 0) && (
+            <div className="text-[10px] font-mono tabular-nums text-amber-800 mt-1">
+              Adv P+I: {formatINR(totalAdvancePrincipal + totalAdvanceInterest, false)}
+            </div>
+          )}
         </div>
       </div>
 
@@ -259,7 +288,7 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
                 Farmer Final Balance Summary (ਕਿਸਾਨ-ਵਾਰ ਅੰਤਿਮ ਹਿਸਾਬ)
               </h3>
               <p className="text-[11px] text-slate-500">
-                Paddy Amount minus J-Form, J-Form Labour, Drying Labour & Other Entries
+                Paddy Amount minus J-Form, Labour, Other Entries & Advances + Interest
               </p>
             </div>
             <button
@@ -300,6 +329,7 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
                     <th className="py-2.5 px-3 font-semibold text-right">Weight (Qtl/KG/GM)</th>
                     <th className="py-2.5 px-3 font-semibold text-right">Paddy Amt</th>
                     <th className="py-2.5 px-3 font-semibold text-right">J-Form + Lab</th>
+                    <th className="py-2.5 px-3 font-semibold text-right">Adv (P+I)</th>
                     <th className="py-2.5 px-3 font-semibold text-right">Final Balance</th>
                     <th className="py-2.5 px-3 font-semibold text-right">Action</th>
                   </tr>
@@ -331,22 +361,27 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
                         <td className="py-2.5 px-3 text-right font-mono tabular-nums text-slate-700">
                           {formatINR(jPlusLab)}
                         </td>
+                        <td className="py-2.5 px-3 text-right font-mono tabular-nums text-amber-800 whitespace-nowrap">
+                          {s.totalAdvanceWithInterest > 0
+                            ? formatINR(s.totalAdvanceWithInterest, false)
+                            : '—'}
+                        </td>
                         <td className="py-2.5 px-3 text-right font-mono tabular-nums whitespace-nowrap">
                           <div
                             className={`font-bold ${
-                              s.balanceStatus === 'payable'
+                              s.combinedBalanceStatus === 'payable'
                                 ? 'text-emerald-700'
-                                : s.balanceStatus === 'receivable'
+                                : s.combinedBalanceStatus === 'receivable'
                                 ? 'text-rose-700'
                                 : 'text-slate-600'
                             }`}
                           >
-                            {formatINR(Math.abs(s.finalBalance), false)}
+                            {formatINR(Math.abs(s.combinedFinalBalance), false)}
                           </div>
                           <div className="text-[10px] text-slate-500">
-                            {s.balanceStatus === 'payable'
+                            {s.combinedBalanceStatus === 'payable'
                               ? 'Dene Hai (Payable)'
-                              : s.balanceStatus === 'receivable'
+                              : s.combinedBalanceStatus === 'receivable'
                               ? 'Lene Hai (Receivable)'
                               : 'Settled'}
                           </div>

@@ -144,6 +144,35 @@ service cloud.firestore {
         && data.updatedAt is string && data.updatedAt.size() <= 64;
     }
 
+    function isValidMphAdvance(data, userId, advanceId) {
+      return data.keys().hasAll([
+          'id', 'ownerId', 'farmerId', 'farmerName', 'startDate', 'endDate',
+          'days', 'purpose', 'principalAmount', 'interestRateMonthly', 'interestBasis',
+          'monthlyInterestAmount', 'interestAmount', 'totalAmount', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'ownerId', 'farmerId', 'farmerName', 'startDate', 'endDate',
+          'days', 'purpose', 'principalAmount', 'interestRateMonthly', 'interestBasis',
+          'monthlyInterestAmount', 'interestAmount', 'totalAmount', 'createdAt', 'updatedAt'
+        ])
+        && data.id == advanceId
+        && data.ownerId == userId
+        && isValidId(data.farmerId)
+        && data.farmerName is string && data.farmerName.size() >= 1 && data.farmerName.size() <= 160
+        && data.startDate is string && data.startDate.size() >= 8 && data.startDate.size() <= 32
+        && data.endDate is string && data.endDate.size() >= 8 && data.endDate.size() <= 32
+        && data.days is number && data.days >= 0
+        && data.purpose is string && data.purpose.size() >= 1 && data.purpose.size() <= 300
+        && data.principalAmount is number && data.principalAmount >= 0
+        && data.interestRateMonthly is number && data.interestRateMonthly >= 0
+        && data.interestBasis in ['daily_30', 'monthly_30']
+        && data.monthlyInterestAmount is number && data.monthlyInterestAmount >= 0
+        && data.interestAmount is number && data.interestAmount >= 0
+        && data.totalAmount is number && data.totalAmount >= 0
+        && data.createdAt is string && data.createdAt.size() <= 64
+        && data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
     // User profile and Master Google Sheet config
     match /users/{userId} {
       allow read, write: if isOwner(userId) && isValidId(userId);
@@ -265,6 +294,26 @@ service cloud.firestore {
             'hybridPaddyRate', 'paddyAGurdeRate', 'jFormLaborRate', 'paddyDryingLaborRate', 'updatedAt'
           ]);
         allow delete: if isOwner(userId) && isVerifiedUser() && isValidId(userId) && isValidId(settingId);
+      }
+
+      match /mph_advances/{advanceId} {
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(advanceId);
+        allow list: if isOwner(userId) && isValidId(userId) && existing().ownerId == request.auth.uid;
+        allow create: if isOwner(userId) && isVerifiedUser() && isValidId(userId) && isValidId(advanceId)
+          && isValidMphAdvance(incoming(), userId, advanceId)
+          && existsAfter(/databases/$(database)/documents/users/$(userId)/mph_farmers/$(incoming().farmerId));
+        allow update: if isOwner(userId) && isVerifiedUser() && isValidId(userId) && isValidId(advanceId)
+          && isValidMphAdvance(incoming(), userId, advanceId)
+          && incoming().id == existing().id
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && existsAfter(/databases/$(database)/documents/users/$(userId)/mph_farmers/$(incoming().farmerId))
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'farmerId', 'farmerName', 'startDate', 'endDate', 'days', 'purpose',
+            'principalAmount', 'interestRateMonthly', 'interestBasis',
+            'monthlyInterestAmount', 'interestAmount', 'totalAmount', 'updatedAt'
+          ]);
+        allow delete: if isOwner(userId) && isVerifiedUser() && isValidId(userId) && isValidId(advanceId);
       }
     }
   }

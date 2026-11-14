@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { User } from 'firebase/auth';
 import {
   DEFAULT_MPH_SETTINGS,
+  MphAdvance,
   MphArrival,
   MphFarmer,
   MphJForm,
@@ -9,16 +10,19 @@ import {
   MphSettings,
 } from '../../types/mandiPaddyHisab';
 import {
+  deleteMphAdvanceFromCloud,
   deleteMphArrivalFromCloud,
   deleteMphFarmerCascadeFromCloud,
   deleteMphJFormFromCloud,
   deleteMphOtherEntryFromCloud,
   loadLocalMphData,
+  saveLocalMphAdvances,
   saveLocalMphArrivals,
   saveLocalMphFarmers,
   saveLocalMphJForms,
   saveLocalMphOtherEntries,
   saveLocalMphSettings,
+  saveMphAdvanceToCloud,
   saveMphArrivalToCloud,
   saveMphFarmerToCloud,
   saveMphJFormToCloud,
@@ -32,6 +36,7 @@ import { MphDashboard, MphTab } from './MphDashboard';
 import { MphFarmerMasterView } from './MphFarmerMasterView';
 import { MphArrivalView } from './MphArrivalView';
 import { MphJFormView } from './MphJFormView';
+import { MphAdvanceView } from './MphAdvanceView';
 import { MphFarmerLedgerView } from './MphFarmerLedgerView';
 import { MphReportsView } from './MphReportsView';
 import { MphSettingsView } from './MphSettingsView';
@@ -42,6 +47,7 @@ import {
   FileSpreadsheet,
   FileText,
   LayoutDashboard,
+  Percent,
   RefreshCw,
   Settings,
   Users,
@@ -62,6 +68,7 @@ export const MandiPaddyHisabApp: React.FC<MandiPaddyHisabAppProps> = ({ user }) 
   const [arrivals, setArrivals] = useState<MphArrival[]>(initialLocal.arrivals);
   const [jForms, setJForms] = useState<MphJForm[]>(initialLocal.jForms);
   const [otherEntries, setOtherEntries] = useState<MphOtherEntry[]>(initialLocal.otherEntries);
+  const [advances, setAdvances] = useState<MphAdvance[]>(initialLocal.advances);
   const [settings, setSettings] = useState<MphSettings>(initialLocal.settings);
 
   const [isSyncingLocal, setIsSyncingLocal] = useState(false);
@@ -100,6 +107,9 @@ export const MandiPaddyHisabApp: React.FC<MandiPaddyHisabAppProps> = ({ user }) 
     saveLocalMphOtherEntries(otherEntries);
   }, [otherEntries]);
   useEffect(() => {
+    saveLocalMphAdvances(advances);
+  }, [advances]);
+  useEffect(() => {
     saveLocalMphSettings(settings);
   }, [settings]);
 
@@ -113,7 +123,8 @@ export const MandiPaddyHisabApp: React.FC<MandiPaddyHisabAppProps> = ({ user }) 
       localSnapshot.farmers.length > 0 ||
       localSnapshot.arrivals.length > 0 ||
       localSnapshot.jForms.length > 0 ||
-      localSnapshot.otherEntries.length > 0;
+      localSnapshot.otherEntries.length > 0 ||
+      localSnapshot.advances.length > 0;
 
     const unsub = subscribeToMphCloudData(user.uid, {
       onFarmers: (cloudFarmers) => {
@@ -139,6 +150,11 @@ export const MandiPaddyHisabApp: React.FC<MandiPaddyHisabAppProps> = ({ user }) 
           setOtherEntries(cloudOther);
         }
       },
+      onAdvances: (cloudAdvances) => {
+        if (cloudAdvances.length > 0 || !hasLocalRecords || hasMigrated) {
+          setAdvances(cloudAdvances);
+        }
+      },
       onSettings: (cloudSettings) => {
         setSettings(cloudSettings || DEFAULT_MPH_SETTINGS);
       },
@@ -159,6 +175,7 @@ export const MandiPaddyHisabApp: React.FC<MandiPaddyHisabAppProps> = ({ user }) 
         arrivals,
         jForms,
         otherEntries,
+        advances,
         settings,
       });
       showNotice('success', `Mandi Paddy Hisab ਦੇ ${count} ਰਿਕਾਰਡ ਕਲਾਊਡ ਵਿੱਚ ਸੁਰੱਖਿਅਤ ਸਿੰਕ ਹੋ ਗਏ।`);
@@ -188,6 +205,9 @@ export const MandiPaddyHisabApp: React.FC<MandiPaddyHisabAppProps> = ({ user }) 
       setOtherEntries((prev) =>
         prev.map((o) => (o.farmerId === farmer.id ? { ...o, farmerName: farmer.name } : o))
       );
+      setAdvances((prev) =>
+        prev.map((adv) => (adv.farmerId === farmer.id ? { ...adv, farmerName: farmer.name } : adv))
+      );
     }
 
     if (user) {
@@ -203,19 +223,21 @@ export const MandiPaddyHisabApp: React.FC<MandiPaddyHisabAppProps> = ({ user }) 
     const linkedArrivals = arrivals.filter((a) => a.farmerId === farmer.id);
     const linkedJForms = jForms.filter((j) => j.farmerId === farmer.id);
     const linkedOthers = otherEntries.filter((o) => o.farmerId === farmer.id);
+    const linkedAdvances = advances.filter((adv) => adv.farmerId === farmer.id);
 
     setConfirmState({
       isOpen: true,
       title: 'Delete Farmer (ਕਿਸਾਨ ਹਟਾਓ)',
       tone: 'danger',
       confirmLabel: 'Delete Permanently',
-      message: `Are you sure you want to delete farmer "${farmer.name}" (${farmer.village})?\n\nThis will also delete ${linkedArrivals.length} Paddy Arrivals, ${linkedJForms.length} J-Forms, and ${linkedOthers.length} Other Entries for this farmer.`,
+      message: `Are you sure you want to delete farmer "${farmer.name}" (${farmer.village})?\n\nThis will also delete ${linkedArrivals.length} Paddy Arrivals, ${linkedJForms.length} J-Forms, ${linkedOthers.length} Other Entries, and ${linkedAdvances.length} Advances for this farmer.`,
       onConfirm: () => {
         setConfirmState((s) => ({ ...s, isOpen: false }));
         setFarmers((prev) => prev.filter((f) => f.id !== farmer.id));
         setArrivals((prev) => prev.filter((a) => a.farmerId !== farmer.id));
         setJForms((prev) => prev.filter((j) => j.farmerId !== farmer.id));
         setOtherEntries((prev) => prev.filter((o) => o.farmerId !== farmer.id));
+        setAdvances((prev) => prev.filter((adv) => adv.farmerId !== farmer.id));
         if (selectedFarmerId === farmer.id) setSelectedFarmerId('');
 
         if (user) {
@@ -224,7 +246,8 @@ export const MandiPaddyHisabApp: React.FC<MandiPaddyHisabAppProps> = ({ user }) 
             farmer.id,
             linkedArrivals.map((a) => a.id),
             linkedJForms.map((j) => j.id),
-            linkedOthers.map((o) => o.id)
+            linkedOthers.map((o) => o.id),
+            linkedAdvances.map((adv) => adv.id)
           ).catch(console.error);
         }
         showNotice('success', `Farmer "${farmer.name}" removed.`);
@@ -331,6 +354,39 @@ export const MandiPaddyHisabApp: React.FC<MandiPaddyHisabAppProps> = ({ user }) 
     });
   };
 
+  // Advances & Interest CRUD
+  const handleSaveAdvance = (advance: MphAdvance) => {
+    const isEdit = advances.some((a) => a.id === advance.id);
+    setAdvances((prev) =>
+      isEdit ? prev.map((a) => (a.id === advance.id ? advance : a)) : [advance, ...prev]
+    );
+    if (user) {
+      saveMphAdvanceToCloud(user.uid, advance).catch((err) => {
+        console.error(err);
+        showNotice('error', 'Error saving advance entry to Firestore.');
+      });
+    }
+    showNotice('success', isEdit ? 'Advance & interest updated.' : 'Advance & interest saved.');
+  };
+
+  const handleDeleteAdvance = (advance: MphAdvance) => {
+    setConfirmState({
+      isOpen: true,
+      title: 'Delete Advance (ਪੇਸ਼ਗੀ ਹਟਾਓ)',
+      tone: 'danger',
+      confirmLabel: 'Delete Advance',
+      message: `Delete advance for "${advance.farmerName}" (Principal ₹${advance.principalAmount} + Interest ₹${advance.interestAmount})?`,
+      onConfirm: () => {
+        setConfirmState((s) => ({ ...s, isOpen: false }));
+        setAdvances((prev) => prev.filter((a) => a.id !== advance.id));
+        if (user) {
+          deleteMphAdvanceFromCloud(user.uid, advance.id).catch(console.error);
+        }
+        showNotice('success', 'Advance entry deleted.');
+      },
+    });
+  };
+
   // Settings Save
   const handleSaveSettings = (nextSettings: MphSettings) => {
     setSettings(nextSettings);
@@ -371,6 +427,12 @@ export const MandiPaddyHisabApp: React.FC<MandiPaddyHisabAppProps> = ({ user }) 
       label: 'J-Form Entry (ਜੇ-ਫਾਰਮ)',
       count: jForms.length,
       icon: <FileSpreadsheet className="w-4 h-4" />,
+    },
+    {
+      id: 'advances',
+      label: 'Advance & Interest (ਪੇਸ਼ਗੀ/ਵਿਆਜ)',
+      count: advances.length,
+      icon: <Percent className="w-4 h-4" />,
     },
     {
       id: 'ledger',
@@ -462,6 +524,7 @@ export const MandiPaddyHisabApp: React.FC<MandiPaddyHisabAppProps> = ({ user }) 
           arrivals={arrivals}
           jForms={jForms}
           otherEntries={otherEntries}
+          advances={advances}
           settings={settings}
           onNavigate={handleNavigate}
         />
@@ -473,6 +536,7 @@ export const MandiPaddyHisabApp: React.FC<MandiPaddyHisabAppProps> = ({ user }) 
           arrivals={arrivals}
           jForms={jForms}
           otherEntries={otherEntries}
+          advances={advances}
           settings={settings}
           onSaveFarmer={handleSaveFarmer}
           onDeleteFarmer={handleDeleteFarmer}
@@ -528,19 +592,33 @@ export const MandiPaddyHisabApp: React.FC<MandiPaddyHisabAppProps> = ({ user }) 
         />
       )}
 
+      {activeTab === 'advances' && (
+        <MphAdvanceView
+          farmers={farmers}
+          advances={advances}
+          onSaveAdvance={handleSaveAdvance}
+          onDeleteAdvance={handleDeleteAdvance}
+          onGoToFarmers={() => setActiveTab('farmers')}
+        />
+      )}
+
       {activeTab === 'ledger' && (
         <MphFarmerLedgerView
           farmers={farmers}
           arrivals={arrivals}
           jForms={jForms}
           otherEntries={otherEntries}
+          advances={advances}
           settings={settings}
           selectedFarmerId={selectedFarmerId}
           onSelectFarmerId={setSelectedFarmerId}
           onSaveOtherEntry={handleSaveOtherEntry}
           onDeleteOtherEntry={handleDeleteOtherEntry}
+          onSaveAdvance={handleSaveAdvance}
+          onDeleteAdvance={handleDeleteAdvance}
           onGoToArrivals={() => setActiveTab('arrivals')}
           onGoToJForms={() => setActiveTab('jforms')}
+          onGoToAdvances={() => setActiveTab('advances')}
           onGoToFarmers={() => setActiveTab('farmers')}
         />
       )}
@@ -551,6 +629,7 @@ export const MandiPaddyHisabApp: React.FC<MandiPaddyHisabAppProps> = ({ user }) 
           arrivals={arrivals}
           jForms={jForms}
           otherEntries={otherEntries}
+          advances={advances}
           settings={settings}
         />
       )}

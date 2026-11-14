@@ -17,6 +17,7 @@ import {
 } from './firestore';
 import {
   DEFAULT_MPH_SETTINGS,
+  MphAdvance,
   MphArrival,
   MphFarmer,
   MphJForm,
@@ -30,6 +31,7 @@ export const MPH_STORAGE_KEYS = {
   ARRIVALS: 'mph_arrivals_v1',
   JFORMS: 'mph_jforms_v1',
   OTHER_ENTRIES: 'mph_other_entries_v1',
+  ADVANCES: 'mph_advances_v1',
   SETTINGS: 'mph_settings_v1',
 } as const;
 
@@ -38,6 +40,7 @@ export function loadLocalMphData(): {
   arrivals: MphArrival[];
   jForms: MphJForm[];
   otherEntries: MphOtherEntry[];
+  advances: MphAdvance[];
   settings: MphSettings;
 } {
   const readJson = <T,>(key: string, fallback: T): T => {
@@ -55,6 +58,7 @@ export function loadLocalMphData(): {
     arrivals: readJson<MphArrival[]>(MPH_STORAGE_KEYS.ARRIVALS, []),
     jForms: readJson<MphJForm[]>(MPH_STORAGE_KEYS.JFORMS, []),
     otherEntries: readJson<MphOtherEntry[]>(MPH_STORAGE_KEYS.OTHER_ENTRIES, []),
+    advances: readJson<MphAdvance[]>(MPH_STORAGE_KEYS.ADVANCES, []),
     settings: readJson<MphSettings>(MPH_STORAGE_KEYS.SETTINGS, DEFAULT_MPH_SETTINGS),
   };
 }
@@ -86,6 +90,14 @@ export function saveLocalMphJForms(items: MphJForm[]) {
 export function saveLocalMphOtherEntries(items: MphOtherEntry[]) {
   try {
     localStorage.setItem(MPH_STORAGE_KEYS.OTHER_ENTRIES, JSON.stringify(items));
+  } catch (e) {
+    console.warn(e);
+  }
+}
+
+export function saveLocalMphAdvances(items: MphAdvance[]) {
+  try {
+    localStorage.setItem(MPH_STORAGE_KEYS.ADVANCES, JSON.stringify(items));
   } catch (e) {
     console.warn(e);
   }
@@ -128,7 +140,8 @@ export async function deleteMphFarmerCascadeFromCloud(
   farmerId: string,
   arrivalIds: string[],
   jFormIds: string[],
-  otherIds: string[]
+  otherIds: string[],
+  advanceIds: string[] = []
 ): Promise<void> {
   const fDocId = sanitizeDocId(farmerId);
   const path = `users/${userId}/mph_farmers/${fDocId}`;
@@ -142,6 +155,9 @@ export async function deleteMphFarmerCascadeFromCloud(
     }
     for (const oId of otherIds) {
       batch.delete(doc(db, 'users', userId, 'mph_other_entries', sanitizeDocId(oId)));
+    }
+    for (const advId of advanceIds) {
+      batch.delete(doc(db, 'users', userId, 'mph_advances', sanitizeDocId(advId)));
     }
     batch.delete(doc(db, 'users', userId, 'mph_farmers', fDocId));
     await batch.commit();
@@ -259,6 +275,44 @@ export async function deleteMphOtherEntryFromCloud(userId: string, entryId: stri
   }
 }
 
+export async function saveMphAdvanceToCloud(userId: string, advance: MphAdvance): Promise<void> {
+  const docId = sanitizeDocId(advance.id);
+  const path = `users/${userId}/mph_advances/${docId}`;
+  try {
+    const payload: MphAdvance = {
+      id: docId,
+      ownerId: userId,
+      farmerId: sanitizeDocId(advance.farmerId),
+      farmerName: advance.farmerName.trim().slice(0, 160),
+      startDate: advance.startDate.slice(0, 32),
+      endDate: advance.endDate.slice(0, 32),
+      days: Math.max(0, Math.floor(Number(advance.days) || 0)),
+      purpose: (advance.purpose || 'Season Advance').trim().slice(0, 300),
+      principalAmount: Math.max(0, Number(advance.principalAmount) || 0),
+      interestRateMonthly: Math.max(0, Number(advance.interestRateMonthly) || 0),
+      interestBasis: advance.interestBasis === 'monthly_30' ? 'monthly_30' : 'daily_30',
+      monthlyInterestAmount: Math.max(0, Number(advance.monthlyInterestAmount) || 0),
+      interestAmount: Math.max(0, Number(advance.interestAmount) || 0),
+      totalAmount: Math.max(0, Number(advance.totalAmount) || 0),
+      createdAt: advance.createdAt,
+      updatedAt: advance.updatedAt,
+    };
+    await setDoc(doc(db, 'users', userId, 'mph_advances', docId), cleanForFirestore(payload));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, path);
+  }
+}
+
+export async function deleteMphAdvanceFromCloud(userId: string, advanceId: string): Promise<void> {
+  const docId = sanitizeDocId(advanceId);
+  const path = `users/${userId}/mph_advances/${docId}`;
+  try {
+    await deleteDoc(doc(db, 'users', userId, 'mph_advances', docId));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, path);
+  }
+}
+
 export async function saveMphSettingsToCloud(userId: string, settings: MphSettings): Promise<void> {
   const docId = 'default';
   const path = `users/${userId}/mph_settings/${docId}`;
@@ -288,6 +342,7 @@ export async function syncMphLocalDataToCloud(
     arrivals: MphArrival[];
     jForms: MphJForm[];
     otherEntries: MphOtherEntry[];
+    advances?: MphAdvance[];
     settings: MphSettings;
   }
 ): Promise<number> {
@@ -366,6 +421,23 @@ export async function syncMphLocalDataToCloud(
     });
   }
 
+  for (const adv of data.advances || []) {
+    const fId = sanitizeDocId(adv.farmerId);
+    if (!farmerIdSet.has(fId)) continue;
+    const docId = sanitizeDocId(adv.id);
+    ops.push({
+      path: doc(db, 'users', userId, 'mph_advances', docId),
+      payload: cleanForFirestore({
+        ...adv,
+        id: docId,
+        ownerId: userId,
+        farmerId: fId,
+        farmerName: adv.farmerName.trim().slice(0, 160),
+        purpose: (adv.purpose || 'Season Advance').trim().slice(0, 300),
+      }),
+    });
+  }
+
   ops.push({
     path: doc(db, 'users', userId, 'mph_settings', 'default'),
     payload: cleanForFirestore({
@@ -401,6 +473,7 @@ export function subscribeToMphCloudData(
     onArrivals: (arrivals: MphArrival[]) => void;
     onJForms: (jForms: MphJForm[]) => void;
     onOtherEntries: (entries: MphOtherEntry[]) => void;
+    onAdvances?: (advances: MphAdvance[]) => void;
     onSettings: (settings: MphSettings) => void;
   }
 ): () => void {
@@ -455,6 +528,19 @@ export function subscribeToMphCloudData(
         callbacks.onOtherEntries(list);
       },
       (err) => handleFirestoreError(err, OperationType.LIST, otherPath)
+    )
+  );
+
+  const advancesPath = `users/${userId}/mph_advances`;
+  unsubscribers.push(
+    onSnapshot(
+      query(collection(db, 'users', userId, 'mph_advances'), where('ownerId', '==', userId)),
+      (snap) => {
+        const list: MphAdvance[] = [];
+        snap.forEach((d) => list.push(d.data() as MphAdvance));
+        callbacks.onAdvances?.(list);
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, advancesPath)
     )
   );
 

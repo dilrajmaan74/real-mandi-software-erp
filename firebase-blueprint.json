@@ -249,6 +249,30 @@
         "updatedAt": { "type": "string", "maxLength": 64 }
       },
       "required": ["id", "ownerId", "hybridPaddyRate", "paddyAGurdeRate", "jFormLaborRate", "paddyDryingLaborRate", "updatedAt"]
+    },
+    "MphAdvance": {
+      "title": "Mandi Paddy Hisab Advance and Interest",
+      "description": "Farmer advance/payment entry with custom start date, end date, auto-calculated days, and monthly interest rate",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "farmerId": { "type": "string", "maxLength": 128 },
+        "farmerName": { "type": "string", "maxLength": 160 },
+        "startDate": { "type": "string", "maxLength": 32 },
+        "endDate": { "type": "string", "maxLength": 32 },
+        "days": { "type": "number" },
+        "purpose": { "type": "string", "maxLength": 300 },
+        "principalAmount": { "type": "number" },
+        "interestRateMonthly": { "type": "number" },
+        "interestBasis": { "type": "string", "enum": ["daily_30", "monthly_30"] },
+        "monthlyInterestAmount": { "type": "number" },
+        "interestAmount": { "type": "number" },
+        "totalAmount": { "type": "number" },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "ownerId", "farmerId", "farmerName", "startDate", "endDate", "days", "purpose", "principalAmount", "interestRateMonthly", "interestBasis", "monthlyInterestAmount", "interestAmount", "totalAmount", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -295,6 +319,10 @@
     "/users/{userId}/mph_settings/{settingId}": {
       "schema": "MphSettings",
       "description": "Settings and rates for separate Mandi Paddy Hisab module"
+    },
+    "/users/{userId}/mph_advances/{advanceId}": {
+      "schema": "MphAdvance",
+      "description": "Advance payments and calculated interest entries for separate Mandi Paddy Hisab module"
     }
   }
 }

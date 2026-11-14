@@ -1,7 +1,9 @@
 import {
+  MphAdvance,
   MphArrival,
   MphFarmer,
   MphFarmerAccountSummary,
+  MphInterestBasis,
   MphJForm,
   MphOtherEntry,
   MphSettings,
@@ -133,12 +135,88 @@ export function formatDateDMY(dateStr?: string): string {
   return `${dd}/${mm}/${yyyy}`;
 }
 
+function parseUtcDate(dateStr?: string): Date | null {
+  if (!dateStr) return null;
+  const parts = dateStr.split('-').map(Number);
+  if (parts.length !== 3 || parts.some((n) => isNaN(n))) return null;
+  const [y, m, d] = parts;
+  return new Date(Date.UTC(y, m - 1, d));
+}
+
+/**
+ * Calculates auto days and interest between startDate and endDate.
+ * Example: 1,00,000 @ 1.5%/month = ₹1,500/month.
+ * daily_30: uses actual days between dates ÷ 30 × monthly interest.
+ * monthly_30: uses 30-day calendar months + remaining days ÷ 30.
+ */
+export function calculateAdvanceDaysAndInterest(
+  principalAmount: number,
+  interestRateMonthly: number,
+  startDate: string,
+  endDate: string,
+  basis: MphInterestBasis = 'daily_30'
+): {
+  days: number;
+  monthlyInterestAmount: number;
+  interestAmount: number;
+  totalAmount: number;
+} {
+  const principal = Math.max(0, Number(principalAmount) || 0);
+  const rate = Math.max(0, Number(interestRateMonthly) || 0);
+  const monthlyInterestAmount = Math.round(((principal * rate) / 100) * 100) / 100;
+
+  const sDate = parseUtcDate(startDate);
+  const eDate = parseUtcDate(endDate);
+  if (!sDate || !eDate || eDate.getTime() < sDate.getTime()) {
+    return {
+      days: 0,
+      monthlyInterestAmount,
+      interestAmount: 0,
+      totalAmount: Math.round(principal * 100) / 100,
+    };
+  }
+
+  const diffMs = eDate.getTime() - sDate.getTime();
+  const days = Math.max(0, Math.round(diffMs / 86400000));
+
+  let monthsEquivalent = days / 30;
+  if (basis === 'monthly_30') {
+    const sy = sDate.getUTCFullYear();
+    const sm = sDate.getUTCMonth();
+    const sd = sDate.getUTCDate();
+    const ey = eDate.getUTCFullYear();
+    const em = eDate.getUTCMonth();
+    const ed = eDate.getUTCDate();
+
+    let fullMonths = (ey - sy) * 12 + (em - sm);
+    let remDays = ed - sd;
+    if (remDays < 0) {
+      fullMonths -= 1;
+      const prevMonthLastDay = new Date(Date.UTC(ey, em, 0)).getUTCDate();
+      remDays = prevMonthLastDay - sd + ed;
+    }
+    // Treat end of month (e.g., 1st to 31st/30th) cleanly: 30 days = 1 full month
+    monthsEquivalent = Math.max(0, fullMonths) + Math.max(0, remDays) / 30;
+  }
+
+  const interestAmount = Math.round(monthlyInterestAmount * monthsEquivalent * 100) / 100;
+  const totalAmount = Math.round((principal + interestAmount) * 100) / 100;
+
+  return {
+    days,
+    monthlyInterestAmount,
+    interestAmount,
+    totalAmount,
+  };
+}
+
 export function computeFarmerAccountSummary(
   farmer: MphFarmer,
   allArrivals: MphArrival[],
   allJForms: MphJForm[],
   allOtherEntries: MphOtherEntry[],
-  settings: MphSettings
+  settings: MphSettings,
+  allAdvances: MphAdvance[] = []
 ): MphFarmerAccountSummary {
   const arrivals = allArrivals
     .filter((a) => a.farmerId === farmer.id)
@@ -151,6 +229,13 @@ export function computeFarmerAccountSummary(
   const otherEntries = allOtherEntries
     .filter((o) => o.farmerId === farmer.id)
     .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
+
+  const advances = allAdvances
+    .filter((adv) => adv.farmerId === farmer.id)
+    .sort(
+      (a, b) =>
+        a.startDate.localeCompare(b.startDate) || a.createdAt.localeCompare(b.createdAt)
+    );
 
   const weights = sumPaddyWeights(arrivals);
   const totalPaddyAmount =
@@ -189,7 +274,7 @@ export function computeFarmerAccountSummary(
     Math.round((totalJFormAmount + totalJFormLabor + totalDryingLabor + totalOtherDeductions) * 100) / 100;
 
   // Final Balance = Total Paddy Amount - J-Form Amount - J-Form Labour - Drying Labour + Other Additions - Other Deductions
-  // Rounded off to nearest whole rupee
+  // Rounded off to nearest whole rupee (Paddy Bakaya before Advances & Interest)
   const rawFinalBalance =
     totalPaddyAmount -
     totalJFormAmount -
@@ -207,11 +292,34 @@ export function computeFarmerAccountSummary(
     balanceStatus = 'receivable'; // Farmer Paise Lene Hai (Receivable)
   }
 
+  // Advances (Principal + Interest)
+  const totalAdvancePrincipal =
+    Math.round(advances.reduce((sum, adv) => sum + (Number(adv.principalAmount) || 0), 0) * 100) /
+    100;
+  const totalAdvanceInterest =
+    Math.round(advances.reduce((sum, adv) => sum + (Number(adv.interestAmount) || 0), 0) * 100) /
+    100;
+  const totalAdvanceWithInterest =
+    Math.round((totalAdvancePrincipal + totalAdvanceInterest) * 100) / 100;
+
+  // Combined Final Balance = Paddy Bakaya - (Principal + Interest), rounded to whole rupees
+  const rawCombined = rawFinalBalance - totalAdvanceWithInterest;
+  const roundedCombined = Math.round(rawCombined);
+  const combinedFinalBalance = roundedCombined === 0 ? 0 : roundedCombined;
+
+  let combinedBalanceStatus: 'payable' | 'receivable' | 'settled' = 'settled';
+  if (combinedFinalBalance > 0) {
+    combinedBalanceStatus = 'payable';
+  } else if (combinedFinalBalance < 0) {
+    combinedBalanceStatus = 'receivable';
+  }
+
   return {
     farmer,
     arrivals,
     jForms,
     otherEntries,
+    advances,
     totalArrivalBags: weights.totalBags,
     totalLooseKg: weights.totalLooseKg,
     totalLooseGm: weights.totalLooseGm,
@@ -231,6 +339,11 @@ export function computeFarmerAccountSummary(
     totalDeductions,
     finalBalance,
     balanceStatus,
+    totalAdvancePrincipal,
+    totalAdvanceInterest,
+    totalAdvanceWithInterest,
+    combinedFinalBalance,
+    combinedBalanceStatus,
   };
 }
 

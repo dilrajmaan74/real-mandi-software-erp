@@ -72,6 +72,27 @@ export interface MphOtherEntry {
   updatedAt: string;
 }
 
+export type MphInterestBasis = 'daily_30' | 'monthly_30';
+
+export interface MphAdvance {
+  id: string;
+  ownerId?: string;
+  farmerId: string;
+  farmerName: string;
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  days: number;
+  purpose: string;
+  principalAmount: number;
+  interestRateMonthly: number; // % per month (e.g. 1, 1.5, 2 or custom)
+  interestBasis: MphInterestBasis;
+  monthlyInterestAmount: number;
+  interestAmount: number;
+  totalAmount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface MphSettings {
   id: string;
   ownerId?: string;
@@ -96,6 +117,7 @@ export interface MphFarmerAccountSummary {
   arrivals: MphArrival[];
   jForms: MphJForm[];
   otherEntries: MphOtherEntry[];
+  advances: MphAdvance[];
   totalArrivalBags: number;
   totalLooseKg: number;
   totalLooseGm: number;
@@ -113,6 +135,11 @@ export interface MphFarmerAccountSummary {
   totalOtherAdditions: number;
   totalOtherDeductions: number;
   totalDeductions: number;
-  finalBalance: number;
+  finalBalance: number; // Paddy Bakaya (before advances & interest, rounded)
   balanceStatus: 'payable' | 'receivable' | 'settled';
+  totalAdvancePrincipal: number;
+  totalAdvanceInterest: number;
+  totalAdvanceWithInterest: number;
+  combinedFinalBalance: number; // Paddy Bakaya - (Principal + Interest), rounded
+  combinedBalanceStatus: 'payable' | 'receivable' | 'settled';
 }

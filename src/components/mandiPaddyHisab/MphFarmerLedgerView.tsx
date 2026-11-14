@@ -1,12 +1,15 @@
 import React, { useMemo, useRef, useState } from 'react';
 import {
+  MphAdvance,
   MphArrival,
   MphFarmer,
+  MphInterestBasis,
   MphJForm,
   MphOtherEntry,
   MphSettings,
 } from '../../types/mandiPaddyHisab';
 import {
+  calculateAdvanceDaysAndInterest,
   computeFarmerAccountSummary,
   formatDateDMY,
   formatINR,
@@ -15,10 +18,12 @@ import {
 } from '../../lib/mandiPaddyHisabUtils';
 import { exportElementToPdf } from '../../lib/mandiPaddyHisabPdf';
 import {
+  Calculator,
   Download,
   Edit3,
   FileSpreadsheet,
   Loader2,
+  Percent,
   Plus,
   Printer,
   Trash2,
@@ -31,40 +36,86 @@ interface MphFarmerLedgerViewProps {
   arrivals: MphArrival[];
   jForms: MphJForm[];
   otherEntries: MphOtherEntry[];
+  advances: MphAdvance[];
   settings: MphSettings;
   selectedFarmerId: string;
   onSelectFarmerId: (id: string) => void;
   onSaveOtherEntry: (entry: MphOtherEntry) => void;
   onDeleteOtherEntry: (entry: MphOtherEntry) => void;
+  onSaveAdvance: (advance: MphAdvance) => void;
+  onDeleteAdvance: (advance: MphAdvance) => void;
   onGoToArrivals: () => void;
   onGoToJForms: () => void;
+  onGoToAdvances: () => void;
   onGoToFarmers: () => void;
 }
+
+const ADV_QUICK_RATES = ['0', '1', '1.5', '2'];
 
 export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
   farmers,
   arrivals,
   jForms,
   otherEntries,
+  advances,
   settings,
   selectedFarmerId,
   onSelectFarmerId,
   onSaveOtherEntry,
   onDeleteOtherEntry,
+  onSaveAdvance,
+  onDeleteAdvance,
   onGoToArrivals,
   onGoToJForms,
+  onGoToAdvances,
   onGoToFarmers,
 }) => {
+  const today = new Date().toISOString().split('T')[0];
   const printRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
 
   // Other expense / payment inline form state
   const [editingOtherId, setEditingOtherId] = useState<string | null>(null);
-  const [otherDate, setOtherDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [otherDate, setOtherDate] = useState<string>(today);
   const [otherType, setOtherType] = useState<'add' | 'deduct'>('deduct');
   const [otherDesc, setOtherDesc] = useState<string>('');
   const [otherAmount, setOtherAmount] = useState<string>('');
   const [otherError, setOtherError] = useState<string | null>(null);
+
+  // Advance & interest inline form state
+  const [editingAdvId, setEditingAdvId] = useState<string | null>(null);
+  const [advStartDate, setAdvStartDate] = useState<string>(today);
+  const [advEndDate, setAdvEndDate] = useState<string>(today);
+  const [advPurpose, setAdvPurpose] = useState<string>(
+    'Pre-Season Advance (ਸੀਜ਼ਨ ਤੋਂ ਪਹਿਲਾਂ ਪੇਸ਼ਗੀ)'
+  );
+  const [advPrincipal, setAdvPrincipal] = useState<string>('');
+  const [advRate, setAdvRate] = useState<string>('1.5');
+  const [advBasis, setAdvBasis] = useState<MphInterestBasis>('daily_30');
+  const [advInterestOverride, setAdvInterestOverride] = useState<string>('');
+  const [advError, setAdvError] = useState<string | null>(null);
+
+  const parsedAdvPrincipal = Math.max(0, Number(advPrincipal) || 0);
+  const parsedAdvRate = Math.max(0, Number(advRate) || 0);
+
+  const liveAdvCalc = useMemo(
+    () =>
+      calculateAdvanceDaysAndInterest(
+        parsedAdvPrincipal,
+        parsedAdvRate,
+        advStartDate,
+        advEndDate,
+        advBasis
+      ),
+    [parsedAdvPrincipal, parsedAdvRate, advStartDate, advEndDate, advBasis]
+  );
+
+  const effectiveAdvInterest =
+    advInterestOverride.trim() !== ''
+      ? Math.max(0, Math.round((Number(advInterestOverride) || 0) * 100) / 100)
+      : liveAdvCalc.interestAmount;
+
+  const effectiveAdvTotal = Math.round((parsedAdvPrincipal + effectiveAdvInterest) * 100) / 100;
 
   const activeFarmer = useMemo(() => {
     if (farmers.length === 0) return null;
@@ -78,9 +129,10 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
       arrivals,
       jForms,
       otherEntries,
-      settings
+      settings,
+      advances
     );
-  }, [activeFarmer, arrivals, jForms, otherEntries, settings]);
+  }, [activeFarmer, arrivals, jForms, otherEntries, settings, advances]);
 
   const jFormHolderBreakdown = useMemo(() => {
     if (!summary) return [] as Array<{ key: string; name: string; relation: string; bags: number; amount: number; count: number }>;
@@ -162,6 +214,89 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
     resetOtherForm();
   };
 
+  const resetAdvForm = () => {
+    setEditingAdvId(null);
+    setAdvStartDate(today);
+    setAdvEndDate(today);
+    setAdvPurpose('Pre-Season Advance (ਸੀਜ਼ਨ ਤੋਂ ਪਹਿਲਾਂ ਪੇਸ਼ਗੀ)');
+    setAdvPrincipal('');
+    setAdvRate('1.5');
+    setAdvBasis('daily_30');
+    setAdvInterestOverride('');
+    setAdvError(null);
+  };
+
+  const handleEditAdv = (item: MphAdvance) => {
+    setEditingAdvId(item.id);
+    setAdvStartDate(item.startDate);
+    setAdvEndDate(item.endDate);
+    setAdvPurpose(item.purpose);
+    setAdvPrincipal(String(item.principalAmount));
+    setAdvRate(String(item.interestRateMonthly));
+    setAdvBasis(item.interestBasis || 'daily_30');
+
+    const recomputed = calculateAdvanceDaysAndInterest(
+      item.principalAmount,
+      item.interestRateMonthly,
+      item.startDate,
+      item.endDate,
+      item.interestBasis || 'daily_30'
+    );
+    if (Math.abs(recomputed.interestAmount - item.interestAmount) > 0.01) {
+      setAdvInterestOverride(String(item.interestAmount));
+    } else {
+      setAdvInterestOverride('');
+    }
+    setAdvError(null);
+  };
+
+  const handleAdvSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeFarmer) return;
+    setAdvError(null);
+
+    if (!advStartDate || !advEndDate) {
+      setAdvError('ਕਿਰਪਾ ਕਰਕੇ ਸ਼ੁਰੂ ਅਤੇ ਅੰਤ ਤਾਰੀਖ ਦਰਜ ਕਰੋ।');
+      return;
+    }
+    if (advEndDate < advStartDate) {
+      setAdvError('ਅੰਤ ਤਾਰੀਖ (End Date) ਸ਼ੁਰੂ ਤਾਰੀਖ (Start Date) ਤੋਂ ਪਹਿਲਾਂ ਨਹੀਂ ਹੋ ਸਕਦੀ।');
+      return;
+    }
+    if (!advPurpose.trim()) {
+      setAdvError('ਕਿਰਪਾ ਕਰਕੇ ਵੇਰਵਾ / ਕਿਸ ਕੰਮ ਲਈ (Purpose) ਲਿਖੋ।');
+      return;
+    }
+    if (parsedAdvPrincipal <= 0) {
+      setAdvError('ਮੂਲ ਰਕਮ 0 ਤੋਂ ਵੱਧ ਹੋਣੀ ਚਾਹੀਦੀ ਹੈ (Principal amount must be > 0).');
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const existing = editingAdvId ? advances.find((a) => a.id === editingAdvId) : null;
+
+    onSaveAdvance({
+      id: existing
+        ? existing.id
+        : `MPHA_${Date.now()}_${Math.floor(100 + Math.random() * 900)}`,
+      farmerId: activeFarmer.id,
+      farmerName: activeFarmer.name,
+      startDate: advStartDate,
+      endDate: advEndDate,
+      days: liveAdvCalc.days,
+      purpose: advPurpose.trim(),
+      principalAmount: Math.round(parsedAdvPrincipal * 100) / 100,
+      interestRateMonthly: Math.round(parsedAdvRate * 1000) / 1000,
+      interestBasis: advBasis,
+      monthlyInterestAmount: liveAdvCalc.monthlyInterestAmount,
+      interestAmount: effectiveAdvInterest,
+      totalAmount: effectiveAdvTotal,
+      createdAt: existing ? existing.createdAt : now,
+      updatedAt: now,
+    });
+    resetAdvForm();
+  };
+
   const handleDownloadPdf = async () => {
     if (!printRef.current || !activeFarmer) return;
     setIsExporting(true);
@@ -211,6 +346,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
             onChange={(e) => {
               onSelectFarmerId(e.target.value);
               resetOtherForm();
+              resetAdvForm();
             }}
             className="w-full sm:w-80 px-3 py-2 text-xs sm:text-sm font-semibold border border-slate-300 rounded-lg bg-white focus:outline-none focus:border-emerald-600"
           >
@@ -238,6 +374,14 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
           >
             <FileSpreadsheet className="w-3.5 h-3.5" />
             <span>+ J-Form</span>
+          </button>
+          <button
+            type="button"
+            onClick={onGoToAdvances}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold bg-amber-50 text-amber-900 border border-amber-200 rounded-lg hover:bg-amber-100 cursor-pointer whitespace-nowrap"
+          >
+            <Percent className="w-3.5 h-3.5" />
+            <span>+ Advance</span>
           </button>
           <button
             type="button"
@@ -384,7 +528,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
           >
             <div>
               <div className="text-xs font-bold uppercase tracking-wide opacity-80">
-                Final Balance (ਅੰਤਿਮ ਬਕਾਇਆ - Round Off)
+                Paddy Bakaya (ਝੋਨਾ ਬਕਾਇਆ - Round Off)
               </div>
               <div className="text-3xl font-bold font-mono tabular-nums mt-2">
                 {formatINR(Math.abs(summary.finalBalance), false)}
@@ -798,6 +942,405 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
               </table>
             </div>
           )}
+        </div>
+
+        {/* Pre-Season Advances & Other Payments with Interest */}
+        <div className="border border-amber-200 rounded-xl overflow-hidden">
+          <div className="px-4 py-2.5 bg-amber-50 border-b border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+            <div>
+              <h3 className="text-xs font-bold text-amber-950">
+                Pre-Season Advances & Other Payments with Interest (ਪੇਸ਼ਗੀ ਅਤੇ ਵਿਆਜ ਖਾਤਾ - {summary.advances.length})
+              </h3>
+              <p className="text-[10.5px] text-amber-800">
+                Multiple amounts, independent start & end dates, auto days & custom monthly interest rates (1%, 1.5%, 2%, etc.)
+              </p>
+            </div>
+            <span className="text-[11px] font-mono tabular-nums font-semibold text-amber-950 whitespace-nowrap">
+              Principal: {formatINR(summary.totalAdvancePrincipal)} · Interest:{' '}
+              {formatINR(summary.totalAdvanceInterest)}
+            </span>
+          </div>
+
+          {/* Inline Add/Edit Advance & Interest Form (hidden in print) */}
+          <form
+            onSubmit={handleAdvSubmit}
+            className="print:hidden p-3 bg-amber-50/40 border-b border-amber-200 space-y-2.5"
+          >
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2.5 items-end">
+              <div className="lg:col-span-2">
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  Purpose / Payment For (ਕਿਸ ਕੰਮ ਲਈ)
+                </label>
+                <input
+                  type="text"
+                  value={advPurpose}
+                  onChange={(e) => setAdvPurpose(e.target.value)}
+                  placeholder="Pre-season advance, Diesel, Seed..."
+                  className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  Principal (ਮੂਲ ਰਕਮ ₹)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={advPrincipal}
+                  onChange={(e) => {
+                    setAdvPrincipal(e.target.value);
+                    setAdvInterestOverride('');
+                  }}
+                  placeholder="e.g. 100000"
+                  className="w-full px-2.5 py-1.5 text-xs font-mono tabular-nums font-bold border border-slate-300 rounded-lg bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  Rate % / Month
+                </label>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={advRate}
+                    onChange={(e) => {
+                      setAdvRate(e.target.value);
+                      setAdvInterestOverride('');
+                    }}
+                    className="w-20 px-2 py-1.5 text-xs font-mono tabular-nums font-bold border border-slate-300 rounded-lg bg-white"
+                  />
+                  <div className="flex items-center gap-1">
+                    {ADV_QUICK_RATES.map((r) => (
+                      <button
+                        key={r}
+                        type="button"
+                        onClick={() => {
+                          setAdvRate(r);
+                          setAdvInterestOverride('');
+                        }}
+                        className={`px-1.5 py-1 text-[10px] font-mono font-bold rounded border cursor-pointer ${
+                          advRate === r
+                            ? 'bg-amber-600 text-white border-amber-600'
+                            : 'bg-white text-slate-700 border-slate-300'
+                        }`}
+                      >
+                        {r}%
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  Start Date
+                </label>
+                <input
+                  type="date"
+                  value={advStartDate}
+                  onChange={(e) => {
+                    setAdvStartDate(e.target.value);
+                    setAdvInterestOverride('');
+                  }}
+                  className="w-full px-2 py-1.5 text-xs font-mono border border-slate-300 rounded-lg bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  End Date
+                </label>
+                <input
+                  type="date"
+                  value={advEndDate}
+                  onChange={(e) => {
+                    setAdvEndDate(e.target.value);
+                    setAdvInterestOverride('');
+                  }}
+                  className="w-full px-2 py-1.5 text-xs font-mono border border-slate-300 rounded-lg bg-white"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2 pt-1 text-xs">
+              <div className="flex flex-wrap items-center gap-3">
+                <select
+                  value={advBasis}
+                  onChange={(e) => {
+                    setAdvBasis(e.target.value as MphInterestBasis);
+                    setAdvInterestOverride('');
+                  }}
+                  className="px-2 py-1 text-[11px] border border-slate-300 rounded bg-white"
+                >
+                  <option value="daily_30">Exact Days ÷ 30 Basis</option>
+                  <option value="monthly_30">30-Day Month + Extra Days Basis</option>
+                </select>
+                <span className="inline-flex items-center gap-1 text-slate-700 font-mono">
+                  <Calculator className="w-3.5 h-3.5 text-amber-700" />
+                  <span>Days: <strong>{liveAdvCalc.days}</strong></span>
+                </span>
+                <span className="text-slate-700 font-mono">
+                  Monthly: <strong>{formatINR(liveAdvCalc.monthlyInterestAmount)}</strong>
+                </span>
+                <span className="text-rose-800 font-mono">
+                  Interest: <strong>{formatINR(effectiveAdvInterest)}</strong>
+                </span>
+                <span className="text-slate-900 font-mono">
+                  Total P+I: <strong>{formatINR(effectiveAdvTotal)}</strong>
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={advInterestOverride}
+                  onChange={(e) => setAdvInterestOverride(e.target.value)}
+                  placeholder={`Override Int (${liveAdvCalc.interestAmount})`}
+                  className="w-40 px-2 py-1 text-[11px] font-mono border border-amber-300 rounded bg-white"
+                />
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-1 px-3.5 py-1.5 text-xs font-bold bg-slate-900 text-white rounded-lg hover:bg-slate-800 cursor-pointer whitespace-nowrap"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>{editingAdvId ? 'Update Advance' : 'Add Advance & Interest'}</span>
+                </button>
+                {editingAdvId && (
+                  <button
+                    type="button"
+                    onClick={resetAdvForm}
+                    className="p-1.5 text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+          </form>
+
+          {advError && (
+            <div className="px-4 py-2 bg-rose-50 text-rose-800 text-xs font-medium border-b border-rose-200">
+              {advError}
+            </div>
+          )}
+
+          {summary.advances.length === 0 ? (
+            <div className="p-4 text-center text-xs text-slate-500">
+              No pre-season advances or interest-bearing payments recorded for this farmer.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
+                  <tr>
+                    <th className="py-2 px-2.5 font-semibold">#</th>
+                    <th className="py-2 px-2.5 font-semibold">Purpose / Payment</th>
+                    <th className="py-2 px-2.5 font-semibold">Start → End Date</th>
+                    <th className="py-2 px-2.5 font-semibold text-right">Auto Days</th>
+                    <th className="py-2 px-2.5 font-semibold text-right">Principal (ਮੂਲ)</th>
+                    <th className="py-2 px-2.5 font-semibold text-right">Rate %/Mo</th>
+                    <th className="py-2 px-2.5 font-semibold text-right">Monthly Int.</th>
+                    <th className="py-2 px-2.5 font-semibold text-right">Interest (ਵਿਆਜ)</th>
+                    <th className="py-2 px-2.5 font-semibold text-right">Total (P+I)</th>
+                    <th className="py-2 px-2.5 font-semibold text-right print:hidden">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {summary.advances.map((adv, idx) => (
+                    <tr key={adv.id} className="hover:bg-slate-50/70">
+                      <td className="py-2 px-2.5 font-mono tabular-nums text-slate-400">
+                        {idx + 1}
+                      </td>
+                      <td className="py-2 px-2.5 text-slate-800 font-medium">{adv.purpose}</td>
+                      <td className="py-2 px-2.5 font-mono tabular-nums whitespace-nowrap text-slate-700">
+                        {formatDateDMY(adv.startDate)} → {formatDateDMY(adv.endDate)}
+                      </td>
+                      <td className="py-2 px-2.5 text-right font-mono tabular-nums text-slate-700">
+                        {adv.days} Days
+                      </td>
+                      <td className="py-2 px-2.5 text-right font-mono tabular-nums font-semibold text-slate-900 whitespace-nowrap">
+                        {formatINR(adv.principalAmount)}
+                      </td>
+                      <td className="py-2 px-2.5 text-right font-mono tabular-nums text-slate-600">
+                        {adv.interestRateMonthly}%
+                      </td>
+                      <td className="py-2 px-2.5 text-right font-mono tabular-nums text-slate-600 whitespace-nowrap">
+                        {formatINR(adv.monthlyInterestAmount)}
+                      </td>
+                      <td className="py-2 px-2.5 text-right font-mono tabular-nums font-semibold text-amber-800 whitespace-nowrap">
+                        {formatINR(adv.interestAmount)}
+                      </td>
+                      <td className="py-2 px-2.5 text-right font-mono tabular-nums font-bold text-rose-700 whitespace-nowrap">
+                        {formatINR(adv.totalAmount)}
+                      </td>
+                      <td className="py-2 px-2.5 text-right print:hidden whitespace-nowrap">
+                        <div className="inline-flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleEditAdv(adv)}
+                            className="p-1 text-blue-700 hover:bg-blue-50 rounded cursor-pointer"
+                            title="Edit"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDeleteAdvance(adv)}
+                            className="p-1 text-rose-600 hover:bg-rose-50 rounded cursor-pointer"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-amber-50/80 border-t-2 border-amber-200 font-bold text-amber-950">
+                  <tr>
+                    <td colSpan={4} className="py-2 px-2.5">
+                      Total Advances ({summary.advances.length} Entries)
+                    </td>
+                    <td className="py-2 px-2.5 text-right font-mono tabular-nums whitespace-nowrap">
+                      {formatINR(summary.totalAdvancePrincipal)}
+                    </td>
+                    <td colSpan={2}></td>
+                    <td className="py-2 px-2.5 text-right font-mono tabular-nums text-amber-900 whitespace-nowrap">
+                      {formatINR(summary.totalAdvanceInterest)}
+                    </td>
+                    <td className="py-2 px-2.5 text-right font-mono tabular-nums text-rose-800 whitespace-nowrap">
+                      {formatINR(summary.totalAdvanceWithInterest)}
+                    </td>
+                    <td className="print:hidden"></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* LAST SECTION: Combined Final Settlement (Paddy Bakaya + Principal + Interest) */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch pt-1">
+          <div className="lg:col-span-7 border border-slate-300 rounded-xl overflow-hidden">
+            <div className="px-4 py-2.5 bg-slate-900 text-white">
+              <h3 className="text-xs font-bold uppercase tracking-wide">
+                Combined Final Settlement: Paddy Bakaya + Principal & Interest (ਕੁੱਲ ਅੰਤਿਮ ਹਿਸਾਬ)
+              </h3>
+            </div>
+            <div className="divide-y divide-slate-100 text-xs">
+              <div className="px-4 py-2.5 flex items-center justify-between">
+                <div>
+                  <span className="font-semibold text-slate-900">
+                    1. Paddy Bakaya (ਝੋਨਾ ਬਕਾਇਆ — Round Off)
+                  </span>
+                  <span className="text-[11px] text-slate-500 block">
+                    {summary.balanceStatus === 'payable'
+                      ? 'Farmer Nu Paise Dene Hai (Paddy Payable)'
+                      : summary.balanceStatus === 'receivable'
+                      ? 'Farmer Paise Lene Hai (Paddy Receivable)'
+                      : 'Paddy Account Settled'}
+                  </span>
+                </div>
+                <span
+                  className={`font-mono tabular-nums font-bold text-sm ${
+                    summary.finalBalance >= 0 ? 'text-emerald-800' : 'text-rose-700'
+                  }`}
+                >
+                  {summary.finalBalance >= 0 ? '+' : '-'}
+                  {formatINR(Math.abs(summary.finalBalance), false)}
+                </span>
+              </div>
+
+              <div className="px-4 py-2.5 flex items-center justify-between">
+                <div>
+                  <span className="font-medium text-slate-800">
+                    2. (-) Advance Principal Amount (ਕੁੱਲ ਮੂਲ ਰਕਮ)
+                  </span>
+                  <span className="text-[11px] text-slate-500 block">
+                    Across {summary.advances.length} advance / payment entries
+                  </span>
+                </div>
+                <span className="font-mono tabular-nums font-semibold text-rose-700">
+                  -{formatINR(summary.totalAdvancePrincipal)}
+                </span>
+              </div>
+
+              <div className="px-4 py-2.5 flex items-center justify-between">
+                <div>
+                  <span className="font-medium text-slate-800">
+                    3. (-) Advance Interest (ਕੁੱਲ ਵਿਆਜ)
+                  </span>
+                  <span className="text-[11px] text-slate-500 block">
+                    Auto-calculated on dates & custom rates
+                  </span>
+                </div>
+                <span className="font-mono tabular-nums font-semibold text-rose-700">
+                  -{formatINR(summary.totalAdvanceInterest)}
+                </span>
+              </div>
+
+              <div className="px-4 py-2.5 bg-amber-50/60 flex items-center justify-between">
+                <span className="font-bold text-amber-950">
+                  (=) Total Advance + Interest (ਕੁੱਲ ਪੇਸ਼ਗੀ ਤੇ ਵਿਆਜ)
+                </span>
+                <span className="font-mono tabular-nums font-bold text-rose-800">
+                  -{formatINR(summary.totalAdvanceWithInterest)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div
+            className={`lg:col-span-5 rounded-xl border-2 p-5 flex flex-col justify-between ${
+              summary.combinedBalanceStatus === 'payable'
+                ? 'bg-emerald-50 border-emerald-400 text-emerald-950'
+                : summary.combinedBalanceStatus === 'receivable'
+                ? 'bg-rose-50 border-rose-400 text-rose-950'
+                : 'bg-slate-50 border-slate-300 text-slate-900'
+            }`}
+          >
+            <div>
+              <div className="text-xs font-bold uppercase tracking-wide opacity-80">
+                Grand Final Balance (ਅੰਤਿਮ ਕੁੱਲ ਬਕਾਇਆ — Round Off)
+              </div>
+              <div className="text-3xl font-bold font-mono tabular-nums mt-2">
+                {formatINR(Math.abs(summary.combinedFinalBalance), false)}
+              </div>
+              <div className="mt-2 text-sm font-bold">
+                {summary.combinedBalanceStatus === 'payable' && (
+                  <span>
+                    Farmer Nu Paise Dene Hai (Payable) — ਕਿਸਾਨ ਨੂੰ ਪੈਸੇ ਦੇਣੇ ਹਨ
+                  </span>
+                )}
+                {summary.combinedBalanceStatus === 'receivable' && (
+                  <span>
+                    Farmer Paise Lene Hai (Receivable) — ਕਿਸਾਨ ਤੋਂ ਪੈਸੇ ਲੈਣੇ ਹਨ
+                  </span>
+                )}
+                {summary.combinedBalanceStatus === 'settled' && (
+                  <span>Settled (ਹਿਸਾਬ ਬਰਾਬਰ — ਕੋਈ ਬਕਾਇਆ ਨਹੀਂ)</span>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-black/10 grid grid-cols-2 gap-2 text-xs">
+              <div>
+                <span className="opacity-70 block text-[11px]">Paddy Bakaya</span>
+                <span className="font-mono tabular-nums font-bold">
+                  {summary.finalBalance >= 0 ? '' : '-'}
+                  {formatINR(Math.abs(summary.finalBalance), false)}
+                </span>
+              </div>
+              <div className="text-right">
+                <span className="opacity-70 block text-[11px]">Principal + Interest</span>
+                <span className="font-mono tabular-nums font-bold">
+                  -{formatINR(summary.totalAdvanceWithInterest)}
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

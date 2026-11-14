@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import {
+  MphAdvance,
   MphArrival,
   MphFarmer,
   MphJForm,
@@ -22,6 +23,7 @@ interface MphReportsViewProps {
   arrivals: MphArrival[];
   jForms: MphJForm[];
   otherEntries: MphOtherEntry[];
+  advances: MphAdvance[];
   settings: MphSettings;
 }
 
@@ -32,6 +34,7 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
   arrivals,
   jForms,
   otherEntries,
+  advances,
   settings,
 }) => {
   const reportRef = useRef<HTMLDivElement>(null);
@@ -53,16 +56,19 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
       arrivals,
       jForms,
       otherEntries,
-      settings
+      settings,
+      advances
     );
-  }, [activeFarmer, arrivals, jForms, otherEntries, settings]);
+  }, [activeFarmer, arrivals, jForms, otherEntries, settings, advances]);
 
   const allSummaries = useMemo(
     () =>
       farmers
-        .map((f) => computeFarmerAccountSummary(f, arrivals, jForms, otherEntries, settings))
+        .map((f) =>
+          computeFarmerAccountSummary(f, arrivals, jForms, otherEntries, settings, advances)
+        )
         .sort((a, b) => a.farmer.name.localeCompare(b.farmer.name)),
-    [farmers, arrivals, jForms, otherEntries, settings]
+    [farmers, arrivals, jForms, otherEntries, settings, advances]
   );
 
   const dateFilteredArrivals = useMemo(() => {
@@ -115,8 +121,10 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
       Math.round(allSummaries.reduce((s, x) => s + x.totalJFormAmount, 0) * 100) / 100;
     const deductions =
       Math.round(allSummaries.reduce((s, x) => s + x.totalDeductions, 0) * 100) / 100;
-    const netBalance = Math.round(allSummaries.reduce((s, x) => s + x.finalBalance, 0));
-    return { bags, allWeights, paddyAmt, jFormAmt, deductions, netBalance };
+    const advTotal =
+      Math.round(allSummaries.reduce((s, x) => s + x.totalAdvanceWithInterest, 0) * 100) / 100;
+    const netBalance = Math.round(allSummaries.reduce((s, x) => s + x.combinedFinalBalance, 0));
+    return { bags, allWeights, paddyAmt, jFormAmt, deductions, advTotal, netBalance };
   }, [allSummaries, arrivals]);
 
   const handleDownloadPdf = async () => {
@@ -319,21 +327,26 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
                     </div>
                   </div>
                   <div className="text-left sm:text-right">
+                    <div className="text-[11px] text-slate-600 font-mono tabular-nums">
+                      Paddy Bakaya: {farmerSummary.finalBalance >= 0 ? '' : '-'}
+                      {formatINR(Math.abs(farmerSummary.finalBalance), false)} · Adv (P+I): -
+                      {formatINR(farmerSummary.totalAdvanceWithInterest)}
+                    </div>
                     <div className="font-bold text-sm font-mono tabular-nums">
-                      Final Balance: {formatINR(Math.abs(farmerSummary.finalBalance), false)}
+                      Grand Final Balance: {formatINR(Math.abs(farmerSummary.combinedFinalBalance), false)}
                     </div>
                     <div
                       className={`font-bold text-xs ${
-                        farmerSummary.balanceStatus === 'payable'
+                        farmerSummary.combinedBalanceStatus === 'payable'
                           ? 'text-emerald-700'
-                          : farmerSummary.balanceStatus === 'receivable'
+                          : farmerSummary.combinedBalanceStatus === 'receivable'
                           ? 'text-rose-700'
                           : 'text-slate-600'
                       }`}
                     >
-                      {farmerSummary.balanceStatus === 'payable'
+                      {farmerSummary.combinedBalanceStatus === 'payable'
                         ? 'Farmer Nu Paise Dene Hai (Payable)'
-                        : farmerSummary.balanceStatus === 'receivable'
+                        : farmerSummary.combinedBalanceStatus === 'receivable'
                         ? 'Farmer Paise Lene Hai (Receivable)'
                         : 'Settled'}
                     </div>
@@ -489,6 +502,78 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
                     </table>
                   </div>
                 </div>
+
+                {/* Advances & Interest Register in Complete Ledger Report */}
+                <div className="border border-amber-200 rounded-lg overflow-hidden">
+                  <div className="px-3 py-2 bg-amber-50 border-b border-amber-200 flex items-center justify-between text-xs font-bold text-amber-950">
+                    <span>Advances & Interest Ledger ({farmerSummary.advances.length})</span>
+                    <span className="font-mono tabular-nums">
+                      Principal: {formatINR(farmerSummary.totalAdvancePrincipal)} · Interest:{' '}
+                      {formatINR(farmerSummary.totalAdvanceInterest)} · Total:{' '}
+                      {formatINR(farmerSummary.totalAdvanceWithInterest)}
+                    </span>
+                  </div>
+                  {farmerSummary.advances.length > 0 && (
+                    <table className="w-full text-left text-[11px]">
+                      <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
+                        <tr>
+                          <th className="py-1.5 px-2">#</th>
+                          <th className="py-1.5 px-2">Purpose</th>
+                          <th className="py-1.5 px-2">Start → End Date</th>
+                          <th className="py-1.5 px-2 text-right">Days</th>
+                          <th className="py-1.5 px-2 text-right">Principal</th>
+                          <th className="py-1.5 px-2 text-right">Rate</th>
+                          <th className="py-1.5 px-2 text-right">Interest</th>
+                          <th className="py-1.5 px-2 text-right">Total (P+I)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {farmerSummary.advances.map((adv, idx) => (
+                          <tr key={adv.id}>
+                            <td className="py-1.5 px-2 font-mono text-slate-400">{idx + 1}</td>
+                            <td className="py-1.5 px-2 text-slate-800">{adv.purpose}</td>
+                            <td className="py-1.5 px-2 font-mono whitespace-nowrap">
+                              {formatDateDMY(adv.startDate)} → {formatDateDMY(adv.endDate)}
+                            </td>
+                            <td className="py-1.5 px-2 text-right font-mono">{adv.days}d</td>
+                            <td className="py-1.5 px-2 text-right font-mono font-semibold">
+                              {formatINR(adv.principalAmount)}
+                            </td>
+                            <td className="py-1.5 px-2 text-right font-mono">
+                              {adv.interestRateMonthly}%
+                            </td>
+                            <td className="py-1.5 px-2 text-right font-mono text-amber-800 font-semibold">
+                              {formatINR(adv.interestAmount)}
+                            </td>
+                            <td className="py-1.5 px-2 text-right font-mono font-bold text-rose-700">
+                              {formatINR(adv.totalAmount)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                  <div className="px-3 py-2.5 bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                    <div className="font-mono tabular-nums">
+                      Paddy Bakaya ({farmerSummary.finalBalance >= 0 ? '' : '-'}
+                      {formatINR(Math.abs(farmerSummary.finalBalance), false)}) − Principal (
+                      {formatINR(farmerSummary.totalAdvancePrincipal)}) − Interest (
+                      {formatINR(farmerSummary.totalAdvanceInterest)})
+                    </div>
+                    <div className="font-bold font-mono tabular-nums text-sm">
+                      Grand Final Balance: {formatINR(Math.abs(farmerSummary.combinedFinalBalance), false)}{' '}
+                      <span className="text-[11px] font-sans">
+                        (
+                        {farmerSummary.combinedBalanceStatus === 'payable'
+                          ? 'Farmer Nu Paise Dene Hai / Payable'
+                          : farmerSummary.combinedBalanceStatus === 'receivable'
+                          ? 'Farmer Paise Lene Hai / Receivable'
+                          : 'Settled'}
+                        )
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
           </>
@@ -642,6 +727,7 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
                   <th className="py-2 px-2.5 font-semibold text-right">Paddy Amount</th>
                   <th className="py-2 px-2.5 font-semibold text-right">J-Form Amount</th>
                   <th className="py-2 px-2.5 font-semibold text-right">Total Deductions</th>
+                  <th className="py-2 px-2.5 font-semibold text-right">Adv (P+I)</th>
                   <th className="py-2 px-2.5 font-semibold text-right">Final Balance</th>
                   <th className="py-2 px-2.5 font-semibold text-right">Status</th>
                 </tr>
@@ -669,13 +755,18 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
                     <td className="py-2 px-2.5 text-right font-mono tabular-nums text-rose-700 whitespace-nowrap">
                       -{formatINR(s.totalDeductions)}
                     </td>
+                    <td className="py-2 px-2.5 text-right font-mono tabular-nums text-amber-800 whitespace-nowrap">
+                      {s.totalAdvanceWithInterest > 0
+                        ? `-${formatINR(s.totalAdvanceWithInterest)}`
+                        : '—'}
+                    </td>
                     <td className="py-2 px-2.5 text-right font-mono tabular-nums font-bold whitespace-nowrap">
-                      {formatINR(Math.abs(s.finalBalance), false)}
+                      {formatINR(Math.abs(s.combinedFinalBalance), false)}
                     </td>
                     <td className="py-2 px-2.5 text-right text-[11px] font-semibold whitespace-nowrap">
-                      {s.balanceStatus === 'payable' ? (
+                      {s.combinedBalanceStatus === 'payable' ? (
                         <span className="text-emerald-700">Nu Paise Dene Hai (Payable)</span>
-                      ) : s.balanceStatus === 'receivable' ? (
+                      ) : s.combinedBalanceStatus === 'receivable' ? (
                         <span className="text-rose-700">Paise Lene Hai (Receivable)</span>
                       ) : (
                         <span className="text-slate-500">Settled</span>
@@ -707,6 +798,9 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
                   </td>
                   <td className="py-2.5 px-2.5 text-right font-mono tabular-nums text-rose-800 whitespace-nowrap">
                     -{formatINR(grandTotals.deductions)}
+                  </td>
+                  <td className="py-2.5 px-2.5 text-right font-mono tabular-nums text-amber-900 whitespace-nowrap">
+                    -{formatINR(grandTotals.advTotal)}
                   </td>
                   <td className="py-2.5 px-2.5 text-right font-mono tabular-nums whitespace-nowrap">
                     {formatINR(Math.abs(grandTotals.netBalance), false)}

@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
+  MphAdvance,
   MphArrival,
   MphFarmer,
   MphJForm,
@@ -18,6 +19,7 @@ interface MphFarmerMasterViewProps {
   arrivals: MphArrival[];
   jForms: MphJForm[];
   otherEntries: MphOtherEntry[];
+  advances: MphAdvance[];
   settings: MphSettings;
   onSaveFarmer: (farmer: MphFarmer) => void;
   onDeleteFarmer: (farmer: MphFarmer) => void;
@@ -29,6 +31,7 @@ export const MphFarmerMasterView: React.FC<MphFarmerMasterViewProps> = ({
   arrivals,
   jForms,
   otherEntries,
+  advances,
   settings,
   onSaveFarmer,
   onDeleteFarmer,
@@ -129,10 +132,13 @@ export const MphFarmerMasterView: React.FC<MphFarmerMasterViewProps> = ({
   const summaryMap = useMemo(() => {
     const map = new Map<string, ReturnType<typeof computeFarmerAccountSummary>>();
     for (const f of farmers) {
-      map.set(f.id, computeFarmerAccountSummary(f, arrivals, jForms, otherEntries, settings));
+      map.set(
+        f.id,
+        computeFarmerAccountSummary(f, arrivals, jForms, otherEntries, settings, advances)
+      );
     }
     return map;
-  }, [farmers, arrivals, jForms, otherEntries, settings]);
+  }, [farmers, arrivals, jForms, otherEntries, settings, advances]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
@@ -286,24 +292,31 @@ export const MphFarmerMasterView: React.FC<MphFarmerMasterViewProps> = ({
                       </td>
                       <td className="py-2.5 px-3 text-right font-mono tabular-nums whitespace-nowrap">
                         {summary ? (
-                          <span
-                            className={`font-bold ${
-                              summary.balanceStatus === 'payable'
-                                ? 'text-emerald-700'
-                                : summary.balanceStatus === 'receivable'
-                                ? 'text-rose-700'
-                                : 'text-slate-600'
-                            }`}
-                          >
-                            {formatINR(Math.abs(summary.finalBalance), false)}{' '}
-                            <span className="text-[10px] font-sans font-normal text-slate-500">
-                              {summary.balanceStatus === 'payable'
-                                ? '(Payable)'
-                                : summary.balanceStatus === 'receivable'
-                                ? '(Receivable)'
-                                : ''}
+                          <div>
+                            <span
+                              className={`font-bold ${
+                                summary.combinedBalanceStatus === 'payable'
+                                  ? 'text-emerald-700'
+                                  : summary.combinedBalanceStatus === 'receivable'
+                                  ? 'text-rose-700'
+                                  : 'text-slate-600'
+                              }`}
+                            >
+                              {formatINR(Math.abs(summary.combinedFinalBalance), false)}{' '}
+                              <span className="text-[10px] font-sans font-normal text-slate-500">
+                                {summary.combinedBalanceStatus === 'payable'
+                                  ? '(Payable)'
+                                  : summary.combinedBalanceStatus === 'receivable'
+                                  ? '(Receivable)'
+                                  : ''}
+                              </span>
                             </span>
-                          </span>
+                            {summary.totalAdvanceWithInterest > 0 && (
+                              <div className="text-[10px] text-amber-700 font-normal">
+                                Adv P+I: {formatINR(summary.totalAdvanceWithInterest, false)}
+                              </div>
+                            )}
+                          </div>
                         ) : (
                           '₹0.00'
                         )}
