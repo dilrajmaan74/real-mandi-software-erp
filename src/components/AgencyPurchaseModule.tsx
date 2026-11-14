@@ -1391,6 +1391,7 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
         <table className="w-full text-left text-xs border-collapse">
           <thead>
             <tr className="bg-gray-50 text-gray-700 font-bold border-b border-gray-200">
+              <th className="py-3 px-2.5 text-center w-12 font-bold text-gray-700">ਲੜੀ ਨੰ. (#)</th>
               <th className="py-3 px-3">Date / Firm / Mandi</th>
               <th className="py-3 px-3">ਕਿਸਾਨ ਦਾ ਨਾਮ ਤੇ ਵੇਰਵਾ (Farmer Name & Details)</th>
               <th className="py-3 px-3 text-center">ਬਾਰਦਾਨਾ (N+O)</th>
@@ -1405,12 +1406,12 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
           <tbody className="divide-y divide-gray-100">
             {filteredEntries.length === 0 ? (
               <tr>
-                <td colSpan={9} className="py-10 text-center text-gray-400 text-xs">
+                <td colSpan={10} className="py-10 text-center text-gray-400 text-xs">
                   ਚੁਣੀ ਹੋਈ ਮਿਤੀ ਲਈ ਕੋਈ ਖਰੀਦ ਐਂਟਰੀ ਨਹੀਂ ਮਿਲੀ।
                 </td>
               </tr>
             ) : (
-              filteredEntries.map((item) => {
+              filteredEntries.map((item, idx) => {
                 // Show ONLY single selected farmer name
                 const displayedFarmerName = item.farmer_name || item.billed_to_name;
                 const isDuplicate = duplicatePurchaseIdSet.has(item.id);
@@ -1424,6 +1425,10 @@ export const AgencyPurchaseModule: React.FC<AgencyPurchaseModuleProps> = ({
                         : 'hover:bg-blue-50/20'
                     }`}
                   >
+                    <td className="py-3 px-2.5 text-center font-mono font-bold text-gray-500 text-xs">
+                      {idx + 1}
+                    </td>
+
                     <td className="py-3 px-3">
                       <div className="font-bold text-gray-900">{item.date}</div>
                       <div className="text-[10px] text-blue-900 font-bold">{item.firm_name || 'JAMMU TRADING CO.'}</div>

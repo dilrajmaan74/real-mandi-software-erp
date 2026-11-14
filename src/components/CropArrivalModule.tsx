@@ -35,11 +35,11 @@ import {
   ChevronDown,
   ChevronUp,
   Info,
-  TrendingUp,
   Printer,
   FileDown,
   Copy,
-  BookOpen
+  BookOpen,
+  Sun
 } from 'lucide-react';
 import { appendCropArrivalToSheets } from '../lib/sheets';
 import { getSavedVillages, registerVillage, VillageItem } from '../lib/villages';
@@ -96,6 +96,10 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
     return new Set(duplicateArrivalGroups.flatMap((g) => g.duplicates.map((d) => d.id)));
   }, [duplicateArrivalGroups]);
   const [showOnlyDuplicates, setShowOnlyDuplicates] = useState(false);
+  const [showOnlySukhiKiti, setShowOnlySukhiKiti] = useState(false);
+  const sukhiKitiArrivalCount = useMemo(() => {
+    return entries.filter((e) => (e.sukhi_kiti_total && e.sukhi_kiti_total > 0) || (e.sukhi_kiti_rate && e.sukhi_kiti_rate > 0)).length;
+  }, [entries]);
 
   const handleDeleteAllDuplicateArrivals = () => {
     const ids = duplicateArrivalGroups.flatMap((g) => g.duplicates.map((d) => d.id));
@@ -623,6 +627,7 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
           pNo.toLowerCase().includes(q) ||
           (e.mandi_name && e.mandi_name.toLowerCase().includes(q));
         if (showOnlyDuplicates && !duplicateArrivalIdSet.has(e.id)) return false;
+        if (showOnlySukhiKiti && !((e.sukhi_kiti_total && e.sukhi_kiti_total > 0) || (e.sukhi_kiti_rate && e.sukhi_kiti_rate > 0))) return false;
         const matchCrop = cropFilter === 'All' || e.crop_type.includes(cropFilter) || e.crop_variety.includes(cropFilter);
         const matchFarmer =
           farmerFilter === 'All' ||
@@ -631,7 +636,7 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
           (e.farmer_name_pa && e.farmer_name_pa.trim() === farmerFilter.trim());
         return matchSearch && matchCrop && matchFarmer;
       });
-  }, [entries, search, cropFilter, farmerFilter, showOnlyDuplicates, duplicateArrivalIdSet]);
+  }, [entries, search, cropFilter, farmerFilter, showOnlyDuplicates, showOnlySukhiKiti, duplicateArrivalIdSet]);
 
   const totalQuintals = entries.reduce((acc, curr) => acc + (curr.weight_quintals || 0), 0);
   const totalBagsCount = entries.reduce((acc, curr) => acc + (curr.total_bags_arrived || 0), 0);
@@ -1492,27 +1497,27 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
         <div className="bg-emerald-50 border-2 border-emerald-300 rounded-xl p-3 shadow-2xs">
           <div className="flex items-center justify-between">
             <span className="text-gray-600 font-bold block text-[11px]">ਕੁੱਲ ਆਵਕ ਵਜ਼ਨ (Weight)</span>
-            {(search.trim() || cropFilter !== 'All' || farmerFilter !== 'All' || showOnlyDuplicates) && (
+            {(search.trim() || cropFilter !== 'All' || farmerFilter !== 'All' || showOnlyDuplicates || showOnlySukhiKiti) && (
               <span className="text-[10px] bg-emerald-200 text-emerald-900 px-1.5 py-0.2 rounded font-bold font-mono">
                 ਫਿਲਟਰ ਮੁਤਾਬਕ
               </span>
             )}
           </div>
           <div className="text-lg font-black font-mono text-emerald-950 mt-0.5">
-            {(search.trim() || cropFilter !== 'All' || farmerFilter !== 'All' || showOnlyDuplicates ? filteredTotalQuintals : totalQuintals).toFixed(2)} Qtl
+            {(search.trim() || cropFilter !== 'All' || farmerFilter !== 'All' || showOnlyDuplicates || showOnlySukhiKiti ? filteredTotalQuintals : totalQuintals).toFixed(2)} Qtl
           </div>
         </div>
         <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-3 shadow-2xs">
           <div className="flex items-center justify-between">
             <span className="text-gray-600 font-bold block text-[11px]">ਕੁੱਲ ਆਏ ਗੱਟੇ (Total Bags)</span>
-            {(search.trim() || cropFilter !== 'All' || farmerFilter !== 'All' || showOnlyDuplicates) && (
+            {(search.trim() || cropFilter !== 'All' || farmerFilter !== 'All' || showOnlyDuplicates || showOnlySukhiKiti) && (
               <span className="text-[10px] bg-amber-200 text-amber-950 px-1.5 py-0.2 rounded font-bold font-mono">
                 ਫਿਲਟਰ ਮੁਤਾਬਕ
               </span>
             )}
           </div>
           <div className="text-lg font-black font-mono text-amber-950 mt-0.5">
-            {(search.trim() || cropFilter !== 'All' || farmerFilter !== 'All' || showOnlyDuplicates ? filteredTotalBags : totalBagsCount).toLocaleString()} Bags
+            {(search.trim() || cropFilter !== 'All' || farmerFilter !== 'All' || showOnlyDuplicates || showOnlySukhiKiti ? filteredTotalBags : totalBagsCount).toLocaleString()} Bags
           </div>
         </div>
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
@@ -1599,6 +1604,21 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
                 <span>ਪ੍ਰਿੰਟ / PDF ਲਿਸਟ</span>
               </button>
 
+              {/* Only Sukhi Kiti Filter Toggle */}
+              <button
+                type="button"
+                onClick={() => setShowOnlySukhiKiti((prev) => !prev)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer border ${
+                  showOnlySukhiKiti
+                    ? 'bg-amber-500 text-stone-950 border-amber-600 shadow-xs ring-2 ring-amber-300'
+                    : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
+                }`}
+                title="ਸਿਰਫ਼ ਸੁਕੀ ਕੀਤੀ ਵਾਲੀਆਂ ਐਂਟਰੀਆਂ ਦੇਖੋ (Show only Sukhi Kiti bags)"
+              >
+                <Sun className={`w-3.5 h-3.5 ${showOnlySukhiKiti ? 'text-stone-950 animate-spin' : 'text-amber-600'}`} />
+                <span>{showOnlySukhiKiti ? 'ਸਾਰੀਆਂ ਆਵਕਾਂ' : `☀️ ਸਿਰਫ਼ ਸੁਕੀ ਕੀਤੀ (${sukhiKitiArrivalCount})`}</span>
+              </button>
+
               {/* Duplicate Filter Toggle */}
               {duplicateArrivalCount > 0 && (
                 <button
@@ -1636,6 +1656,7 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-gray-50 text-gray-700 font-bold border-b border-gray-200">
+                  <th className="py-3 px-2.5 text-center w-12 font-bold text-gray-700">ਲੜੀ ਨੰ. (#)</th>
                   <th className="py-3 px-3">ਪਰਚੀ ਨੰਬਰ / ਮਿਤੀ (Parchi No / Date)</th>
                   <th className="py-3 px-3">ਮੰਡੀ (Dana Mandi)</th>
                   <th className="py-3 px-3">ਕਿਸਾਨ ਤੇ ਪਿੰਡ (Farmer & Village)</th>
@@ -1652,12 +1673,12 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
               <tbody className="divide-y divide-gray-100">
                 {sortedAndFilteredEntries.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="py-12 text-center text-gray-400">
+                    <td colSpan={12} className="py-12 text-center text-gray-400">
                       ਕੋਈ ਆਵਕ ਰਿਕਾਰਡ ਨਹੀਂ ਮਿਲਿਆ। ਨਵੀਂ ਪਰਚੀ ਕੱਟਣ ਲਈ ਉੱਪਰ ਦਿੱਤੇ ਬਟਨ 'ਤੇ ਕਲਿੱਕ ਕਰੋ।
                     </td>
                   </tr>
                 ) : (
-                  sortedAndFilteredEntries.map((item) => {
+                  sortedAndFilteredEntries.map((item, idx) => {
                     const totBags = item.total_bags_arrived;
                     const newBags = item.new_jute_bags ?? Math.round(totBags / 2);
                     const oldBags = item.old_jute_bags ?? Math.floor(totBags / 2);
@@ -1675,6 +1696,10 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
                             : 'hover:bg-emerald-50/40'
                         }`}
                       >
+                        <td className="py-3 px-2.5 text-center font-mono font-bold text-gray-500 text-xs">
+                          {idx + 1}
+                        </td>
+
                         <td className="py-3 px-3 font-mono">
                           <div className="font-bold text-emerald-950 flex items-center gap-1">
                             <span className="text-[10px] bg-emerald-100 text-emerald-900 px-1 rounded font-semibold">ਪਰਚੀ</span>
@@ -1816,7 +1841,7 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
               </tbody>
               <tfoot className="bg-amber-100/90 font-bold border-t-2 border-amber-400 text-amber-950 text-xs">
                 <tr>
-                  <td colSpan={5} className="py-3 px-3 text-left">
+                  <td colSpan={6} className="py-3 px-3 text-left">
                     <div className="font-black text-amber-950 flex items-center gap-1.5 flex-wrap">
                       <Wheat className="w-4 h-4 text-amber-700" />
                       <span>ਕੁੱਲ ਜੋੜ (Filtered Total): {sortedAndFilteredEntries.length} ਆਵਕ ਪਰਚੀਆਂ</span>
@@ -3266,6 +3291,7 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
                                 <table className="w-full text-left text-xs border border-gray-200 rounded-lg overflow-hidden">
                                   <thead className="bg-blue-50 text-blue-950 font-bold text-[11px]">
                                     <tr>
+                                      <th className="p-2 w-8 text-center">#</th>
                                       <th className="p-2">ਮਿਤੀ (Date)</th>
                                       <th className="p-2">ਪਰਚੀ ਨੰਬਰ</th>
                                       <th className="p-2">ਟਰਾਲੀ / ਗੱਡੀ</th>
@@ -3275,8 +3301,9 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
                                     </tr>
                                   </thead>
                                   <tbody className="divide-y divide-gray-100">
-                                    {rec.arrivals.map((a) => (
+                                    {rec.arrivals.map((a, aIdx) => (
                                       <tr key={a.id} className="hover:bg-gray-50 text-[11px]">
+                                        <td className="p-2 font-mono text-center text-gray-400 font-bold">{aIdx + 1}</td>
                                         <td className="p-2 font-mono">{a.date.split('-').reverse().join('/')}</td>
                                         <td className="p-2 font-mono font-bold text-indigo-900">{a.parchi_no || '-'}</td>
                                         <td className="p-2 font-mono text-gray-700">{a.trolley_no || '-'}</td>
@@ -3304,6 +3331,7 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
                                 <table className="w-full text-left text-xs border border-gray-200 rounded-lg overflow-hidden">
                                   <thead className="bg-emerald-50 text-emerald-950 font-bold text-[11px]">
                                     <tr>
+                                      <th className="p-2 w-8 text-center">#</th>
                                       <th className="p-2">ਮਿਤੀ (Date)</th>
                                       <th className="p-2">ਸਰਕਾਰੀ ਏਜੰਸੀ</th>
                                       <th className="p-2">ਫਰਮ (Firm)</th>
@@ -3315,8 +3343,9 @@ export const CropArrivalModule: React.FC<CropArrivalModuleProps> = ({
                                     </tr>
                                   </thead>
                                   <tbody className="divide-y divide-gray-100">
-                                    {rec.purchases.map((p) => (
+                                    {rec.purchases.map((p, pIdx) => (
                                       <tr key={p.id} className="hover:bg-gray-50 text-[11px]">
+                                        <td className="p-2 font-mono text-center text-gray-400 font-bold">{pIdx + 1}</td>
                                         <td className="p-2 font-mono">{p.date.split('-').reverse().join('/')}</td>
                                         <td className="p-2 font-bold text-gray-900">{p.agency}</td>
                                         <td className="p-2 text-[10px] text-gray-600">{p.firm_name}</td>

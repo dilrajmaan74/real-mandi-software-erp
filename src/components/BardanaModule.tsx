@@ -307,6 +307,7 @@ export const BardanaModule: React.FC<BardanaModuleProps> = ({
         <table className="w-full text-left text-xs border-collapse">
           <thead>
             <tr className="bg-gray-50 text-gray-700 font-bold border-b border-gray-200">
+              <th className="py-3 px-3 text-center w-12 font-bold text-gray-700">ਲੜੀ ਨੰ. (#)</th>
               <th className="py-3 px-4">Date / Mandi</th>
               <th className="py-3 px-4">Transaction Type</th>
               <th className="py-3 px-4">Party / Agency / Sheller / Private</th>
@@ -322,12 +323,12 @@ export const BardanaModule: React.FC<BardanaModuleProps> = ({
           <tbody className="divide-y divide-gray-100">
             {filteredEntries.length === 0 ? (
               <tr>
-                <td colSpan={10} className="py-10 text-center text-gray-400 text-xs">
+                <td colSpan={11} className="py-10 text-center text-gray-400 text-xs">
                   ਕੋਈ ਬਾਰਦਾਨਾ ਐਂਟਰੀ ਨਹੀਂ ਮਿਲੀ।
                 </td>
               </tr>
             ) : (
-              filteredEntries.map((item) => {
+              filteredEntries.map((item, idx) => {
                 const isIncoming =
                   item.transaction_type === 'Received from Agency' ||
                   item.transaction_type === 'Received from Seller/Sheller' ||
@@ -341,6 +342,10 @@ export const BardanaModule: React.FC<BardanaModuleProps> = ({
 
                 return (
                   <tr key={item.id} className="hover:bg-orange-50/20 transition-colors">
+                    <td className="py-3 px-3 text-center font-mono font-bold text-gray-500 text-xs">
+                      {idx + 1}
+                    </td>
+
                     <td className="py-3 px-4 font-mono">
                       <div className="font-bold text-gray-900">{item.date}</div>
                       <div className="text-[10px] text-gray-500">{item.mandi_name || 'Mandi Kamalpur'}</div>

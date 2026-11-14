@@ -146,6 +146,7 @@ export const FarmerDirectory: React.FC<FarmerDirectoryProps> = ({
         <table className="w-full text-left text-xs border-collapse">
           <thead>
             <tr className="bg-gray-50 text-gray-700 font-bold border-b border-gray-200">
+              <th className="py-3 px-3 text-center w-12 font-bold text-gray-700">ਲੜੀ ਨੰ. (#)</th>
               <th className="py-3 px-4">Farmer ID</th>
               <th className="py-3 px-4">Farmer Name (English & ਪੰਜਾਬੀ)</th>
               <th className="py-3 px-4">Father / Husband</th>
@@ -159,18 +160,22 @@ export const FarmerDirectory: React.FC<FarmerDirectoryProps> = ({
           <tbody className="divide-y divide-gray-100">
             {filteredFarmers.length === 0 ? (
               <tr>
-                <td colSpan={8} className="py-12 text-center text-gray-400 text-xs">
+                <td colSpan={9} className="py-12 text-center text-gray-400 text-xs">
                   ਕੋਈ ਕਿਸਾਨ ਰਿਕਾਰਡ ਨਹੀਂ ਮਿਲਿਆ। ਨਵਾਂ ਕਿਸਾਨ ਜੋੜਨ ਲਈ ਉੱਪਰ ਦਿੱਤੇ ਬਟਨ ਤੇ ਕਲਿੱਕ ਕਰੋ।
                 </td>
               </tr>
             ) : (
-              filteredFarmers.map((farmer) => {
+              filteredFarmers.map((farmer, idx) => {
                 const isExpanded = expandedFarmerId === farmer.id;
                 const hasLinked = farmer.linked_farmers && farmer.linked_farmers.length > 0;
 
                 return (
                   <React.Fragment key={farmer.id}>
                     <tr className="hover:bg-emerald-50/40 transition-colors">
+                      <td className="py-3 px-3 text-center font-mono font-bold text-gray-500 text-xs">
+                        {idx + 1}
+                      </td>
+
                       <td className="py-3 px-4 font-mono font-bold text-gray-800">
                         {farmer.id}
                       </td>
@@ -270,7 +275,7 @@ export const FarmerDirectory: React.FC<FarmerDirectoryProps> = ({
                     {/* Expandable Multi Linked Farmers Row */}
                     {isExpanded && hasLinked && (
                       <tr className="bg-amber-50/60 border-y border-amber-200">
-                        <td colSpan={8} className="py-3 px-6">
+                        <td colSpan={9} className="py-3 px-6">
                           <div className="space-y-2">
                             <div className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
                               <Users className="w-4 h-4 text-amber-700" />
@@ -279,13 +284,16 @@ export const FarmerDirectory: React.FC<FarmerDirectoryProps> = ({
                               </span>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                              {farmer.linked_farmers.map((lf) => (
+                              {farmer.linked_farmers.map((lf, lfIdx) => (
                                 <div
                                   key={lf.id}
                                   className="bg-white border border-amber-200 rounded-lg p-2.5 shadow-2xs text-xs"
                                 >
                                   <div className="flex items-center justify-between">
-                                    <span className="font-bold text-gray-900">{lf.name_en}</span>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="font-mono text-[10px] font-bold text-gray-400 bg-gray-100 px-1 rounded">{lfIdx + 1}</span>
+                                      <span className="font-bold text-gray-900">{lf.name_en}</span>
+                                    </div>
                                     <span className="text-[10px] bg-amber-100 text-amber-900 font-semibold px-2 py-0.5 rounded">
                                       {lf.relation}
                                     </span>

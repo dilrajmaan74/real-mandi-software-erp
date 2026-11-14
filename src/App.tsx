@@ -23,6 +23,7 @@ import { PWAInstallModal, MandiOfflineIndicator } from './components/PWAInstallM
 import { DuplicateCleanerModal } from './components/DuplicateCleanerModal';
 import { DashboardModule } from './components/DashboardModule';
 import { FarmerLedgerModule } from './components/FarmerLedgerModule';
+import { MandiPaddyHisabApp } from './components/mandiPaddyHisab/MandiPaddyHisabApp';
 import { findDuplicateArrivals, findDuplicatePurchases, findDuplicateFarmers } from './lib/duplicates';
 import { 
   FarmerMaster, 
@@ -361,7 +362,10 @@ export const DEMO_IDS = new Set([
 ]);
 
 export default function App() {
-  // Active Module Navigation Tab
+  // Independent Software Switcher: Existing KisanMitra ERP vs Separate Mandi Paddy Hisab
+  const [softwareMode, setSoftwareMode] = useState<'kisanmitra' | 'paddy_hisab'>('kisanmitra');
+
+  // Active Module Navigation Tab (KisanMitra ERP)
   const [activeModule, setActiveModule] = useState<
     'dashboard' | 'farmers' | 'arrivals' | 'bardana' | 'agency' | 'lifting' | 'letterpad' | 'ai_assistant' | 'farmer_ledger'
   >('dashboard');
@@ -1260,7 +1264,10 @@ export default function App() {
         isSyncingCloud={isSyncingCloud}
         onSyncLaptopData={handleSyncLaptopData}
         hasLocalDataToUpload={hasLocalDataToUpload}
-        onOpenLetterPad={() => setActiveModule('letterpad')}
+        onOpenLetterPad={() => {
+          setSoftwareMode('kisanmitra');
+          setActiveModule('letterpad');
+        }}
         onOpenAuthTroubleshoot={() => setIsUnauthorizedDomainModalOpen(true)}
         onOpenPwaModal={() => setIsPwaModalOpen(true)}
         onOpenDuplicateCleaner={() => setIsDuplicateCleanerOpen(true)}
@@ -1269,6 +1276,50 @@ export default function App() {
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 print:p-0 print:m-0 print:max-w-none print:space-y-0">
+
+        {/* Top-Level Software Switcher (KisanMitra ERP vs Separate Mandi Paddy Hisab) */}
+        <div className="print:hidden bg-white border border-slate-200 rounded-xl p-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-xs">
+          <div className="flex items-center gap-2 px-2">
+            <span className="text-xs font-bold text-slate-700">
+              Software Module (ਸਾਫਟਵੇਅਰ ਚੁਣੋ):
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setSoftwareMode('kisanmitra')}
+              className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                softwareMode === 'kisanmitra'
+                  ? 'bg-emerald-900 text-white'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              <LayoutDashboard className="w-3.5 h-3.5" />
+              <span>KisanMitra ERP (ਮੌਜੂਦਾ ਮੰਡੀ ਸਾਫਟਵੇਅਰ)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSoftwareMode('paddy_hisab')}
+              className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                softwareMode === 'paddy_hisab'
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-amber-50 text-amber-950 border border-amber-300 hover:bg-amber-100'
+              }`}
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>Mandi Paddy Hisab (ਝੋਨਾ ਹਿਸਾਬ ਸਾਫਟਵੇਅਰ)</span>
+            </button>
+          </div>
+        </div>
+
+        {/* SEPARATE SOFTWARE MODULE: Mandi Paddy Hisab */}
+        {softwareMode === 'paddy_hisab' && (
+          <MandiPaddyHisabApp user={user} />
+        )}
+
+        {/* EXISTING SOFTWARE MODULE: KisanMitra ERP (Completely Preserved) */}
+        {softwareMode === 'kisanmitra' && (
+          <>
         
         {/* Device Sync Info & Laptop Data Migration Banner */}
         {user && hasLocalDataToUpload && (
@@ -1777,6 +1828,9 @@ export default function App() {
               <span>ਸਿਰਫ਼ ਡੈਮੋ ਡਾਟਾ ਸਾਫ਼ ਕਰੋ (Clear Demo Data)</span>
             </button>
           </div>
+        )}
+
+          </>
         )}
 
       </main>

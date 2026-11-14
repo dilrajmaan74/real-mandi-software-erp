@@ -118,6 +118,7 @@ export const RecentEntriesList: React.FC<RecentEntriesListProps> = ({
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-gray-50 text-gray-600 font-semibold border-b border-gray-200">
+                <th className="py-3 px-3 text-center w-12 font-bold text-gray-700">ਲੜੀ (#)</th>
                 <th className="py-3 px-4">Entry / Date</th>
                 <th className="py-3 px-4">Farmer & Village</th>
                 <th className="py-3 px-4">Crop & Bags</th>
@@ -128,7 +129,7 @@ export const RecentEntriesList: React.FC<RecentEntriesListProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filteredEntries.map((item) => {
+              {filteredEntries.map((item, idx) => {
                 const isSelected = item.id === selectedId;
                 const formattedDate = item.created_at
                   ? new Date(item.created_at).toLocaleDateString('en-IN', {
@@ -145,6 +146,10 @@ export const RecentEntriesList: React.FC<RecentEntriesListProps> = ({
                       isSelected ? 'bg-emerald-50/80 font-medium' : ''
                     }`}
                   >
+                    <td className="py-3 px-3 text-center font-mono font-bold text-gray-400 text-xs">
+                      {idx + 1}
+                    </td>
+
                     <td className="py-3 px-4">
                       <div className="font-mono font-bold text-gray-900">{item.id}</div>
                       <div className="text-[11px] text-gray-400">{formattedDate}</div>

@@ -718,6 +718,7 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
         <table className="w-full text-left text-xs border-collapse">
           <thead>
             <tr className="bg-gray-50 text-gray-700 font-bold border-b border-gray-200">
+              <th className="py-3 px-2.5 text-center w-12 font-bold text-gray-700">ਲੜੀ ਨੰ. (#)</th>
               <th className="py-3 px-3">ਚਲਾਨ ਨੰਬਰ / ਮਿਤੀ (DD/MM/YYYY)</th>
               <th className="py-3 px-3">ਆੜ੍ਹਤੀਆ ਫਰਮ</th>
               <th className="py-3 px-3">ਟਰੱਕ, ਫੋਟੋ ਤੇ ਡਰਾਈਵਰ</th>
@@ -732,18 +733,22 @@ export const LiftingDispatchModule: React.FC<LiftingDispatchModuleProps> = ({
           <tbody className="divide-y divide-gray-100">
             {filteredEntries.length === 0 ? (
               <tr>
-                <td colSpan={9} className="py-10 text-center text-gray-400 text-xs">
+                <td colSpan={10} className="py-10 text-center text-gray-400 text-xs">
                   ਕੋਈ ਲਿਫਟਿੰਗ ਐਂਟਰੀ ਨਹੀਂ ਮਿਲੀ। ਫਿਲਟਰ ਬਦਲੋ ਜਾਂ ਨਵਾਂ ਟਰੱਕ ਗੇਟ ਪਾਸ ਕੱਟੋ।
                 </td>
               </tr>
             ) : (
-              filteredEntries.map((item) => {
+              filteredEntries.map((item, idx) => {
                 const isDelivered = item.delivery_status === 'Delivered';
                 const hasShortage = (item.shortage_bags || 0) > 0 || (item.rejected_bags || 0) > 0;
                 const calcQtl = item.weight_quintals || Number((item.bags_lifted * 0.375).toFixed(2));
 
                 return (
                   <tr key={item.id} className="hover:bg-purple-50/20 transition-colors">
+                    <td className="py-3 px-2.5 text-center font-mono font-bold text-gray-500 text-xs">
+                      {idx + 1}
+                    </td>
+
                     <td className="py-3 px-3 font-mono">
                       <button
                         type="button"

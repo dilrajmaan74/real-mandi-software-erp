@@ -38,7 +38,9 @@ import {
   Check,
   Download,
   Image as ImageIcon,
-  Loader2
+  Loader2,
+  Sun,
+  Edit3
 } from 'lucide-react';
 import { toJpeg, toPng } from 'html-to-image';
 import jsPDF from 'jspdf';
@@ -55,6 +57,7 @@ interface FarmerLedgerModuleProps {
   currentMandi: string;
   selectedFarmerIdProp?: string | null;
   onSelectFarmer?: (farmerId: string) => void;
+  onUpdateArrival?: (entry: CropArrivalEntry) => void;
 }
 
 interface FarmerAdjustments {
@@ -82,6 +85,7 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
   currentMandi,
   selectedFarmerIdProp,
   onSelectFarmer,
+  onUpdateArrival,
 }) => {
   const [search, setSearch] = useState('');
   const [selectedFarmerId, setSelectedFarmerId] = useState<string>(
@@ -123,6 +127,93 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
   const [newEntryDirection, setNewEntryDirection] = useState<'debit' | 'credit'>('debit');
   const [newEntryMode, setNewEntryMode] = useState<FarmerLedgerEntry['payment_mode']>('Cash (ਨਕਦ)');
   const [newEntryNotes, setNewEntryNotes] = useState('');
+
+  // Arrival Edit Modal inside Statement
+  const [editingArrival, setEditingArrival] = useState<CropArrivalEntry | null>(null);
+  const [editDate, setEditDate] = useState('');
+  const [editParchiNo, setEditParchiNo] = useState('');
+  const [editVehicle, setEditVehicle] = useState('');
+  const [editVariety, setEditVariety] = useState('PR-126');
+  const [editNewBags, setEditNewBags] = useState<number>(0);
+  const [editOldBags, setEditOldBags] = useState<number>(0);
+  const [editPacking, setEditPacking] = useState<number>(37.5);
+  const [editLooseKg, setEditLooseKg] = useState<number>(0);
+  const [editWeightQtl, setEditWeightQtl] = useState<number>(0);
+  const [editMoisture, setEditMoisture] = useState<number>(17);
+  const [editLaborRate, setEditLaborRate] = useState<number>(8);
+  const [editEnableSukhi, setEditEnableSukhi] = useState<boolean>(false);
+  const [editSukhiRate, setEditSukhiRate] = useState<number>(5);
+  const [editEnablePakha, setEditEnablePakha] = useState<boolean>(false);
+  const [editPakhaRate, setEditPakhaRate] = useState<number>(4);
+
+  const openEditArrivalModal = (a: CropArrivalEntry) => {
+    setEditingArrival(a);
+    setEditDate(a.date || new Date().toISOString().split('T')[0]);
+    setEditParchiNo(a.parchi_no || a.gate_pass_no || '');
+    setEditVehicle(a.vehicle_trolley_no || '');
+    setEditVariety(a.crop_variety || a.crop_type || 'PR-126');
+    const totBags = Number(a.total_bags_arrived) || 0;
+    const newB = a.new_jute_bags !== undefined ? Number(a.new_jute_bags) : Math.round(totBags / 2);
+    const oldB = a.old_jute_bags !== undefined ? Number(a.old_jute_bags) : Math.floor(totBags / 2);
+    setEditNewBags(newB);
+    setEditOldBags(oldB);
+    const pack = Number(a.bag_packing_kg) || 37.5;
+    setEditPacking(pack);
+    const loose = Number(a.loose_weight_kg) || 0;
+    setEditLooseKg(loose);
+    setEditWeightQtl(Number(a.weight_quintals) || Number((((totBags * pack) + loose) / 100).toFixed(2)));
+    setEditMoisture(Number(a.moisture_percentage) || 17);
+    setEditLaborRate(Number(a.labor_rate) ?? 8);
+    const hasSukhi = (Number(a.sukhi_kiti_total) || 0) > 0 || (Number(a.sukhi_kiti_rate) || 0) > 0;
+    setEditEnableSukhi(hasSukhi);
+    setEditSukhiRate(Number(a.sukhi_kiti_rate) || 5);
+    const hasPakha = (Number(a.double_pakha_total) || 0) > 0 || (Number(a.double_pakha_rate) || 0) > 0;
+    setEditEnablePakha(hasPakha);
+    setEditPakhaRate(Number(a.double_pakha_rate) || 4);
+  };
+
+  const handleUpdateEditWeight = (nb: number, ob: number, packing: number, looseKg: number) => {
+    const tot = nb + ob;
+    const calcWeight = Number((((tot * packing) + looseKg) / 100).toFixed(2));
+    setEditWeightQtl(calcWeight);
+  };
+
+  const handleSaveArrivalEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingArrival || !onUpdateArrival) return;
+    const totBags = Number(editNewBags || 0) + Number(editOldBags || 0);
+    const lRate = Number(editLaborRate) >= 0 ? Number(editLaborRate) : 8;
+    const sRate = editEnableSukhi ? (Number(editSukhiRate) || 5) : 0;
+    const pRate = editEnablePakha ? (Number(editPakhaRate) || 4) : 0;
+    const lTotal = Number((totBags * lRate).toFixed(2));
+    const sTotal = Number((totBags * sRate).toFixed(2));
+    const pTotal = Number((totBags * pRate).toFixed(2));
+    const totalDeductions = Number((lTotal + sTotal + pTotal).toFixed(2));
+
+    const updated: CropArrivalEntry = {
+      ...editingArrival,
+      date: editDate,
+      parchi_no: editParchiNo,
+      vehicle_trolley_no: editVehicle,
+      crop_variety: editVariety,
+      new_jute_bags: editNewBags,
+      old_jute_bags: editOldBags,
+      total_bags_arrived: totBags,
+      bag_packing_kg: editPacking,
+      loose_weight_kg: editLooseKg,
+      weight_quintals: editWeightQtl,
+      moisture_percentage: editMoisture,
+      labor_rate: lRate,
+      labor_total: lTotal,
+      sukhi_kiti_rate: sRate,
+      sukhi_kiti_total: sTotal,
+      double_pakha_rate: pRate,
+      double_pakha_total: pTotal,
+      total_labor_deductions: totalDeductions,
+    };
+    onUpdateArrival(updated);
+    setEditingArrival(null);
+  };
 
   // Comprehensive Phone Number Cleaning (extracts last 10 digits)
   const cleanPhone = (phone?: string) => {
@@ -686,16 +777,27 @@ export const FarmerLedgerModule: React.FC<FarmerLedgerModuleProps> = ({
     return totalFarmerBags * (Number(adjustments.palledariRate) || 8);
   }, [adjustments.customPalledariAmount, adjustments.palledariRate, farmerArrivals, farmerPurchases, totalFarmerBags]);
 
-  // 2. Sukhi Kiti: If enabled, bags × ₹5 or custom
+  // Count of bags dried across this farmer's arrivals
+  const farmerArrivalSukhiBags = useMemo(() => {
+    return farmerArrivals
+      .filter((a) => (Number(a.sukhi_kiti_total) || 0) > 0 || (Number(a.sukhi_kiti_rate) || 0) > 0)
+      .reduce((sum, a) => sum + (Number(a.total_bags_arrived) || (Number(a.new_jute_bags || 0) + Number(a.old_jute_bags || 0))), 0);
+  }, [farmerArrivals]);
+
+  // 2. Sukhi Kiti: If enabled, bags × rate or custom
   const totalSukhiKiti = useMemo(() => {
     if (!adjustments.enableSukhiKiti) return 0;
-    if (adjustments.customSukhiKitiAmount !== undefined) {
+    if (adjustments.customSukhiKitiAmount !== undefined && adjustments.customSukhiKitiAmount !== null) {
       return Number(adjustments.customSukhiKitiAmount) || 0;
+    }
+    const rate = Number(adjustments.sukhiKitiRate) >= 0 ? Number(adjustments.sukhiKitiRate) : 5;
+    if (farmerArrivalSukhiBags > 0) {
+      return farmerArrivalSukhiBags * rate;
     }
     const fromArrivals = farmerArrivals.reduce((s, a) => s + (Number(a.sukhi_kiti_total) || 0), 0);
     if (fromArrivals > 0) return fromArrivals;
-    return totalFarmerBags * (Number(adjustments.sukhiKitiRate) || 5);
-  }, [adjustments.enableSukhiKiti, adjustments.customSukhiKitiAmount, adjustments.sukhiKitiRate, farmerArrivals, totalFarmerBags]);
+    return totalFarmerBags * rate;
+  }, [adjustments.enableSukhiKiti, adjustments.customSukhiKitiAmount, adjustments.sukhiKitiRate, farmerArrivals, farmerArrivalSukhiBags, totalFarmerBags]);
 
   // 3. Double Pakha: If enabled, bags × ₹4 or custom
   const totalDoublePakha = useMemo(() => {
@@ -1102,7 +1204,7 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
               {filteredFarmers.length === 0 ? (
                 <div className="p-4 text-center text-xs text-gray-500">ਕੋਈ ਕਿਸਾਨ ਨਹੀਂ ਮਿਲਿਆ।</div>
               ) : (
-                filteredFarmers.map((f) => {
+                filteredFarmers.map((f, idx) => {
                   const isSelected = f.id === currentFarmer?.id || 
                     (currentFarmer && normalizeCleanStr(f.name_en) === normalizeCleanStr(currentFarmer.name_en));
 
@@ -1129,11 +1231,23 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
                           : 'hover:bg-gray-100 text-gray-800'
                       }`}
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-xs truncate">
-                          {f.name_en} {f.name_pa && `(${f.name_pa})`}
-                        </span>
-                        <ChevronRight className={`w-3.5 h-3.5 ${isSelected ? 'text-amber-300' : 'text-gray-400'}`} />
+                      <div className="flex items-center justify-between gap-1.5">
+                        <div className="flex items-center gap-1.5 truncate">
+                          <span
+                            className={`inline-flex items-center justify-center min-w-5 h-5 px-1 rounded-md font-mono text-[10px] font-bold shrink-0 ${
+                              isSelected
+                                ? 'bg-amber-400 text-emerald-950 font-black'
+                                : 'bg-gray-200 text-gray-700 font-semibold'
+                            }`}
+                            title={`ਲੜੀ ਨੰਬਰ ${idx + 1}`}
+                          >
+                            {idx + 1}
+                          </span>
+                          <span className="font-bold text-xs truncate">
+                            {f.name_en} {f.name_pa && `(${f.name_pa})`}
+                          </span>
+                        </div>
+                        <ChevronRight className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-amber-300' : 'text-gray-400'}`} />
                       </div>
                       <div className="flex items-center justify-between text-[11px] mt-1 opacity-85">
                         <span className="truncate flex items-center gap-1">
@@ -1430,11 +1544,27 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
                       </div>
 
                       {/* 1. Palledari */}
-                      <div className="flex items-center justify-between text-[11px] pt-1 border-t border-rose-100">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-gray-700">ਪੱਲੇਦਾਰੀ ਲੇਬਰ (@ ₹{adjustments.palledariRate}/ਗੱਟਾ):</span>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] pt-1.5 pb-1 border-t border-rose-100 gap-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-gray-800 font-bold">ਪੱਲੇਦਾਰੀ ਲੇਬਰ:</span>
+                          <div className="flex items-center gap-1 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                            <span className="text-[10px] text-rose-950 font-bold">ਰੇਟ: ₹</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.5"
+                              value={adjustments.palledariRate ?? 8}
+                              onChange={(e) => {
+                                const r = Number(e.target.value) || 0;
+                                updateAdjustment({ palledariRate: r, customPalledariAmount: undefined });
+                              }}
+                              className="w-12 px-1 py-0.5 text-xs font-black text-center bg-white border border-rose-300 rounded focus:outline-none"
+                              title="ਇਸ ਕਿਸਾਨ ਲਈ ਪੱਲੇਦਾਰੀ ਰੇਟ ਬਦਲੋ"
+                            />
+                            <span className="text-[10px] text-rose-950 font-bold">/ਗੱਟਾ</span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 self-end sm:self-auto">
                           <span className="text-gray-400 font-mono text-[10px] hidden sm:inline">
                             {totalFarmerBags} × ₹{adjustments.palledariRate} =
                           </span>
@@ -1444,33 +1574,88 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
                         </div>
                       </div>
 
-                      {/* 2. Sukhi Kiti Toggle */}
-                      <div className="flex items-center justify-between text-[11px] pt-1 border-t border-rose-100">
-                        <label className="flex items-center gap-1.5 cursor-pointer text-gray-700">
-                          <input
-                            type="checkbox"
-                            checked={adjustments.enableSukhiKiti}
-                            onChange={(e) => updateAdjustment({ enableSukhiKiti: e.target.checked })}
-                            className="w-3.5 h-3.5 text-rose-600 rounded cursor-pointer"
-                          />
-                          <span>ਸੁੱਕੀ ਕੀਤੀ ਲੇਬਰ (@ ₹{adjustments.sukhiKitiRate}):</span>
-                        </label>
-                        <span className={`font-mono font-bold ${adjustments.enableSukhiKiti ? 'text-rose-700' : 'text-gray-400'}`}>
-                          -₹{totalSukhiKiti.toLocaleString('en-IN')}
-                        </span>
+                      {/* 2. Sukhi Kiti Toggle & Per-Farmer Rate */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] pt-1.5 pb-1 border-t border-rose-100 gap-1 bg-amber-50/50 p-1.5 rounded-lg">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <label className="flex items-center gap-1.5 cursor-pointer text-gray-800 font-bold">
+                            <input
+                              type="checkbox"
+                              checked={adjustments.enableSukhiKiti}
+                              onChange={(e) => updateAdjustment({ enableSukhiKiti: e.target.checked })}
+                              className="w-3.5 h-3.5 text-rose-600 rounded cursor-pointer"
+                            />
+                            <span className="flex items-center gap-1">
+                              <Sun className="w-3.5 h-3.5 text-amber-600" />
+                              <span>ਸੁੱਕੀ ਕੀਤੀ (ਸੁਕਾਈ ਕਟੌਤੀ):</span>
+                            </span>
+                          </label>
+                          {adjustments.enableSukhiKiti && (
+                            <div className="flex items-center gap-1 bg-white px-2 py-0.5 rounded border border-amber-300 shadow-2xs">
+                              <span className="text-[10px] text-amber-950 font-bold">ਰੇਟ: ₹</span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.5"
+                                value={adjustments.sukhiKitiRate ?? 5}
+                                onChange={(e) => {
+                                  const r = Number(e.target.value) || 0;
+                                  updateAdjustment({ sukhiKitiRate: r, customSukhiKitiAmount: undefined });
+                                }}
+                                className="w-12 px-1 py-0.5 text-xs font-black text-center bg-amber-50 border border-amber-400 rounded focus:outline-none"
+                                title="ਇਸ ਕਿਸਾਨ ਲਈ ਸੁਕੀ ਕੀਤੀ ਦਾ ਵੱਖਰਾ ਰੇਟ ਰੱਖੋ"
+                              />
+                              <span className="text-[10px] text-amber-950 font-bold">/ਗੱਟਾ</span>
+                            </div>
+                          )}
+                          {farmerArrivalSukhiBags > 0 && (
+                            <span className="text-[10px] bg-amber-200 text-amber-950 px-2 py-0.5 rounded-full font-bold font-mono">
+                              {farmerArrivalSukhiBags} ਗੱਟੇ ਸੁਕਾਏ
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 self-end sm:self-auto">
+                          {adjustments.enableSukhiKiti && (
+                            <span className="text-gray-400 font-mono text-[10px] hidden sm:inline">
+                              {(farmerArrivalSukhiBags > 0 ? farmerArrivalSukhiBags : totalFarmerBags)} × ₹{adjustments.sukhiKitiRate} =
+                            </span>
+                          )}
+                          <span className={`font-mono font-bold ${adjustments.enableSukhiKiti ? 'text-rose-700 font-black' : 'text-gray-400'}`}>
+                            -₹{totalSukhiKiti.toLocaleString('en-IN')}
+                          </span>
+                        </div>
                       </div>
 
-                      {/* 3. Double Pakha Toggle */}
-                      <div className="flex items-center justify-between text-[11px] pt-1 border-t border-rose-100">
-                        <label className="flex items-center gap-1.5 cursor-pointer text-gray-700">
-                          <input
-                            type="checkbox"
-                            checked={adjustments.enableDoublePakha}
-                            onChange={(e) => updateAdjustment({ enableDoublePakha: e.target.checked })}
-                            className="w-3.5 h-3.5 text-rose-600 rounded cursor-pointer"
-                          />
-                          <span>ਡਬਲ ਪੱਖਾ ਖਰਚਾ (@ ₹{adjustments.doublePakhaRate}):</span>
-                        </label>
+                      {/* 3. Double Pakha Toggle & Per-Farmer Rate */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] pt-1.5 pb-1 border-t border-rose-100 gap-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <label className="flex items-center gap-1.5 cursor-pointer text-gray-800 font-bold">
+                            <input
+                              type="checkbox"
+                              checked={adjustments.enableDoublePakha}
+                              onChange={(e) => updateAdjustment({ enableDoublePakha: e.target.checked })}
+                              className="w-3.5 h-3.5 text-rose-600 rounded cursor-pointer"
+                            />
+                            <span>ਡਬਲ ਪੱਖਾ ਖਰਚਾ:</span>
+                          </label>
+                          {adjustments.enableDoublePakha && (
+                            <div className="flex items-center gap-1 bg-amber-50 px-2 py-0.5 rounded border border-amber-300">
+                              <span className="text-[10px] text-amber-950 font-bold">ਰੇਟ: ₹</span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.5"
+                                value={adjustments.doublePakhaRate ?? 4}
+                                onChange={(e) => {
+                                  const r = Number(e.target.value) || 0;
+                                  updateAdjustment({ doublePakhaRate: r, customDoublePakhaAmount: undefined });
+                                }}
+                                className="w-12 px-1 py-0.5 text-xs font-black text-center bg-white border border-amber-400 rounded focus:outline-none"
+                                title="ਇਸ ਕਿਸਾਨ ਲਈ ਡਬਲ ਪੱਖਾ ਰੇਟ ਬਦਲੋ"
+                              />
+                              <span className="text-[10px] text-amber-950 font-bold">/ਗੱਟਾ</span>
+                            </div>
+                          )}
+                        </div>
                         <span className={`font-mono font-bold ${adjustments.enableDoublePakha ? 'text-rose-700' : 'text-gray-400'}`}>
                           -₹{totalDoublePakha.toLocaleString('en-IN')}
                         </span>
@@ -2013,6 +2198,7 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
                       <table className="w-full text-left text-xs">
                         <thead className="bg-gray-50 text-gray-600 font-bold border-y border-gray-200">
                           <tr>
+                            <th className="py-2.5 px-2 text-center w-10">#</th>
                             <th className="py-2.5 px-3">ਤਾਰੀਖ</th>
                             <th className="py-2.5 px-3">ਏਜੰਸੀ</th>
                             <th className="py-2.5 px-3">ਫਰਮ</th>
@@ -2025,8 +2211,9 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                          {farmerPurchases.map((p) => (
+                          {farmerPurchases.map((p, pIdx) => (
                             <tr key={p.id} className="hover:bg-gray-50">
+                              <td className="py-2.5 px-2 font-mono text-center text-gray-400 font-bold">{pIdx + 1}</td>
                               <td className="py-2.5 px-3 font-mono font-medium">{formatDmy(p.date)}</td>
                               <td className="py-2.5 px-3 font-bold text-blue-900">{p.purchasing_agency}</td>
                               <td className="py-2.5 px-3 text-gray-700">{p.firm_name}</td>
@@ -2060,6 +2247,7 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
                       <table className="w-full text-left text-xs">
                         <thead className="bg-gray-50 text-gray-600 font-bold border-y border-gray-200">
                           <tr>
+                            <th className="py-2.5 px-2 text-center w-10">#</th>
                             <th className="py-2.5 px-3">ਤਾਰੀਖ</th>
                             <th className="py-2.5 px-3">ਪਰਚੀ ਨੰਬਰ</th>
                             <th className="py-2.5 px-3">ਟਰਾਲੀ / ਵਾਹਨ</th>
@@ -2071,8 +2259,9 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                          {farmerArrivals.map((a) => (
+                          {farmerArrivals.map((a, aIdx) => (
                             <tr key={a.id} className="hover:bg-gray-50">
+                              <td className="py-2.5 px-2 font-mono text-center text-gray-400 font-bold">{aIdx + 1}</td>
                               <td className="py-2.5 px-3 font-mono font-medium">{formatDmy(a.date)}</td>
                               <td className="py-2.5 px-3 font-mono font-bold text-amber-800">{a.parchi_no || a.gate_pass_no}</td>
                               <td className="py-2.5 px-3 font-medium">{a.vehicle_trolley_no || 'ਟਰਾਲੀ'}</td>
@@ -2110,6 +2299,7 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
                       <table className="w-full text-left text-xs">
                         <thead className="bg-gray-50 text-gray-600 font-bold border-y border-gray-200">
                           <tr>
+                            <th className="py-2.5 px-2 text-center w-10">#</th>
                             <th className="py-2.5 px-3">ਤਾਰੀਖ</th>
                             <th className="py-2.5 px-3">ਲੈਣ-ਦੇਣ ਦੀ ਕਿਸਮ</th>
                             <th className="py-2.5 px-3">ਕਿਸਾਨ ਨੇ ਲਏ (Debit -)</th>
@@ -2120,8 +2310,9 @@ ${totalPreviousKhata > 0 ? `*ਪੁਰਾਣਾ ਖਾਤਾ:* -₹${totalPrevio
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                          {farmerCustomEntries.map((e) => (
+                          {farmerCustomEntries.map((e, eIdx) => (
                             <tr key={e.id} className="hover:bg-gray-50">
+                              <td className="py-2.5 px-2 font-mono text-center text-gray-400 font-bold">{eIdx + 1}</td>
                               <td className="py-2.5 px-3 font-mono font-medium">{formatDmy(e.date)}</td>
                               <td className="py-2.5 px-3 font-bold text-gray-900">{e.transaction_type}</td>
                               <td className="py-2.5 px-3 font-mono font-bold text-rose-700">

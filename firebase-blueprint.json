@@ -151,6 +151,104 @@
         "synced_to_sheets": { "type": "boolean" }
       },
       "required": ["id", "date_time", "truck_number", "bags_lifted", "challan_no"]
+    },
+    "MphFarmer": {
+      "title": "Mandi Paddy Hisab Farmer",
+      "description": "Farmer master record for the separate Mandi Paddy Hisab module",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 160 },
+        "fatherName": { "type": "string", "maxLength": 160 },
+        "village": { "type": "string", "maxLength": 160 },
+        "mobile": { "type": "string", "maxLength": 20 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "ownerId", "name", "fatherName", "village", "mobile", "createdAt", "updatedAt"]
+    },
+    "MphArrival": {
+      "title": "Mandi Paddy Hisab Arrival",
+      "description": "Date-wise paddy arrival entry with separate bags and loose kg/gm weight",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "farmerId": { "type": "string", "maxLength": 128 },
+        "farmerName": { "type": "string", "maxLength": 160 },
+        "date": { "type": "string", "maxLength": 32 },
+        "paddyType": { "type": "string", "enum": ["Hybrid Paddy", "Paddy A Gurde"] },
+        "ratePerQuintal": { "type": "number" },
+        "bags": { "type": "number" },
+        "looseKg": { "type": "number" },
+        "looseGm": { "type": "number" },
+        "totalQuintals": { "type": "number" },
+        "weightQtlPart": { "type": "number" },
+        "weightKgPart": { "type": "number" },
+        "weightGmPart": { "type": "number" },
+        "paddyAmount": { "type": "number" },
+        "applyDryingLabor": { "type": "boolean" },
+        "notes": { "type": "string", "maxLength": 400 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "ownerId", "farmerId", "farmerName", "date", "paddyType", "ratePerQuintal", "bags", "looseKg", "looseGm", "totalQuintals", "paddyAmount", "applyDryingLabor", "createdAt", "updatedAt"]
+    },
+    "MphJForm": {
+      "title": "Mandi Paddy Hisab J-Form",
+      "description": "Date-wise J-Form entry kept separate from paddy arrival amounts, supporting multi-farmer/family/partner J-Form holders",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "farmerId": { "type": "string", "maxLength": 128 },
+        "farmerName": { "type": "string", "maxLength": 160 },
+        "jFormHolderName": { "type": "string", "maxLength": 160 },
+        "holderRelation": { "type": "string", "maxLength": 64 },
+        "date": { "type": "string", "maxLength": 32 },
+        "jFormNo": { "type": "string", "maxLength": 64 },
+        "bags": { "type": "number" },
+        "rate": { "type": "number" },
+        "jFormAmount": { "type": "number" },
+        "notes": { "type": "string", "maxLength": 400 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "ownerId", "farmerId", "farmerName", "jFormHolderName", "holderRelation", "date", "bags", "rate", "jFormAmount", "createdAt", "updatedAt"]
+    },
+    "MphOtherEntry": {
+      "title": "Mandi Paddy Hisab Other Expense or Payment",
+      "description": "Additional farmer expenses or payments (+/-) for final account settlement",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "farmerId": { "type": "string", "maxLength": 128 },
+        "farmerName": { "type": "string", "maxLength": 160 },
+        "date": { "type": "string", "maxLength": 32 },
+        "entryType": { "type": "string", "enum": ["add", "deduct"] },
+        "description": { "type": "string", "maxLength": 300 },
+        "amount": { "type": "number" },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "ownerId", "farmerId", "farmerName", "date", "entryType", "description", "amount", "createdAt", "updatedAt"]
+    },
+    "MphSettings": {
+      "title": "Mandi Paddy Hisab Settings",
+      "description": "Default paddy and labour rates for Mandi Paddy Hisab module",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "hybridPaddyRate": { "type": "number" },
+        "paddyAGurdeRate": { "type": "number" },
+        "jFormLaborRate": { "type": "number" },
+        "paddyDryingLaborRate": { "type": "number" },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "ownerId", "hybridPaddyRate", "paddyAGurdeRate", "jFormLaborRate", "paddyDryingLaborRate", "updatedAt"]
     }
   },
   "firestore": {
@@ -177,6 +275,26 @@
     "/users/{userId}/lifting_dispatches/{dispatchId}": {
       "schema": "LiftingDispatchEntry",
       "description": "Lifting and truck dispatch records registered by this user account"
+    },
+    "/users/{userId}/mph_farmers/{farmerId}": {
+      "schema": "MphFarmer",
+      "description": "Farmers for separate Mandi Paddy Hisab module"
+    },
+    "/users/{userId}/mph_arrivals/{arrivalId}": {
+      "schema": "MphArrival",
+      "description": "Paddy arrival entries for separate Mandi Paddy Hisab module"
+    },
+    "/users/{userId}/mph_jforms/{jformId}": {
+      "schema": "MphJForm",
+      "description": "J-Form entries for separate Mandi Paddy Hisab module"
+    },
+    "/users/{userId}/mph_other_entries/{entryId}": {
+      "schema": "MphOtherEntry",
+      "description": "Other expenses and payments for separate Mandi Paddy Hisab module"
+    },
+    "/users/{userId}/mph_settings/{settingId}": {
+      "schema": "MphSettings",
+      "description": "Settings and rates for separate Mandi Paddy Hisab module"
     }
   }
 }

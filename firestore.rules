@@ -12,6 +12,10 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
@@ -20,38 +24,247 @@ service cloud.firestore {
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Mandi Paddy Hisab (MPH) Validators
+    function isValidMphFarmer(data, userId, farmerId) {
+      return data.keys().hasAll(['id', 'ownerId', 'name', 'fatherName', 'village', 'mobile', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'ownerId', 'name', 'fatherName', 'village', 'mobile', 'createdAt', 'updatedAt'])
+        && data.id == farmerId
+        && data.ownerId == userId
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 160
+        && data.fatherName is string && data.fatherName.size() <= 160
+        && data.village is string && data.village.size() <= 160
+        && data.mobile is string && data.mobile.size() <= 20
+        && data.createdAt is string && data.createdAt.size() <= 64
+        && data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
+    function isValidMphArrival(data, userId, arrivalId) {
+      return data.keys().hasAll([
+          'id', 'ownerId', 'farmerId', 'farmerName', 'date', 'paddyType',
+          'ratePerQuintal', 'bags', 'looseKg', 'looseGm', 'totalQuintals',
+          'weightQtlPart', 'weightKgPart', 'weightGmPart', 'paddyAmount',
+          'applyDryingLabor', 'notes', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'ownerId', 'farmerId', 'farmerName', 'date', 'paddyType',
+          'ratePerQuintal', 'bags', 'looseKg', 'looseGm', 'totalQuintals',
+          'weightQtlPart', 'weightKgPart', 'weightGmPart', 'paddyAmount',
+          'applyDryingLabor', 'notes', 'createdAt', 'updatedAt'
+        ])
+        && data.id == arrivalId
+        && data.ownerId == userId
+        && isValidId(data.farmerId)
+        && data.farmerName is string && data.farmerName.size() >= 1 && data.farmerName.size() <= 160
+        && data.date is string && data.date.size() >= 8 && data.date.size() <= 32
+        && data.paddyType in ['Hybrid Paddy', 'Paddy A Gurde']
+        && data.ratePerQuintal is number && data.ratePerQuintal >= 0
+        && data.bags is number && data.bags >= 0
+        && data.looseKg is number && data.looseKg >= 0
+        && data.looseGm is number && data.looseGm >= 0 && data.looseGm < 1000
+        && data.totalQuintals is number && data.totalQuintals >= 0
+        && data.weightQtlPart is number && data.weightQtlPart >= 0
+        && data.weightKgPart is number && data.weightKgPart >= 0 && data.weightKgPart < 100
+        && data.weightGmPart is number && data.weightGmPart >= 0 && data.weightGmPart < 1000
+        && data.paddyAmount is number && data.paddyAmount >= 0
+        && data.applyDryingLabor is bool
+        && data.notes is string && data.notes.size() <= 400
+        && data.createdAt is string && data.createdAt.size() <= 64
+        && data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
+    function isValidMphJForm(data, userId, jformId) {
+      return data.keys().hasAll([
+          'id', 'ownerId', 'farmerId', 'farmerName', 'jFormHolderName', 'holderRelation',
+          'date', 'jFormNo', 'bags', 'rate', 'jFormAmount', 'notes', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'ownerId', 'farmerId', 'farmerName', 'jFormHolderName', 'holderRelation',
+          'date', 'jFormNo', 'bags', 'rate', 'jFormAmount', 'notes', 'createdAt', 'updatedAt'
+        ])
+        && data.id == jformId
+        && data.ownerId == userId
+        && isValidId(data.farmerId)
+        && data.farmerName is string && data.farmerName.size() >= 1 && data.farmerName.size() <= 160
+        && data.jFormHolderName is string && data.jFormHolderName.size() >= 1 && data.jFormHolderName.size() <= 160
+        && data.holderRelation is string && data.holderRelation.size() >= 1 && data.holderRelation.size() <= 64
+        && data.date is string && data.date.size() >= 8 && data.date.size() <= 32
+        && data.jFormNo is string && data.jFormNo.size() <= 64
+        && data.bags is number && data.bags >= 0
+        && data.rate is number && data.rate >= 0
+        && data.jFormAmount is number && data.jFormAmount >= 0
+        && data.notes is string && data.notes.size() <= 400
+        && data.createdAt is string && data.createdAt.size() <= 64
+        && data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
+    function isValidMphOtherEntry(data, userId, entryId) {
+      return data.keys().hasAll([
+          'id', 'ownerId', 'farmerId', 'farmerName', 'date', 'entryType',
+          'description', 'amount', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'ownerId', 'farmerId', 'farmerName', 'date', 'entryType',
+          'description', 'amount', 'createdAt', 'updatedAt'
+        ])
+        && data.id == entryId
+        && data.ownerId == userId
+        && isValidId(data.farmerId)
+        && data.farmerName is string && data.farmerName.size() >= 1 && data.farmerName.size() <= 160
+        && data.date is string && data.date.size() >= 8 && data.date.size() <= 32
+        && data.entryType in ['add', 'deduct']
+        && data.description is string && data.description.size() >= 1 && data.description.size() <= 300
+        && data.amount is number && data.amount >= 0
+        && data.createdAt is string && data.createdAt.size() <= 64
+        && data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
+    function isValidMphSettings(data, userId, settingId) {
+      return data.keys().hasAll([
+          'id', 'ownerId', 'hybridPaddyRate', 'paddyAGurdeRate',
+          'jFormLaborRate', 'paddyDryingLaborRate', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'ownerId', 'hybridPaddyRate', 'paddyAGurdeRate',
+          'jFormLaborRate', 'paddyDryingLaborRate', 'updatedAt'
+        ])
+        && data.id == settingId
+        && data.ownerId == userId
+        && data.hybridPaddyRate is number && data.hybridPaddyRate >= 0
+        && data.paddyAGurdeRate is number && data.paddyAGurdeRate >= 0
+        && data.jFormLaborRate is number && data.jFormLaborRate >= 0
+        && data.paddyDryingLaborRate is number && data.paddyDryingLaborRate >= 0
+        && data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
     // User profile and Master Google Sheet config
     match /users/{userId} {
       allow read, write: if isOwner(userId) && isValidId(userId);
 
-      // Farmers Master subcollection
+      // Farmers Master subcollection (Existing Software)
       match /farmers/{farmerId} {
         allow read, write: if isOwner(userId) && isValidId(userId) && isValidId(farmerId);
         allow list: if isOwner(userId) && isValidId(userId);
       }
 
-      // Crop Arrivals subcollection
+      // Crop Arrivals subcollection (Existing Software)
       match /crop_arrivals/{arrivalId} {
         allow read, write: if isOwner(userId) && isValidId(userId) && isValidId(arrivalId);
         allow list: if isOwner(userId) && isValidId(userId);
       }
 
-      // Bardana Stock subcollection
+      // Bardana Stock subcollection (Existing Software)
       match /bardana_entries/{bardanaId} {
         allow read, write: if isOwner(userId) && isValidId(userId) && isValidId(bardanaId);
         allow list: if isOwner(userId) && isValidId(userId);
       }
 
-      // Agency Purchases / Auctions subcollection
+      // Agency Purchases / Auctions subcollection (Existing Software)
       match /agency_purchases/{purchaseId} {
         allow read, write: if isOwner(userId) && isValidId(userId) && isValidId(purchaseId);
         allow list: if isOwner(userId) && isValidId(userId);
       }
 
-      // Lifting & Dispatches subcollection
+      // Lifting & Dispatches subcollection (Existing Software)
       match /lifting_dispatches/{dispatchId} {
         allow read, write: if isOwner(userId) && isValidId(userId) && isValidId(dispatchId);
         allow list: if isOwner(userId) && isValidId(userId);
+      }
+
+      // ================================================================
+      // SEPARATE MODULE: Mandi Paddy Hisab (MPH) Subcollections
+      // ================================================================
+      match /mph_farmers/{farmerId} {
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(farmerId);
+        allow list: if isOwner(userId) && isValidId(userId) && existing().ownerId == request.auth.uid;
+        allow create: if isOwner(userId) && isVerifiedUser() && isValidId(userId) && isValidId(farmerId)
+          && isValidMphFarmer(incoming(), userId, farmerId);
+        allow update: if isOwner(userId) && isVerifiedUser() && isValidId(userId) && isValidId(farmerId)
+          && isValidMphFarmer(incoming(), userId, farmerId)
+          && incoming().id == existing().id
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'fatherName', 'village', 'mobile', 'updatedAt']);
+        allow delete: if isOwner(userId) && isVerifiedUser() && isValidId(userId) && isValidId(farmerId);
+      }
+
+      match /mph_arrivals/{arrivalId} {
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(arrivalId);
+        allow list: if isOwner(userId) && isValidId(userId) && existing().ownerId == request.auth.uid;
+        allow create: if isOwner(userId) && isVerifiedUser() && isValidId(userId) && isValidId(arrivalId)
+          && isValidMphArrival(incoming(), userId, arrivalId)
+          && existsAfter(/databases/$(database)/documents/users/$(userId)/mph_farmers/$(incoming().farmerId));
+        allow update: if isOwner(userId) && isVerifiedUser() && isValidId(userId) && isValidId(arrivalId)
+          && isValidMphArrival(incoming(), userId, arrivalId)
+          && incoming().id == existing().id
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && existsAfter(/databases/$(database)/documents/users/$(userId)/mph_farmers/$(incoming().farmerId))
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'farmerId', 'farmerName', 'date', 'paddyType', 'ratePerQuintal',
+            'bags', 'looseKg', 'looseGm', 'totalQuintals', 'weightQtlPart',
+            'weightKgPart', 'weightGmPart', 'paddyAmount', 'applyDryingLabor', 'notes', 'updatedAt'
+          ]);
+        allow delete: if isOwner(userId) && isVerifiedUser() && isValidId(userId) && isValidId(arrivalId);
+      }
+
+      match /mph_jforms/{jformId} {
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(jformId);
+        allow list: if isOwner(userId) && isValidId(userId) && existing().ownerId == request.auth.uid;
+        allow create: if isOwner(userId) && isVerifiedUser() && isValidId(userId) && isValidId(jformId)
+          && isValidMphJForm(incoming(), userId, jformId)
+          && existsAfter(/databases/$(database)/documents/users/$(userId)/mph_farmers/$(incoming().farmerId));
+        allow update: if isOwner(userId) && isVerifiedUser() && isValidId(userId) && isValidId(jformId)
+          && isValidMphJForm(incoming(), userId, jformId)
+          && incoming().id == existing().id
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && existsAfter(/databases/$(database)/documents/users/$(userId)/mph_farmers/$(incoming().farmerId))
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'farmerId', 'farmerName', 'jFormHolderName', 'holderRelation',
+            'date', 'jFormNo', 'bags', 'rate', 'jFormAmount', 'notes', 'updatedAt'
+          ]);
+        allow delete: if isOwner(userId) && isVerifiedUser() && isValidId(userId) && isValidId(jformId);
+      }
+
+      match /mph_other_entries/{entryId} {
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(entryId);
+        allow list: if isOwner(userId) && isValidId(userId) && existing().ownerId == request.auth.uid;
+        allow create: if isOwner(userId) && isVerifiedUser() && isValidId(userId) && isValidId(entryId)
+          && isValidMphOtherEntry(incoming(), userId, entryId)
+          && existsAfter(/databases/$(database)/documents/users/$(userId)/mph_farmers/$(incoming().farmerId));
+        allow update: if isOwner(userId) && isVerifiedUser() && isValidId(userId) && isValidId(entryId)
+          && isValidMphOtherEntry(incoming(), userId, entryId)
+          && incoming().id == existing().id
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && existsAfter(/databases/$(database)/documents/users/$(userId)/mph_farmers/$(incoming().farmerId))
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'farmerId', 'farmerName', 'date', 'entryType', 'description', 'amount', 'updatedAt'
+          ]);
+        allow delete: if isOwner(userId) && isVerifiedUser() && isValidId(userId) && isValidId(entryId);
+      }
+
+      match /mph_settings/{settingId} {
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(settingId);
+        allow list: if isOwner(userId) && isValidId(userId) && existing().ownerId == request.auth.uid;
+        allow create: if isOwner(userId) && isVerifiedUser() && isValidId(userId) && isValidId(settingId)
+          && isValidMphSettings(incoming(), userId, settingId);
+        allow update: if isOwner(userId) && isVerifiedUser() && isValidId(userId) && isValidId(settingId)
+          && isValidMphSettings(incoming(), userId, settingId)
+          && incoming().id == existing().id
+          && incoming().ownerId == existing().ownerId
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'hybridPaddyRate', 'paddyAGurdeRate', 'jFormLaborRate', 'paddyDryingLaborRate', 'updatedAt'
+          ]);
+        allow delete: if isOwner(userId) && isVerifiedUser() && isValidId(userId) && isValidId(settingId);
       }
     }
   }

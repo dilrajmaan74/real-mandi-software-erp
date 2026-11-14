@@ -1006,11 +1006,11 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
             cropArrivals.length === 0 ? (
               <div className="py-8 text-center text-xs text-gray-500">ਕੋਈ ਆਵਕ ਐਂਟਰੀ ਮੌਜੂਦ ਨਹੀਂ ਹੈ।</div>
             ) : (
-              cropArrivals.slice(0, 5).map((a) => (
+              cropArrivals.slice(0, 5).map((a, idx) => (
                 <div key={a.id} className="py-3 flex items-center justify-between gap-4 text-xs">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold shrink-0">
-                      🌾
+                    <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-900 flex items-center justify-center font-mono font-black text-xs shrink-0 border border-amber-300">
+                      #{idx + 1}
                     </div>
                     <div>
                       <div className="font-bold text-gray-900">
@@ -1034,11 +1034,11 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
             agencyPurchases.length === 0 ? (
               <div className="py-8 text-center text-xs text-gray-500">ਕੋਈ ਖਰੀਦ ਐਂਟਰੀ ਮੌਜੂਦ ਨਹੀਂ ਹੈ।</div>
             ) : (
-              agencyPurchases.slice(0, 5).map((p) => (
+              agencyPurchases.slice(0, 5).map((p, idx) => (
                 <div key={p.id} className="py-3 flex items-center justify-between gap-4 text-xs">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-800 flex items-center justify-center font-bold shrink-0">
-                      🏢
+                    <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-900 flex items-center justify-center font-mono font-black text-xs shrink-0 border border-blue-300">
+                      #{idx + 1}
                     </div>
                     <div>
                       <div className="font-bold text-gray-900">
@@ -1062,11 +1062,11 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
             liftingDispatches.length === 0 ? (
               <div className="py-8 text-center text-xs text-gray-500">ਕੋਈ ਲਿਫਟਿੰਗ ਚਲਾਨ ਮੌਜੂਦ ਨਹੀਂ ਹੈ।</div>
             ) : (
-              liftingDispatches.slice(0, 5).map((l) => (
+              liftingDispatches.slice(0, 5).map((l, idx) => (
                 <div key={l.id} className="py-3 flex items-center justify-between gap-4 text-xs">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-800 flex items-center justify-center font-bold shrink-0">
-                      🚚
+                    <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-900 flex items-center justify-center font-mono font-black text-xs shrink-0 border border-purple-300">
+                      #{idx + 1}
                     </div>
                     <div>
                       <div className="font-bold text-gray-900">
