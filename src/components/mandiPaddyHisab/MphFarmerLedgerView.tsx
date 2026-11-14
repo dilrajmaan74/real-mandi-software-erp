@@ -23,6 +23,7 @@ import {
   Edit3,
   FileSpreadsheet,
   Loader2,
+  MessageCircle,
   Percent,
   Plus,
   Printer,
@@ -30,6 +31,8 @@ import {
   Wheat,
   X,
 } from 'lucide-react';
+import { useMphLang } from '../../lib/mandiPaddyHisabI18n';
+import { MphWhatsAppModal } from './MphWhatsAppModal';
 
 interface MphFarmerLedgerViewProps {
   farmers: MphFarmer[];
@@ -70,9 +73,39 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
   onGoToAdvances,
   onGoToFarmers,
 }) => {
+  const { lang, tr } = useMphLang();
   const today = new Date().toISOString().split('T')[0];
   const printRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [whatsappOpen, setWhatsappOpen] = useState(false);
+
+  const trPaddyType = (type: string) =>
+    type === 'Hybrid Paddy'
+      ? tr('Hybrid Paddy', 'ਹਾਈਬ੍ਰਿਡ ਝੋਨਾ')
+      : type === 'Paddy A Gurde'
+      ? tr('Paddy A Gurde', 'ਝੋਨਾ ਏ ਗ੍ਰੇਡ')
+      : type;
+
+  const trRelation = (rel: string) => {
+    switch (rel) {
+      case 'Self':
+        return tr('Self', 'ਖੁਦ');
+      case 'Son':
+        return tr('Son', 'ਪੁੱਤਰ');
+      case 'Wife':
+        return tr('Wife', 'ਪਤਨੀ');
+      case 'Hissedar':
+        return tr('Hissedar', 'ਹਿੱਸੇਦਾਰ');
+      case 'Father':
+        return tr('Father', 'ਪਿਤਾ');
+      case 'Brother':
+        return tr('Brother', 'ਭਰਾ');
+      case 'Other':
+        return tr('Other', 'ਹੋਰ');
+      default:
+        return rel;
+    }
+  };
 
   // Other expense / payment inline form state
   const [editingOtherId, setEditingOtherId] = useState<string | null>(null);
@@ -87,7 +120,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
   const [advStartDate, setAdvStartDate] = useState<string>(today);
   const [advEndDate, setAdvEndDate] = useState<string>(today);
   const [advPurpose, setAdvPurpose] = useState<string>(
-    'Pre-Season Advance (ਸੀਜ਼ਨ ਤੋਂ ਪਹਿਲਾਂ ਪੇਸ਼ਗੀ)'
+    lang === 'pa' ? 'ਸੀਜ਼ਨ ਤੋਂ ਪਹਿਲਾਂ ਪੇਸ਼ਗੀ' : 'Pre-Season Advance'
   );
   const [advPrincipal, setAdvPrincipal] = useState<string>('');
   const [advRate, setAdvRate] = useState<string>('1.5');
@@ -109,6 +142,9 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
       ),
     [parsedAdvPrincipal, parsedAdvRate, advStartDate, advEndDate, advBasis]
   );
+
+  const advPerDayInterest =
+    Math.round((liveAdvCalc.monthlyInterestAmount / 30) * 100) / 100;
 
   const effectiveAdvInterest =
     advInterestOverride.trim() !== ''
@@ -185,11 +221,13 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
 
     const amt = Number(otherAmount);
     if (!otherDesc.trim()) {
-      setOtherError('ਕਿਰਪਾ ਕਰਕੇ ਵੇਰਵਾ (Description) ਲਿਖੋ।');
+      setOtherError(tr('Please enter description.', 'ਕਿਰਪਾ ਕਰਕੇ ਵੇਰਵਾ ਲਿਖੋ।'));
       return;
     }
     if (isNaN(amt) || amt <= 0) {
-      setOtherError('ਰਕਮ 0 ਤੋਂ ਵੱਧ ਹੋਣੀ ਚਾਹੀਦੀ ਹੈ (Amount must be greater than 0).');
+      setOtherError(
+        tr('Amount must be greater than 0.', 'ਰਕਮ 0 ਤੋਂ ਵੱਧ ਹੋਣੀ ਚਾਹੀਦੀ ਹੈ।')
+      );
       return;
     }
 
@@ -218,7 +256,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
     setEditingAdvId(null);
     setAdvStartDate(today);
     setAdvEndDate(today);
-    setAdvPurpose('Pre-Season Advance (ਸੀਜ਼ਨ ਤੋਂ ਪਹਿਲਾਂ ਪੇਸ਼ਗੀ)');
+    setAdvPurpose(lang === 'pa' ? 'ਸੀਜ਼ਨ ਤੋਂ ਪਹਿਲਾਂ ਪੇਸ਼ਗੀ' : 'Pre-Season Advance');
     setAdvPrincipal('');
     setAdvRate('1.5');
     setAdvBasis('daily_30');
@@ -256,19 +294,33 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
     setAdvError(null);
 
     if (!advStartDate || !advEndDate) {
-      setAdvError('ਕਿਰਪਾ ਕਰਕੇ ਸ਼ੁਰੂ ਅਤੇ ਅੰਤ ਤਾਰੀਖ ਦਰਜ ਕਰੋ।');
+      setAdvError(
+        tr('Please enter Start and End dates.', 'ਕਿਰਪਾ ਕਰਕੇ ਸ਼ੁਰੂ ਅਤੇ ਅੰਤ ਤਾਰੀਖ ਦਰਜ ਕਰੋ।')
+      );
       return;
     }
     if (advEndDate < advStartDate) {
-      setAdvError('ਅੰਤ ਤਾਰੀਖ (End Date) ਸ਼ੁਰੂ ਤਾਰੀਖ (Start Date) ਤੋਂ ਪਹਿਲਾਂ ਨਹੀਂ ਹੋ ਸਕਦੀ।');
+      setAdvError(
+        tr(
+          'End Date cannot be before Start Date.',
+          'ਅੰਤ ਤਾਰੀਖ ਸ਼ੁਰੂ ਤਾਰੀਖ ਤੋਂ ਪਹਿਲਾਂ ਨਹੀਂ ਹੋ ਸਕਦੀ।'
+        )
+      );
       return;
     }
     if (!advPurpose.trim()) {
-      setAdvError('ਕਿਰਪਾ ਕਰਕੇ ਵੇਰਵਾ / ਕਿਸ ਕੰਮ ਲਈ (Purpose) ਲਿਖੋ।');
+      setAdvError(
+        tr('Please enter purpose / description.', 'ਕਿਰਪਾ ਕਰਕੇ ਵੇਰਵਾ / ਕਿਸ ਕੰਮ ਲਈ ਲਿਖੋ।')
+      );
       return;
     }
     if (parsedAdvPrincipal <= 0) {
-      setAdvError('ਮੂਲ ਰਕਮ 0 ਤੋਂ ਵੱਧ ਹੋਣੀ ਚਾਹੀਦੀ ਹੈ (Principal amount must be > 0).');
+      setAdvError(
+        tr(
+          'Principal amount must be greater than 0.',
+          'ਮੂਲ ਰਕਮ 0 ਤੋਂ ਵੱਧ ਹੋਣੀ ਚਾਹੀਦੀ ਹੈ।'
+        )
+      );
       return;
     }
 
@@ -317,17 +369,20 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
     return (
       <div className="bg-white border border-slate-200 rounded-xl p-10 text-center space-y-3">
         <p className="text-sm font-semibold text-slate-800">
-          No farmers registered in Mandi Paddy Hisab yet.
+          {tr('No farmers registered in Mandi Paddy Hisab yet.', 'ਮੰਡੀ ਝੋਨਾ ਹਿਸਾਬ ਵਿੱਚ ਅਜੇ ਕੋਈ ਕਿਸਾਨ ਦਰਜ ਨਹੀਂ ਹੈ।')}
         </p>
         <p className="text-xs text-slate-500">
-          Add a farmer first to view their Final Account and Two-Side Ledgers.
+          {tr(
+            'Add a farmer first to view their Final Account and Two-Side Ledgers.',
+            'ਅੰਤਿਮ ਹਿਸਾਬ ਅਤੇ ਦੋ-ਪਾਸੜ ਖਾਤੇ ਦੇਖਣ ਲਈ ਪਹਿਲਾਂ ਕਿਸਾਨ ਜੋੜੋ।'
+          )}
         </p>
         <button
           type="button"
           onClick={onGoToFarmers}
           className="px-4 py-2 text-xs font-bold bg-slate-900 text-white rounded-lg hover:bg-slate-800 cursor-pointer"
         >
-          Go to Farmer Master
+          {tr('Go to Farmer Master', 'ਕਿਸਾਨ ਮਾਸਟਰ ਤੇ ਜਾਓ')}
         </button>
       </div>
     );
@@ -339,7 +394,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
       <div className="print:hidden bg-white border border-slate-200 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 flex-1">
           <label className="text-xs font-bold text-slate-700 whitespace-nowrap">
-            Select Farmer (ਕਿਸਾਨ ਚੁਣੋ):
+            {tr('Select Farmer:', 'ਕਿਸਾਨ ਚੁਣੋ:')}
           </label>
           <select
             value={activeFarmer.id}
@@ -352,7 +407,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
           >
             {farmers.map((f) => (
               <option key={f.id} value={f.id}>
-                {f.name} {f.fatherName ? `S/O ${f.fatherName}` : ''} — {f.village}
+                {f.name} {f.fatherName ? `${tr('S/O', 'ਪੁੱਤਰ')} ${f.fatherName}` : ''} — {f.village}
               </option>
             ))}
           </select>
@@ -365,7 +420,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
             className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold bg-emerald-50 text-emerald-900 border border-emerald-200 rounded-lg hover:bg-emerald-100 cursor-pointer whitespace-nowrap"
           >
             <Wheat className="w-3.5 h-3.5" />
-            <span>+ Arrival</span>
+            <span>{tr('+ Arrival', '+ ਝੋਨਾ ਆਵਕ')}</span>
           </button>
           <button
             type="button"
@@ -373,7 +428,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
             className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold bg-blue-50 text-blue-900 border border-blue-200 rounded-lg hover:bg-blue-100 cursor-pointer whitespace-nowrap"
           >
             <FileSpreadsheet className="w-3.5 h-3.5" />
-            <span>+ J-Form</span>
+            <span>{tr('+ J-Form', '+ ਜੇ-ਫਾਰਮ')}</span>
           </button>
           <button
             type="button"
@@ -381,7 +436,16 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
             className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold bg-amber-50 text-amber-900 border border-amber-200 rounded-lg hover:bg-amber-100 cursor-pointer whitespace-nowrap"
           >
             <Percent className="w-3.5 h-3.5" />
-            <span>+ Advance</span>
+            <span>{tr('+ Advance', '+ ਪੇਸ਼ਗੀ')}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setWhatsappOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 cursor-pointer whitespace-nowrap"
+            title={tr('Send Pura Hisab on WhatsApp', 'ਪੂਰਾ ਹਿਸਾਬ WhatsApp ਤੇ ਭੇਜੋ')}
+          >
+            <MessageCircle className="w-3.5 h-3.5" />
+            <span>{tr('WhatsApp Hisab', 'WhatsApp ਹਿਸਾਬ')}</span>
           </button>
           <button
             type="button"
@@ -389,7 +453,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
             className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold bg-slate-100 text-slate-800 border border-slate-300 rounded-lg hover:bg-slate-200 cursor-pointer whitespace-nowrap"
           >
             <Printer className="w-3.5 h-3.5" />
-            <span>Print</span>
+            <span>{tr('Print', 'ਪ੍ਰਿੰਟ')}</span>
           </button>
           <button
             type="button"
@@ -402,7 +466,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
             ) : (
               <Download className="w-3.5 h-3.5" />
             )}
-            <span>Download PDF</span>
+            <span>{tr('Download PDF', 'PDF ਡਾਊਨਲੋਡ')}</span>
           </button>
         </div>
       </div>
@@ -416,16 +480,18 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
               {activeFarmer.name}
             </h2>
             <p className="text-xs text-slate-600 mt-0.5">
-              Father: {activeFarmer.fatherName || '—'} · Village: {activeFarmer.village} · Mobile:{' '}
+              {tr('Father:', 'ਪਿਤਾ:')} {activeFarmer.fatherName || '—'} ·{' '}
+              {tr('Village:', 'ਪਿੰਡ:')} {activeFarmer.village} ·{' '}
+              {tr('Mobile:', 'ਮੋਬਾਈਲ:')}{' '}
               <span className="font-mono">{activeFarmer.mobile || '—'}</span>
             </p>
           </div>
           <div className="text-left sm:text-right">
             <div className="text-xs font-bold text-slate-900">
-              Mandi Paddy Hisab — Farmer Final Account
+              {tr('Mandi Paddy Hisab — Farmer Final Account', 'ਮੰਡੀ ਝੋਨਾ ਹਿਸਾਬ — ਕਿਸਾਨ ਅੰਤਿਮ ਖਾਤਾ')}
             </div>
             <div className="text-[11px] text-slate-500">
-              Printed on {formatDateDMY(new Date().toISOString().split('T')[0])}
+              {tr('Printed on', 'ਪ੍ਰਿੰਟ ਤਾਰੀਖ')} {formatDateDMY(new Date().toISOString().split('T')[0])}
             </div>
           </div>
         </div>
@@ -435,15 +501,17 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
           <div className="lg:col-span-7 border border-slate-200 rounded-xl overflow-hidden">
             <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200">
               <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
-                Farmer Final Account Calculation (ਅੰਤਿਮ ਹਿਸਾਬ ਵੇਰਵਾ)
+                {tr('Farmer Final Account Calculation', 'ਕਿਸਾਨ ਅੰਤਿਮ ਹਿਸਾਬ ਵੇਰਵਾ')}
               </h3>
             </div>
             <div className="divide-y divide-slate-100 text-xs">
               <div className="px-4 py-2.5 flex items-center justify-between">
                 <div>
-                  <span className="font-semibold text-slate-900">Total Paddy Amount (ਕੁੱਲ ਝੋਨੇ ਦੀ ਰਕਮ)</span>
+                  <span className="font-semibold text-slate-900">
+                    {tr('Total Paddy Amount', 'ਕੁੱਲ ਝੋਨੇ ਦੀ ਰਕਮ')}
+                  </span>
                   <span className="text-[11px] text-slate-500 block font-mono tabular-nums">
-                    {summary.totalArrivalBags} Bags ·{' '}
+                    {summary.totalArrivalBags} {tr('Bags', 'ਗੱਟੇ')} ·{' '}
                     {formatWeightQKG(
                       summary.weightQtlPart,
                       summary.weightKgPart,
@@ -458,15 +526,21 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
 
               <div className="px-4 py-2.5 flex items-center justify-between gap-3">
                 <div>
-                  <span className="font-medium text-slate-800">(-) J-Form Amount (ਜੇ-ਫਾਰਮ ਰਕਮ)</span>
+                  <span className="font-medium text-slate-800">
+                    {tr('(-) J-Form Amount', '(-) ਜੇ-ਫਾਰਮ ਰਕਮ')}
+                  </span>
                   <span className="text-[11px] text-slate-500 block font-mono tabular-nums">
-                    {summary.totalJFormBags} Bags across {summary.jForms.length} J-Forms
+                    {summary.totalJFormBags} {tr('Bags across', 'ਗੱਟੇ')} · {summary.jForms.length}{' '}
+                    {tr('J-Forms', 'ਜੇ-ਫਾਰਮ')}
                   </span>
                   {jFormHolderBreakdown.some((h) => h.relation !== 'Self') && (
                     <span className="text-[11px] text-blue-800 font-medium block mt-0.5">
-                      Adjusted Holders:{' '}
+                      {tr('Adjusted Holders:', 'ਸ਼ਾਮਲ ਜੇ-ਫਾਰਮ ਨਾਮ:')}{' '}
                       {jFormHolderBreakdown
-                        .map((h) => `${h.name} (${h.relation}): ${h.bags}B · ${formatINR(h.amount)}`)
+                        .map(
+                          (h) =>
+                            `${h.name} (${trRelation(h.relation)}): ${h.bags}${tr('B', ' ਗੱਟੇ')} · ${formatINR(h.amount)}`
+                        )
                         .join(' | ')}
                     </span>
                   )}
@@ -478,9 +552,12 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
 
               <div className="px-4 py-2.5 flex items-center justify-between">
                 <div>
-                  <span className="font-medium text-slate-800">(-) J-Form Labour (ਜੇ-ਫਾਰਮ ਲੇਬਰ)</span>
+                  <span className="font-medium text-slate-800">
+                    {tr('(-) J-Form Labour', '(-) ਜੇ-ਫਾਰਮ ਲੇਬਰ')}
+                  </span>
                   <span className="text-[11px] text-slate-500 block font-mono tabular-nums">
-                    {summary.totalArrivalBags} Total Arrival Bags × ₹{settings.jFormLaborRate}/bag (ਮੰਡੀ ਆਵਕ ਗੱਟੇ)
+                    {summary.totalArrivalBags} {tr('Total Arrival Bags', 'ਕੁੱਲ ਆਵਕ ਗੱਟੇ')} × ₹
+                    {settings.jFormLaborRate}/{tr('bag', 'ਗੱਟਾ')}
                   </span>
                 </div>
                 <span className="font-mono tabular-nums font-semibold text-rose-700">
@@ -490,9 +567,12 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
 
               <div className="px-4 py-2.5 flex items-center justify-between">
                 <div>
-                  <span className="font-medium text-slate-800">(-) Paddy Drying Labour (ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ)</span>
+                  <span className="font-medium text-slate-800">
+                    {tr('(-) Paddy Drying Labour', '(-) ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ')}
+                  </span>
                   <span className="text-[11px] text-slate-500 block font-mono tabular-nums">
-                    {summary.totalDryingBags} Bags × ₹{settings.paddyDryingLaborRate}/bag
+                    {summary.totalDryingBags} {tr('Bags', 'ਗੱਟੇ')} × ₹{settings.paddyDryingLaborRate}/
+                    {tr('bag', 'ਗੱਟਾ')}
                   </span>
                 </div>
                 <span className="font-mono tabular-nums font-semibold text-rose-700">
@@ -502,10 +582,12 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
 
               <div className="px-4 py-2.5 flex items-center justify-between">
                 <div>
-                  <span className="font-medium text-slate-800">(+/-) Other Expenses or Payments (ਹੋਰ ਖਰਚੇ/ਅਦਾਇਗੀਆਂ)</span>
+                  <span className="font-medium text-slate-800">
+                    {tr('(+/-) Other Expenses or Payments', '(+/-) ਹੋਰ ਖਰਚੇ / ਅਦਾਇਗੀਆਂ')}
+                  </span>
                   <span className="text-[11px] text-slate-500 block font-mono tabular-nums">
-                    Added: +{formatINR(summary.totalOtherAdditions)} · Deducted: -
-                    {formatINR(summary.totalOtherDeductions)}
+                    {tr('Added:', 'ਜਮ੍ਹਾਂ:')} +{formatINR(summary.totalOtherAdditions)} ·{' '}
+                    {tr('Deducted:', 'ਕਟੌਤੀ:')} -{formatINR(summary.totalOtherDeductions)}
                   </span>
                 </div>
                 <span className="font-mono tabular-nums font-semibold text-slate-800">
@@ -528,7 +610,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
           >
             <div>
               <div className="text-xs font-bold uppercase tracking-wide opacity-80">
-                Paddy Bakaya (ਝੋਨਾ ਬਕਾਇਆ - Round Off)
+                {tr('Paddy Bakaya (Round Off)', 'ਝੋਨਾ ਬਕਾਇਆ (ਰਾਊਂਡ ਆਫ)')}
               </div>
               <div className="text-3xl font-bold font-mono tabular-nums mt-2">
                 {formatINR(Math.abs(summary.finalBalance), false)}
@@ -536,29 +618,33 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
               <div className="mt-2 text-sm font-bold">
                 {summary.balanceStatus === 'payable' && (
                   <span>
-                    Farmer Nu Paise Dene Hai (Payable) — ਕਿਸਾਨ ਨੂੰ ਪੈਸੇ ਦੇਣੇ ਹਨ
+                    {tr('Farmer Nu Paise Dene Hai (Payable)', 'ਕਿਸਾਨ ਨੂੰ ਪੈਸੇ ਦੇਣੇ ਹਨ (ਦੇਣਦਾਰ)')}
                   </span>
                 )}
                 {summary.balanceStatus === 'receivable' && (
                   <span>
-                    Farmer Paise Lene Hai (Receivable) — ਕਿਸਾਨ ਤੋਂ ਪੈਸੇ ਲੈਣੇ ਹਨ
+                    {tr('Farmer Paise Lene Hai (Receivable)', 'ਕਿਸਾਨ ਤੋਂ ਪੈਸੇ ਲੈਣੇ ਹਨ (ਲੈਣਦਾਰ)')}
                   </span>
                 )}
                 {summary.balanceStatus === 'settled' && (
-                  <span>Settled (ਹਿਸਾਬ ਬਰਾਬਰ — ਕੋਈ ਬਕਾਇਆ ਨਹੀਂ)</span>
+                  <span>{tr('Settled (No Balance Due)', 'ਹਿਸਾਬ ਬਰਾਬਰ (ਕੋਈ ਬਕਾਇਆ ਨਹੀਂ)')}</span>
                 )}
               </div>
             </div>
 
             <div className="mt-4 pt-3 border-t border-black/10 grid grid-cols-2 gap-2 text-xs">
               <div>
-                <span className="opacity-70 block text-[11px]">Total Paddy Amount</span>
+                <span className="opacity-70 block text-[11px]">
+                  {tr('Total Paddy Amount', 'ਕੁੱਲ ਝੋਨੇ ਦੀ ਰਕਮ')}
+                </span>
                 <span className="font-mono tabular-nums font-bold">
                   {formatINR(summary.totalPaddyAmount)}
                 </span>
               </div>
               <div className="text-right">
-                <span className="opacity-70 block text-[11px]">Total Deductions</span>
+                <span className="opacity-70 block text-[11px]">
+                  {tr('Total Deductions', 'ਕੁੱਲ ਕਟੌਤੀ')}
+                </span>
                 <span className="font-mono tabular-nums font-bold">
                   -{formatINR(summary.totalDeductions)}
                 </span>
@@ -574,16 +660,19 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
             <div className="px-4 py-2.5 bg-emerald-50 border-b border-emerald-200 flex items-center justify-between">
               <div>
                 <h3 className="text-xs font-bold text-emerald-950">
-                  LEFT: Paddy Arrival Ledger (ਝੋਨਾ ਆਵਕ ਖਾਤਾ - {summary.arrivals.length})
+                  {tr('LEFT: Paddy Arrival Ledger', 'ਖੱਬਾ: ਝੋਨਾ ਆਵਕ ਖਾਤਾ')} ({summary.arrivals.length})
                 </h3>
                 <p className="text-[10.5px] text-emerald-800">
-                  Date-wise arrival · Paddy type · Bags · Loose KG/GM · Total weight · Rate · Amount
+                  {tr(
+                    'Date-wise arrival · Paddy type · Bags · Loose KG/GM · Total weight · Rate · Amount',
+                    'ਤਾਰੀਖ-ਵਾਰ ਆਵਕ · ਕਿਸਮ · ਗੱਟੇ · ਖੁੱਲ੍ਹਾ ਕਿਲੋ/ਗ੍ਰਾਮ · ਕੁੱਲ ਵਜ਼ਨ · ਰੇਟ · ਰਕਮ'
+                  )}
                 </p>
               </div>
             </div>
             {summary.arrivals.length === 0 ? (
               <div className="p-6 text-center text-xs text-slate-500">
-                No Paddy Arrivals for this farmer.
+                {tr('No Paddy Arrivals for this farmer.', 'ਇਸ ਕਿਸਾਨ ਦੀ ਕੋਈ ਝੋਨਾ ਆਵਕ ਦਰਜ ਨਹੀਂ ਹੈ।')}
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -591,13 +680,13 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                   <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
                     <tr>
                       <th className="py-2 px-2 font-semibold">#</th>
-                      <th className="py-2 px-2 font-semibold">Date</th>
-                      <th className="py-2 px-2 font-semibold">Paddy Type</th>
-                      <th className="py-2 px-2 font-semibold text-right">Bags</th>
-                      <th className="py-2 px-2 font-semibold text-right">Loose</th>
-                      <th className="py-2 px-2 font-semibold text-right">Total Weight</th>
-                      <th className="py-2 px-2 font-semibold text-right">Rate</th>
-                      <th className="py-2 px-2 font-semibold text-right">Total Amount</th>
+                      <th className="py-2 px-2 font-semibold">{tr('Date', 'ਤਾਰੀਖ')}</th>
+                      <th className="py-2 px-2 font-semibold">{tr('Paddy Type', 'ਕਿਸਮ')}</th>
+                      <th className="py-2 px-2 font-semibold text-right">{tr('Bags', 'ਗੱਟੇ')}</th>
+                      <th className="py-2 px-2 font-semibold text-right">{tr('Loose', 'ਖੁੱਲ੍ਹਾ')}</th>
+                      <th className="py-2 px-2 font-semibold text-right">{tr('Total Weight', 'ਕੁੱਲ ਵਜ਼ਨ')}</th>
+                      <th className="py-2 px-2 font-semibold text-right">{tr('Rate', 'ਰੇਟ')}</th>
+                      <th className="py-2 px-2 font-semibold text-right">{tr('Total Amount', 'ਕੁੱਲ ਰਕਮ')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -610,7 +699,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                           {formatDateDMY(a.date)}
                         </td>
                         <td className="py-2 px-2 font-medium text-slate-800 whitespace-nowrap">
-                          {a.paddyType}
+                          {trPaddyType(a.paddyType)}
                         </td>
                         <td className="py-2 px-2 text-right font-mono tabular-nums font-semibold">
                           {a.bags}
@@ -633,7 +722,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                   <tfoot className="bg-emerald-50/80 border-t-2 border-emerald-200 font-bold text-emerald-950">
                     <tr>
                       <td colSpan={3} className="py-2 px-2">
-                        Total Arrival
+                        {tr('Total Arrival', 'ਕੁੱਲ ਆਵਕ')}
                       </td>
                       <td className="py-2 px-2 text-right font-mono tabular-nums">
                         {summary.totalArrivalBags}
@@ -664,16 +753,19 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
             <div className="px-4 py-2.5 bg-blue-50 border-b border-blue-200 flex items-center justify-between">
               <div>
                 <h3 className="text-xs font-bold text-blue-950">
-                  RIGHT: J-Form Ledger (ਜੇ-ਫਾਰਮ ਖਾਤਾ - {summary.jForms.length})
+                  {tr('RIGHT: J-Form Ledger', 'ਸੱਜਾ: ਜੇ-ਫਾਰਮ ਖਾਤਾ')} ({summary.jForms.length})
                 </h3>
                 <p className="text-[10.5px] text-blue-800">
-                  J-Form date · No. · J-Form Name (Self/Son/Wife/Hissedar) · Bags · Rate · Amount
+                  {tr(
+                    'J-Form date · No. · J-Form Name (Self/Son/Wife/Hissedar) · Bags · Rate · Amount',
+                    'ਜੇ-ਫਾਰਮ ਤਾਰੀਖ · ਨੰ. · ਜੇ-ਫਾਰਮ ਨਾਮ (ਖੁਦ/ਪੁੱਤਰ/ਪਤਨੀ/ਹਿੱਸੇਦਾਰ) · ਗੱਟੇ · ਰੇਟ · ਰਕਮ'
+                  )}
                 </p>
               </div>
             </div>
             {summary.jForms.length === 0 ? (
               <div className="p-6 text-center text-xs text-slate-500">
-                No J-Form entries for this farmer.
+                {tr('No J-Form entries for this farmer.', 'ਇਸ ਕਿਸਾਨ ਦੀ ਕੋਈ ਜੇ-ਫਾਰਮ ਐਂਟਰੀ ਦਰਜ ਨਹੀਂ ਹੈ।')}
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -681,12 +773,12 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                   <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
                     <tr>
                       <th className="py-2 px-2 font-semibold">#</th>
-                      <th className="py-2 px-2 font-semibold">J-Form Date</th>
-                      <th className="py-2 px-2 font-semibold">No.</th>
-                      <th className="py-2 px-2 font-semibold">J-Form Name</th>
-                      <th className="py-2 px-2 font-semibold text-right">Bags</th>
-                      <th className="py-2 px-2 font-semibold text-right">Rate</th>
-                      <th className="py-2 px-2 font-semibold text-right">J-Form Amt</th>
+                      <th className="py-2 px-2 font-semibold">{tr('J-Form Date', 'ਤਾਰੀਖ')}</th>
+                      <th className="py-2 px-2 font-semibold">{tr('No.', 'ਨੰ.')}</th>
+                      <th className="py-2 px-2 font-semibold">{tr('J-Form Name', 'ਜੇ-ਫਾਰਮ ਨਾਮ')}</th>
+                      <th className="py-2 px-2 font-semibold text-right">{tr('Bags', 'ਗੱਟੇ')}</th>
+                      <th className="py-2 px-2 font-semibold text-right">{tr('Rate', 'ਰੇਟ')}</th>
+                      <th className="py-2 px-2 font-semibold text-right">{tr('J-Form Amt', 'ਜੇ-ਫਾਰਮ ਰਕਮ')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -715,7 +807,9 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                             >
                               {holderName}
                             </span>
-                            <span className="ml-1 text-[10px] text-slate-500">({holderRel})</span>
+                            <span className="ml-1 text-[10px] text-slate-500">
+                              ({trRelation(holderRel)})
+                            </span>
                           </td>
                           <td className="py-2 px-2 text-right font-mono tabular-nums font-semibold">
                             {j.bags}
@@ -733,7 +827,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                   <tfoot className="bg-blue-50/80 border-t-2 border-blue-200 font-bold text-blue-950">
                     <tr>
                       <td colSpan={4} className="py-2 px-2">
-                        Total J-Forms
+                        {tr('Total J-Forms', 'ਕੁੱਲ ਜੇ-ਫਾਰਮ')}
                       </td>
                       <td className="py-2 px-2 text-right font-mono tabular-nums">
                         {summary.totalJFormBags}
@@ -745,7 +839,9 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                     </tr>
                     <tr className="bg-amber-50/80 border-t border-blue-200 text-[10.5px] text-slate-800">
                       <td colSpan={6} className="py-1.5 px-2">
-                        Final Account J-Form Labour ({summary.totalArrivalBags} Total Arrival Bags × ₹{settings.jFormLaborRate}/bag):
+                        {tr('Final Account J-Form Labour', 'ਅੰਤਿਮ ਹਿਸਾਬ ਜੇ-ਫਾਰਮ ਲੇਬਰ')} (
+                        {summary.totalArrivalBags} {tr('Total Arrival Bags', 'ਕੁੱਲ ਆਵਕ ਗੱਟੇ')} × ₹
+                        {settings.jFormLaborRate}/{tr('bag', 'ਗੱਟਾ')}):
                       </td>
                       <td className="py-1.5 px-2 text-right font-mono tabular-nums text-rose-800 whitespace-nowrap">
                         -{formatINR(summary.totalJFormLabor)}
@@ -756,7 +852,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                 {jFormHolderBreakdown.some((h) => h.relation !== 'Self') && (
                   <div className="px-3 py-2 bg-slate-50 border-t border-slate-200 text-[11px]">
                     <div className="font-bold text-slate-700 mb-1">
-                      Adjusted J-Form Name Summary (ਨਾਮ-ਵਾਰ ਜੇ-ਫਾਰਮ ਜੋੜ):
+                      {tr('Adjusted J-Form Name Summary:', 'ਨਾਮ-ਵਾਰ ਜੇ-ਫਾਰਮ ਜੋੜ:')}
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                       {jFormHolderBreakdown.map((h) => (
@@ -766,10 +862,12 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                         >
                           <span className="font-medium text-slate-800">
                             {h.name}{' '}
-                            <span className="text-[10px] text-slate-500">({h.relation})</span>
+                            <span className="text-[10px] text-slate-500">
+                              ({trRelation(h.relation)})
+                            </span>
                           </span>
                           <span className="font-mono tabular-nums font-semibold text-blue-800">
-                            {h.bags}B · {formatINR(h.amount)}
+                            {h.bags}{tr('B', ' ਗੱਟੇ')} · {formatINR(h.amount)}
                           </span>
                         </div>
                       ))}
@@ -785,11 +883,11 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
         <div className="border border-slate-200 rounded-xl overflow-hidden">
           <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
             <h3 className="text-xs font-bold text-slate-900">
-              Other Expenses & Payments (+/-) ({summary.otherEntries.length})
+              {tr('Other Expenses & Payments (+/-)', 'ਹੋਰ ਖਰਚੇ ਅਤੇ ਅਦਾਇਗੀਆਂ (+/-)')} ({summary.otherEntries.length})
             </h3>
             <span className="text-[11px] font-mono tabular-nums text-slate-600">
-              Added: +{formatINR(summary.totalOtherAdditions)} · Deducted: -
-              {formatINR(summary.totalOtherDeductions)}
+              {tr('Added:', 'ਜਮ੍ਹਾਂ:')} +{formatINR(summary.totalOtherAdditions)} ·{' '}
+              {tr('Deducted:', 'ਕਟੌਤੀ:')} -{formatINR(summary.totalOtherDeductions)}
             </span>
           </div>
 
@@ -799,7 +897,9 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
             className="print:hidden p-3 bg-slate-50/70 border-b border-slate-200 flex flex-col lg:flex-row lg:items-end gap-2.5"
           >
             <div className="w-full lg:w-36">
-              <label className="block text-[11px] font-semibold text-slate-600 mb-1">Date</label>
+              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                {tr('Date', 'ਤਾਰੀਖ')}
+              </label>
               <input
                 type="date"
                 value={otherDate}
@@ -809,32 +909,39 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
             </div>
             <div className="w-full lg:w-52">
               <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                Entry Type (+/-)
+                {tr('Entry Type (+/-)', 'ਐਂਟਰੀ ਕਿਸਮ (+/-)')}
               </label>
               <select
                 value={otherType}
                 onChange={(e) => setOtherType(e.target.value as 'add' | 'deduct')}
                 className="w-full px-2.5 py-1.5 text-xs font-semibold border border-slate-300 rounded-lg bg-white"
               >
-                <option value="deduct">(-) Expense / Paid to Farmer</option>
-                <option value="add">(+) Payment / Credit to Farmer</option>
+                <option value="deduct">
+                  {tr('(-) Expense / Paid to Farmer', '(-) ਖਰਚ / ਕਿਸਾਨ ਨੂੰ ਦਿੱਤੇ')}
+                </option>
+                <option value="add">
+                  {tr('(+) Payment / Credit to Farmer', '(+) ਜਮ੍ਹਾਂ / ਕਿਸਾਨ ਵੱਲੋਂ ਆਏ')}
+                </option>
               </select>
             </div>
             <div className="flex-1">
               <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                Description (ਵੇਰਵਾ)
+                {tr('Description', 'ਵੇਰਵਾ')}
               </label>
               <input
                 type="text"
                 value={otherDesc}
                 onChange={(e) => setOtherDesc(e.target.value)}
-                placeholder="e.g. Cash Advance / Diesel / Payment Received..."
+                placeholder={tr(
+                  'e.g. Cash Advance / Diesel / Payment Received...',
+                  'ਜਿਵੇਂ ਨਕਦ / ਡੀਜ਼ਲ / ਅਦਾਇਗੀ ਪ੍ਰਾਪਤ...'
+                )}
                 className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg bg-white"
               />
             </div>
             <div className="w-full lg:w-36">
               <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                Amount (₹)
+                {tr('Amount (₹)', 'ਰਕਮ (₹)')}
               </label>
               <input
                 type="number"
@@ -852,7 +959,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                 className="inline-flex items-center gap-1 px-3.5 py-1.5 text-xs font-bold bg-slate-900 text-white rounded-lg hover:bg-slate-800 cursor-pointer whitespace-nowrap"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>{editingOtherId ? 'Update' : 'Add Entry'}</span>
+                <span>{editingOtherId ? tr('Update', 'ਅੱਪਡੇਟ') : tr('Add Entry', 'ਜੋੜੋ')}</span>
               </button>
               {editingOtherId && (
                 <button
@@ -874,7 +981,10 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
 
           {summary.otherEntries.length === 0 ? (
             <div className="p-4 text-center text-xs text-slate-500">
-              No other expenses or payments recorded for this farmer.
+              {tr(
+                'No other expenses or payments recorded for this farmer.',
+                'ਇਸ ਕਿਸਾਨ ਲਈ ਕੋਈ ਹੋਰ ਖਰਚਾ ਜਾਂ ਅਦਾਇਗੀ ਦਰਜ ਨਹੀਂ ਹੈ।'
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -882,11 +992,11 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                 <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
                   <tr>
                     <th className="py-2 px-3 font-semibold">#</th>
-                    <th className="py-2 px-3 font-semibold">Date</th>
-                    <th className="py-2 px-3 font-semibold">Type</th>
-                    <th className="py-2 px-3 font-semibold">Description</th>
-                    <th className="py-2 px-3 font-semibold text-right">Amount</th>
-                    <th className="py-2 px-3 font-semibold text-right print:hidden">Actions</th>
+                    <th className="py-2 px-3 font-semibold">{tr('Date', 'ਤਾਰੀਖ')}</th>
+                    <th className="py-2 px-3 font-semibold">{tr('Type', 'ਕਿਸਮ')}</th>
+                    <th className="py-2 px-3 font-semibold">{tr('Description', 'ਵੇਰਵਾ')}</th>
+                    <th className="py-2 px-3 font-semibold text-right">{tr('Amount', 'ਰਕਮ')}</th>
+                    <th className="py-2 px-3 font-semibold text-right print:hidden">{tr('Actions', 'ਕਾਰਵਾਈ')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -904,7 +1014,9 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                             o.entryType === 'add' ? 'text-emerald-700' : 'text-rose-700'
                           }`}
                         >
-                          {o.entryType === 'add' ? '(+) Credit' : '(-) Expense / Paid'}
+                          {o.entryType === 'add'
+                            ? tr('(+) Credit', '(+) ਜਮ੍ਹਾਂ')
+                            : tr('(-) Expense / Paid', '(-) ਖਰਚ / ਦਿੱਤੇ')}
                         </span>
                       </td>
                       <td className="py-2 px-3 text-slate-800">{o.description}</td>
@@ -922,7 +1034,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                             type="button"
                             onClick={() => handleEditOther(o)}
                             className="p-1 text-blue-700 hover:bg-blue-50 rounded cursor-pointer"
-                            title="Edit"
+                            title={tr('Edit', 'ਸੋਧੋ')}
                           >
                             <Edit3 className="w-3.5 h-3.5" />
                           </button>
@@ -930,7 +1042,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                             type="button"
                             onClick={() => onDeleteOtherEntry(o)}
                             className="p-1 text-rose-600 hover:bg-rose-50 rounded cursor-pointer"
-                            title="Delete"
+                            title={tr('Delete', 'ਮਿਟਾਓ')}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -949,15 +1061,22 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
           <div className="px-4 py-2.5 bg-amber-50 border-b border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
             <div>
               <h3 className="text-xs font-bold text-amber-950">
-                Pre-Season Advances & Other Payments with Interest (ਪੇਸ਼ਗੀ ਅਤੇ ਵਿਆਜ ਖਾਤਾ - {summary.advances.length})
+                {tr(
+                  'Pre-Season Advances & Other Payments with Interest',
+                  'ਸੀਜ਼ਨ ਤੋਂ ਪਹਿਲਾਂ ਪੇਸ਼ਗੀ ਅਤੇ ਹੋਰ ਅਦਾਇਗੀਆਂ (ਵਿਆਜ ਸਮੇਤ)'
+                )}{' '}
+                ({summary.advances.length})
               </h3>
               <p className="text-[10.5px] text-amber-800">
-                Multiple amounts, independent start & end dates, auto days & custom monthly interest rates (1%, 1.5%, 2%, etc.)
+                {tr(
+                  'Multiple amounts, independent start & end dates, auto days & custom monthly interest rates (1%, 1.5%, 2%, etc.)',
+                  'ਵੱਖ-ਵੱਖ ਰਕਮਾਂ, ਸ਼ੁਰੂ ਅਤੇ ਅੰਤ ਤਾਰੀਖਾਂ, ਆਟੋ ਦਿਨ ਅਤੇ ਆਪਣੀ ਮਰਜ਼ੀ ਦੀ ਵਿਆਜ ਦਰ (1%, 1.5%, 2% ਆਦਿ)'
+                )}
               </p>
             </div>
             <span className="text-[11px] font-mono tabular-nums font-semibold text-amber-950 whitespace-nowrap">
-              Principal: {formatINR(summary.totalAdvancePrincipal)} · Interest:{' '}
-              {formatINR(summary.totalAdvanceInterest)}
+              {tr('Principal:', 'ਮੂਲ:')} {formatINR(summary.totalAdvancePrincipal)} ·{' '}
+              {tr('Interest:', 'ਵਿਆਜ:')} {formatINR(summary.totalAdvanceInterest)}
             </span>
           </div>
 
@@ -969,19 +1088,22 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2.5 items-end">
               <div className="lg:col-span-2">
                 <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Purpose / Payment For (ਕਿਸ ਕੰਮ ਲਈ)
+                  {tr('Purpose / Payment For', 'ਕਿਸ ਕੰਮ ਲਈ / ਵੇਰਵਾ')}
                 </label>
                 <input
                   type="text"
                   value={advPurpose}
                   onChange={(e) => setAdvPurpose(e.target.value)}
-                  placeholder="Pre-season advance, Diesel, Seed..."
+                  placeholder={tr(
+                    'Pre-season advance, Diesel, Seed...',
+                    'ਸੀਜ਼ਨ ਪੇਸ਼ਗੀ, ਡੀਜ਼ਲ, ਬੀਜ...'
+                  )}
                   className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg bg-white"
                 />
               </div>
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Principal (ਮੂਲ ਰਕਮ ₹)
+                  {tr('Principal (₹)', 'ਮੂਲ ਰਕਮ (₹)')}
                 </label>
                 <input
                   type="number"
@@ -992,13 +1114,13 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                     setAdvPrincipal(e.target.value);
                     setAdvInterestOverride('');
                   }}
-                  placeholder="e.g. 100000"
+                  placeholder={tr('e.g. 100000', 'ਜਿਵੇਂ 100000')}
                   className="w-full px-2.5 py-1.5 text-xs font-mono tabular-nums font-bold border border-slate-300 rounded-lg bg-white"
                 />
               </div>
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Rate % / Month
+                  {tr('Rate % / Month', 'ਵਿਆਜ ਦਰ % / ਮਹੀਨਾ')}
                 </label>
                 <div className="flex items-center gap-1">
                   <input
@@ -1035,7 +1157,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
               </div>
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Start Date
+                  {tr('Start Date', 'ਪੇਸ਼ਗੀ ਤਾਰੀਖ')}
                 </label>
                 <input
                   type="date"
@@ -1049,7 +1171,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
               </div>
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  End Date
+                  {tr('End Date', 'ਅੰਤ ਤਾਰੀਖ')}
                 </label>
                 <input
                   type="date"
@@ -1073,21 +1195,30 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                   }}
                   className="px-2 py-1 text-[11px] border border-slate-300 rounded bg-white"
                 >
-                  <option value="daily_30">Exact Days ÷ 30 Basis</option>
-                  <option value="monthly_30">30-Day Month + Extra Days Basis</option>
+                  <option value="daily_30">
+                    {tr('Exact Days ÷ 30 Basis', 'ਕੁੱਲ ਦਿਨ ÷ 30 ਆਧਾਰ')}
+                  </option>
+                  <option value="monthly_30">
+                    {tr('30-Day Month + Extra Days Basis', '30 ਦਿਨ ਮਹੀਨਾ + ਵਾਧੂ ਦਿਨ')}
+                  </option>
                 </select>
                 <span className="inline-flex items-center gap-1 text-slate-700 font-mono">
                   <Calculator className="w-3.5 h-3.5 text-amber-700" />
-                  <span>Days: <strong>{liveAdvCalc.days}</strong></span>
+                  <span>
+                    {tr('Days:', 'ਦਿਨ:')} <strong>{liveAdvCalc.days}</strong>
+                  </span>
                 </span>
                 <span className="text-slate-700 font-mono">
-                  Monthly: <strong>{formatINR(liveAdvCalc.monthlyInterestAmount)}</strong>
+                  {tr('Monthly:', 'ਮਹੀਨਾ:')} <strong>{formatINR(liveAdvCalc.monthlyInterestAmount)}</strong>
+                </span>
+                <span className="text-slate-700 font-mono">
+                  {tr('Per Day:', 'ਰੋਜ਼ਾਨਾ:')} <strong>{formatINR(advPerDayInterest)}</strong>
                 </span>
                 <span className="text-rose-800 font-mono">
-                  Interest: <strong>{formatINR(effectiveAdvInterest)}</strong>
+                  {tr('Interest:', 'ਵਿਆਜ:')} <strong>{formatINR(effectiveAdvInterest)}</strong>
                 </span>
                 <span className="text-slate-900 font-mono">
-                  Total P+I: <strong>{formatINR(effectiveAdvTotal)}</strong>
+                  {tr('Total P+I:', 'ਕੁੱਲ:')} <strong>{formatINR(effectiveAdvTotal)}</strong>
                 </span>
                 <input
                   type="number"
@@ -1095,7 +1226,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                   step="0.01"
                   value={advInterestOverride}
                   onChange={(e) => setAdvInterestOverride(e.target.value)}
-                  placeholder={`Override Int (${liveAdvCalc.interestAmount})`}
+                  placeholder={`${tr('Override Int', 'ਵਿਆਜ ਬਦਲੋ')} (${liveAdvCalc.interestAmount})`}
                   className="w-40 px-2 py-1 text-[11px] font-mono border border-amber-300 rounded bg-white"
                 />
               </div>
@@ -1105,7 +1236,11 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                   className="inline-flex items-center gap-1 px-3.5 py-1.5 text-xs font-bold bg-slate-900 text-white rounded-lg hover:bg-slate-800 cursor-pointer whitespace-nowrap"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>{editingAdvId ? 'Update Advance' : 'Add Advance & Interest'}</span>
+                  <span>
+                    {editingAdvId
+                      ? tr('Update Advance', 'ਪੇਸ਼ਗੀ ਅੱਪਡੇਟ ਕਰੋ')
+                      : tr('Add Advance & Interest', 'ਪੇਸ਼ਗੀ ਅਤੇ ਵਿਆਜ ਜੋੜੋ')}
+                  </span>
                 </button>
                 {editingAdvId && (
                   <button
@@ -1128,7 +1263,10 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
 
           {summary.advances.length === 0 ? (
             <div className="p-4 text-center text-xs text-slate-500">
-              No pre-season advances or interest-bearing payments recorded for this farmer.
+              {tr(
+                'No pre-season advances or interest-bearing payments recorded for this farmer.',
+                'ਇਸ ਕਿਸਾਨ ਲਈ ਕੋਈ ਪੇਸ਼ਗੀ ਜਾਂ ਵਿਆਜ ਵਾਲੀ ਅਦਾਇਗੀ ਦਰਜ ਨਹੀਂ ਹੈ।'
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -1136,15 +1274,15 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                 <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
                   <tr>
                     <th className="py-2 px-2.5 font-semibold">#</th>
-                    <th className="py-2 px-2.5 font-semibold">Purpose / Payment</th>
-                    <th className="py-2 px-2.5 font-semibold">Start → End Date</th>
-                    <th className="py-2 px-2.5 font-semibold text-right">Auto Days</th>
-                    <th className="py-2 px-2.5 font-semibold text-right">Principal (ਮੂਲ)</th>
-                    <th className="py-2 px-2.5 font-semibold text-right">Rate %/Mo</th>
-                    <th className="py-2 px-2.5 font-semibold text-right">Monthly Int.</th>
-                    <th className="py-2 px-2.5 font-semibold text-right">Interest (ਵਿਆਜ)</th>
-                    <th className="py-2 px-2.5 font-semibold text-right">Total (P+I)</th>
-                    <th className="py-2 px-2.5 font-semibold text-right print:hidden">Actions</th>
+                    <th className="py-2 px-2.5 font-semibold">{tr('Purpose / Payment', 'ਵੇਰਵਾ / ਕਿਸ ਕੰਮ ਲਈ')}</th>
+                    <th className="py-2 px-2.5 font-semibold">{tr('Start → End Date', 'ਸ਼ੁਰੂ → ਅੰਤ ਤਾਰੀਖ')}</th>
+                    <th className="py-2 px-2.5 font-semibold text-right">{tr('Auto Days', 'ਕੁੱਲ ਦਿਨ')}</th>
+                    <th className="py-2 px-2.5 font-semibold text-right">{tr('Principal', 'ਮੂਲ ਰਕਮ')}</th>
+                    <th className="py-2 px-2.5 font-semibold text-right">{tr('Rate %/Mo', 'ਦਰ %/ਮਹੀਨਾ')}</th>
+                    <th className="py-2 px-2.5 font-semibold text-right">{tr('Monthly Int.', 'ਮਹੀਨਾ ਵਿਆਜ')}</th>
+                    <th className="py-2 px-2.5 font-semibold text-right">{tr('Interest', 'ਵਿਆਜ')}</th>
+                    <th className="py-2 px-2.5 font-semibold text-right">{tr('Total (P+I)', 'ਕੁੱਲ (ਮੂਲ+ਵਿਆਜ)')}</th>
+                    <th className="py-2 px-2.5 font-semibold text-right print:hidden">{tr('Actions', 'ਕਾਰਵਾਈ')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -1158,7 +1296,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                         {formatDateDMY(adv.startDate)} → {formatDateDMY(adv.endDate)}
                       </td>
                       <td className="py-2 px-2.5 text-right font-mono tabular-nums text-slate-700">
-                        {adv.days} Days
+                        {adv.days} {tr('Days', 'ਦਿਨ')}
                       </td>
                       <td className="py-2 px-2.5 text-right font-mono tabular-nums font-semibold text-slate-900 whitespace-nowrap">
                         {formatINR(adv.principalAmount)}
@@ -1181,7 +1319,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                             type="button"
                             onClick={() => handleEditAdv(adv)}
                             className="p-1 text-blue-700 hover:bg-blue-50 rounded cursor-pointer"
-                            title="Edit"
+                            title={tr('Edit', 'ਸੋਧੋ')}
                           >
                             <Edit3 className="w-3.5 h-3.5" />
                           </button>
@@ -1189,7 +1327,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                             type="button"
                             onClick={() => onDeleteAdvance(adv)}
                             className="p-1 text-rose-600 hover:bg-rose-50 rounded cursor-pointer"
-                            title="Delete"
+                            title={tr('Delete', 'ਮਿਟਾਓ')}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -1201,7 +1339,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                 <tfoot className="bg-amber-50/80 border-t-2 border-amber-200 font-bold text-amber-950">
                   <tr>
                     <td colSpan={4} className="py-2 px-2.5">
-                      Total Advances ({summary.advances.length} Entries)
+                      {tr('Total Advances', 'ਕੁੱਲ ਪੇਸ਼ਗੀਆਂ')} ({summary.advances.length} {tr('Entries', 'ਐਂਟਰੀਆਂ')})
                     </td>
                     <td className="py-2 px-2.5 text-right font-mono tabular-nums whitespace-nowrap">
                       {formatINR(summary.totalAdvancePrincipal)}
@@ -1226,21 +1364,24 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
           <div className="lg:col-span-7 border border-slate-300 rounded-xl overflow-hidden">
             <div className="px-4 py-2.5 bg-slate-900 text-white">
               <h3 className="text-xs font-bold uppercase tracking-wide">
-                Combined Final Settlement: Paddy Bakaya + Principal & Interest (ਕੁੱਲ ਅੰਤਿਮ ਹਿਸਾਬ)
+                {tr(
+                  'Combined Final Settlement: Paddy Bakaya + Principal & Interest',
+                  'ਕੁੱਲ ਅੰਤਿਮ ਹਿਸਾਬ: ਝੋਨਾ ਬਕਾਇਆ + ਮੂਲ ਅਤੇ ਵਿਆਜ'
+                )}
               </h3>
             </div>
             <div className="divide-y divide-slate-100 text-xs">
               <div className="px-4 py-2.5 flex items-center justify-between">
                 <div>
                   <span className="font-semibold text-slate-900">
-                    1. Paddy Bakaya (ਝੋਨਾ ਬਕਾਇਆ — Round Off)
+                    {tr('1. Paddy Bakaya (Round Off)', '1. ਝੋਨਾ ਬਕਾਇਆ (ਰਾਊਂਡ ਆਫ)')}
                   </span>
                   <span className="text-[11px] text-slate-500 block">
                     {summary.balanceStatus === 'payable'
-                      ? 'Farmer Nu Paise Dene Hai (Paddy Payable)'
+                      ? tr('Farmer Nu Paise Dene Hai (Paddy Payable)', 'ਕਿਸਾਨ ਨੂੰ ਪੈਸੇ ਦੇਣੇ ਹਨ (ਝੋਨਾ ਬਕਾਇਆ)')
                       : summary.balanceStatus === 'receivable'
-                      ? 'Farmer Paise Lene Hai (Paddy Receivable)'
-                      : 'Paddy Account Settled'}
+                      ? tr('Farmer Paise Lene Hai (Paddy Receivable)', 'ਕਿਸਾਨ ਤੋਂ ਪੈਸੇ ਲੈਣੇ ਹਨ (ਝੋਨਾ ਬਕਾਇਆ)')
+                      : tr('Paddy Account Settled', 'ਝੋਨੇ ਦਾ ਹਿਸਾਬ ਬਰਾਬਰ')}
                   </span>
                 </div>
                 <span
@@ -1256,10 +1397,11 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
               <div className="px-4 py-2.5 flex items-center justify-between">
                 <div>
                   <span className="font-medium text-slate-800">
-                    2. (-) Advance Principal Amount (ਕੁੱਲ ਮੂਲ ਰਕਮ)
+                    {tr('2. (-) Advance Principal Amount', '2. (-) ਕੁੱਲ ਮੂਲ ਰਕਮ (ਪੇਸ਼ਗੀ)')}
                   </span>
                   <span className="text-[11px] text-slate-500 block">
-                    Across {summary.advances.length} advance / payment entries
+                    {tr('Across', 'ਕੁੱਲ')} {summary.advances.length}{' '}
+                    {tr('advance / payment entries', 'ਪੇਸ਼ਗੀ / ਅਦਾਇਗੀ ਐਂਟਰੀਆਂ')}
                   </span>
                 </div>
                 <span className="font-mono tabular-nums font-semibold text-rose-700">
@@ -1270,10 +1412,13 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
               <div className="px-4 py-2.5 flex items-center justify-between">
                 <div>
                   <span className="font-medium text-slate-800">
-                    3. (-) Advance Interest (ਕੁੱਲ ਵਿਆਜ)
+                    {tr('3. (-) Advance Interest', '3. (-) ਕੁੱਲ ਵਿਆਜ')}
                   </span>
                   <span className="text-[11px] text-slate-500 block">
-                    Auto-calculated on dates & custom rates
+                    {tr(
+                      'Auto-calculated on dates & custom rates',
+                      'ਤਾਰੀਖਾਂ ਅਤੇ ਵਿਆਜ ਦਰ ਮੁਤਾਬਕ ਆਟੋ ਹਿਸਾਬ'
+                    )}
                   </span>
                 </div>
                 <span className="font-mono tabular-nums font-semibold text-rose-700">
@@ -1283,7 +1428,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
 
               <div className="px-4 py-2.5 bg-amber-50/60 flex items-center justify-between">
                 <span className="font-bold text-amber-950">
-                  (=) Total Advance + Interest (ਕੁੱਲ ਪੇਸ਼ਗੀ ਤੇ ਵਿਆਜ)
+                  {tr('(=) Total Advance + Interest', '(=) ਕੁੱਲ ਪੇਸ਼ਗੀ + ਵਿਆਜ')}
                 </span>
                 <span className="font-mono tabular-nums font-bold text-rose-800">
                   -{formatINR(summary.totalAdvanceWithInterest)}
@@ -1303,7 +1448,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
           >
             <div>
               <div className="text-xs font-bold uppercase tracking-wide opacity-80">
-                Grand Final Balance (ਅੰਤਿਮ ਕੁੱਲ ਬਕਾਇਆ — Round Off)
+                {tr('Grand Final Balance (Round Off)', 'ਅੰਤਿਮ ਕੁੱਲ ਬਕਾਇਆ (ਰਾਊਂਡ ਆਫ)')}
               </div>
               <div className="text-3xl font-bold font-mono tabular-nums mt-2">
                 {formatINR(Math.abs(summary.combinedFinalBalance), false)}
@@ -1311,30 +1456,34 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
               <div className="mt-2 text-sm font-bold">
                 {summary.combinedBalanceStatus === 'payable' && (
                   <span>
-                    Farmer Nu Paise Dene Hai (Payable) — ਕਿਸਾਨ ਨੂੰ ਪੈਸੇ ਦੇਣੇ ਹਨ
+                    {tr('Farmer Nu Paise Dene Hai (Payable)', 'ਕਿਸਾਨ ਨੂੰ ਪੈਸੇ ਦੇਣੇ ਹਨ (ਦੇਣਦਾਰ)')}
                   </span>
                 )}
                 {summary.combinedBalanceStatus === 'receivable' && (
                   <span>
-                    Farmer Paise Lene Hai (Receivable) — ਕਿਸਾਨ ਤੋਂ ਪੈਸੇ ਲੈਣੇ ਹਨ
+                    {tr('Farmer Paise Lene Hai (Receivable)', 'ਕਿਸਾਨ ਤੋਂ ਪੈਸੇ ਲੈਣੇ ਹਨ (ਲੈਣਦਾਰ)')}
                   </span>
                 )}
                 {summary.combinedBalanceStatus === 'settled' && (
-                  <span>Settled (ਹਿਸਾਬ ਬਰਾਬਰ — ਕੋਈ ਬਕਾਇਆ ਨਹੀਂ)</span>
+                  <span>{tr('Settled (No Balance Due)', 'ਹਿਸਾਬ ਬਰਾਬਰ (ਕੋਈ ਬਕਾਇਆ ਨਹੀਂ)')}</span>
                 )}
               </div>
             </div>
 
             <div className="mt-4 pt-3 border-t border-black/10 grid grid-cols-2 gap-2 text-xs">
               <div>
-                <span className="opacity-70 block text-[11px]">Paddy Bakaya</span>
+                <span className="opacity-70 block text-[11px]">
+                  {tr('Paddy Bakaya', 'ਝੋਨਾ ਬਕਾਇਆ')}
+                </span>
                 <span className="font-mono tabular-nums font-bold">
                   {summary.finalBalance >= 0 ? '' : '-'}
                   {formatINR(Math.abs(summary.finalBalance), false)}
                 </span>
               </div>
               <div className="text-right">
-                <span className="opacity-70 block text-[11px]">Principal + Interest</span>
+                <span className="opacity-70 block text-[11px]">
+                  {tr('Principal + Interest', 'ਮੂਲ + ਵਿਆਜ')}
+                </span>
                 <span className="font-mono tabular-nums font-bold">
                   -{formatINR(summary.totalAdvanceWithInterest)}
                 </span>
@@ -1343,6 +1492,14 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
           </div>
         </div>
       </div>
+
+      <MphWhatsAppModal
+        open={whatsappOpen}
+        summary={summary}
+        settings={settings}
+        statementElement={printRef.current}
+        onClose={() => setWhatsappOpen(false)}
+      />
     </div>
   );
 };

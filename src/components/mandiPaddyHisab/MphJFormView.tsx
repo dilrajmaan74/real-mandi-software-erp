@@ -5,6 +5,7 @@ import {
   formatDateDMY,
   formatINR,
 } from '../../lib/mandiPaddyHisabUtils';
+import { useMphLang } from '../../lib/mandiPaddyHisabI18n';
 import { Calculator, Edit3, FileSpreadsheet, Plus, Search, Trash2, X } from 'lucide-react';
 
 interface MphJFormViewProps {
@@ -32,6 +33,7 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
   onGoToFarmers,
   requestConfirm,
 }) => {
+  const { tr } = useMphLang();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [farmerId, setFarmerId] = useState<string>(farmers[0]?.id || '');
   const [holderRelation, setHolderRelation] = useState<string>('Self');
@@ -178,7 +180,7 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
 
     const selectedFarmer = farmers.find((f) => f.id === farmerId);
     if (!selectedFarmer) {
-      setErrorMsg('ਕਿਰਪਾ ਕਰਕੇ ਕਿਸਾਨ ਚੁਣੋ (Please select a farmer).');
+      setErrorMsg(tr('Please select a farmer.', 'ਕਿਰਪਾ ਕਰਕੇ ਕਿਸਾਨ ਚੁਣੋ।'));
       return;
     }
     const resolvedHolder =
@@ -186,19 +188,24 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
         ? (jFormHolderName.trim() || selectedFarmer.name)
         : jFormHolderName.trim();
     if (!resolvedHolder) {
-      setErrorMsg('ਕਿਰਪਾ ਕਰਕੇ ਜੇ-ਫਾਰਮ ਧਾਰਕ ਦਾ ਨਾਮ (Son / Wife / Hissedar Name) ਦਰਜ ਕਰੋ।');
+      setErrorMsg(
+        tr(
+          'Please enter J-Form Holder Name (Son / Wife / Hissedar).',
+          'ਕਿਰਪਾ ਕਰਕੇ ਜੇ-ਫਾਰਮ ਧਾਰਕ ਦਾ ਨਾਮ (ਪੁੱਤਰ / ਪਤਨੀ / ਹਿੱਸੇਦਾਰ) ਦਰਜ ਕਰੋ।'
+        )
+      );
       return;
     }
     if (!date) {
-      setErrorMsg('ਕਿਰਪਾ ਕਰਕੇ J-Form ਤਾਰੀਖ ਦਰਜ ਕਰੋ।');
+      setErrorMsg(tr('Please enter J-Form Date.', 'ਕਿਰਪਾ ਕਰਕੇ ਜੇ-ਫਾਰਮ ਤਾਰੀਖ ਦਰਜ ਕਰੋ।'));
       return;
     }
     if (parsedBags <= 0) {
-      setErrorMsg('ਗੱਟਿਆਂ ਦੀ ਗਿਣਤੀ 0 ਤੋਂ ਵੱਧ ਹੋਣੀ ਚਾਹੀਦੀ ਹੈ (Bags must be greater than 0).');
+      setErrorMsg(tr('Number of bags must be greater than 0.', 'ਗੱਟਿਆਂ ਦੀ ਗਿਣਤੀ 0 ਤੋਂ ਵੱਧ ਹੋਣੀ ਚਾਹੀਦੀ ਹੈ।'));
       return;
     }
     if (parsedAmount <= 0) {
-      setErrorMsg('J-Form ਰਕਮ 0 ਤੋਂ ਵੱਧ ਹੋਣੀ ਚਾਹੀਦੀ ਹੈ (J-Form Amount must be greater than 0).');
+      setErrorMsg(tr('J-Form Amount must be greater than 0.', 'ਜੇ-ਫਾਰਮ ਰਕਮ 0 ਤੋਂ ਵੱਧ ਹੋਣੀ ਚਾਹੀਦੀ ਹੈ।'));
       return;
     }
 
@@ -218,9 +225,12 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
 
     if (dup) {
       requestConfirm({
-        title: 'Duplicate J-Form Warning (ਡੁਪਲੀਕੇਟ ਚੇਤਾਵਨੀ)',
-        message: `Farmer "${selectedFarmer.name}" (J-Form Name: ${resolvedHolder}) already has a matching J-Form entry on ${formatDateDMY(date)} (${parsedBags} Bags, ${formatINR(parsedAmount)}).\n\nDo you still want to save this J-Form?`,
-        confirmLabel: 'Save Anyway (ਫਿਰ ਵੀ ਸੇਵ ਕਰੋ)',
+        title: tr('Duplicate J-Form Warning', 'ਡੁਪਲੀਕੇਟ ਜੇ-ਫਾਰਮ ਚੇਤਾਵਨੀ'),
+        message: tr(
+          `Farmer "${selectedFarmer.name}" (J-Form Name: ${resolvedHolder}) already has a matching J-Form entry on ${formatDateDMY(date)} (${parsedBags} Bags, ${formatINR(parsedAmount)}).\n\nDo you still want to save this J-Form?`,
+          `ਕਿਸਾਨ "${selectedFarmer.name}" (ਜੇ-ਫਾਰਮ ਨਾਮ: ${resolvedHolder}) ਦਾ ${formatDateDMY(date)} ਨੂੰ ਇਹੀ ਜੇ-ਫਾਰਮ (${parsedBags} ਗੱਟੇ, ${formatINR(parsedAmount)}) ਪਹਿਲਾਂ ਹੀ ਦਰਜ ਹੈ।\n\nਕੀ ਤੁਸੀਂ ਫਿਰ ਵੀ ਇਹ ਜੇ-ਫਾਰਮ ਸੇਵ ਕਰਨਾ ਚਾਹੁੰਦੇ ਹੋ?`
+        ),
+        confirmLabel: tr('Save Anyway', 'ਫਿਰ ਵੀ ਸੇਵ ਕਰੋ'),
         tone: 'warning',
         onConfirm: () => commitSave(existingItem, selectedFarmer),
       });
@@ -265,7 +275,7 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
           <div className="flex items-center gap-2">
             <FileSpreadsheet className="w-4 h-4 text-blue-700" />
             <h3 className="text-sm font-bold text-slate-900">
-              {editingId ? 'Edit J-Form (ਜੇ-ਫਾਰਮ ਸੋਧੋ)' : 'New J-Form Entry (ਨਵਾਂ ਜੇ-ਫਾਰਮ)'}
+              {editingId ? tr('Edit J-Form', 'ਜੇ-ਫਾਰਮ ਸੋਧੋ') : tr('New J-Form Entry', 'ਨਵਾਂ ਜੇ-ਫਾਰਮ')}
             </h3>
           </div>
           {editingId && (
@@ -275,7 +285,7 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
               className="text-xs text-slate-500 hover:text-slate-800 inline-flex items-center gap-1 cursor-pointer"
             >
               <X className="w-3.5 h-3.5" />
-              <span>Cancel</span>
+              <span>{tr('Cancel', 'ਰੱਦ ਕਰੋ')}</span>
             </button>
           )}
         </div>
@@ -283,14 +293,17 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
         {farmers.length === 0 ? (
           <div className="p-6 text-center space-y-3">
             <p className="text-xs text-slate-600">
-              Please add a farmer in Farmer Master before recording J-Form entries.
+              {tr(
+                'Please add a farmer in Farmer Master before recording J-Form entries.',
+                'ਜੇ-ਫਾਰਮ ਦਰਜ ਕਰਨ ਤੋਂ ਪਹਿਲਾਂ ਕਿਸਾਨ ਸੂਚੀ ਵਿੱਚ ਕਿਸਾਨ ਜੋੜੋ।'
+              )}
             </p>
             <button
               type="button"
               onClick={onGoToFarmers}
               className="px-4 py-2 text-xs font-bold bg-slate-900 text-white rounded-lg hover:bg-slate-800 cursor-pointer"
             >
-              Go to Farmer Master
+              {tr('Go to Farmer Master', 'ਕਿਸਾਨ ਸੂਚੀ ਵਿੱਚ ਜਾਓ')}
             </button>
           </div>
         ) : (
@@ -303,7 +316,7 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Arrival Farmer Account (ਕਿਸਾਨ ਖਾਤਾ - ਜੋ ਝੋਨਾ ਲਿਆਇਆ) *
+                {tr('Arrival Farmer Account *', 'ਕਿਸਾਨ ਖਾਤਾ (ਜੋ ਝੋਨਾ ਲਿਆਇਆ) *')}
               </label>
               <select
                 value={farmerId}
@@ -321,30 +334,33 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
             {/* Multi-Farmer / Family / Hissedar J-Form Name */}
             <div className="p-3 bg-blue-50/50 border border-blue-200 rounded-lg space-y-2">
               <div className="text-[11px] font-bold text-blue-950">
-                J-Form Name (ਜੇ-ਫਾਰਮ ਕਿਸ ਦੇ ਨਾਮ ਬਣਿਆ — Self / Son / Wife / Hissedar)
+                {tr(
+                  'J-Form Name (Self / Son / Wife / Hissedar)',
+                  'ਜੇ-ਫਾਰਮ ਕਿਸ ਦੇ ਨਾਮ ਬਣਿਆ (ਆਪ / ਪੁੱਤਰ / ਪਤਨੀ / ਹਿੱਸੇਦਾਰ)'
+                )}
               </div>
               <div className="grid grid-cols-5 gap-2">
                 <div className="col-span-2">
                   <label className="block text-[10.5px] font-semibold text-slate-600 mb-1">
-                    Relation (ਰਿਸ਼ਤਾ)
+                    {tr('Relation', 'ਰਿਸ਼ਤਾ')}
                   </label>
                   <select
                     value={holderRelation}
                     onChange={(e) => handleRelationChange(e.target.value)}
                     className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded-lg bg-white focus:outline-none focus:border-blue-600"
                   >
-                    <option value="Self">Self (ਆਪਣੇ ਨਾਮ)</option>
-                    <option value="Son">Son (ਪੁੱਤਰ)</option>
-                    <option value="Wife">Wife (ਪਤਨੀ)</option>
-                    <option value="Hissedar">Hissedar (ਹਿੱਸੇਦਾਰ)</option>
-                    <option value="Father">Father (ਪਿਤਾ)</option>
-                    <option value="Brother">Brother (ਭਰਾ)</option>
-                    <option value="Other">Other (ਹੋਰ)</option>
+                    <option value="Self">{tr('Self', 'ਆਪਣੇ ਨਾਮ')}</option>
+                    <option value="Son">{tr('Son', 'ਪੁੱਤਰ')}</option>
+                    <option value="Wife">{tr('Wife', 'ਪਤਨੀ')}</option>
+                    <option value="Hissedar">{tr('Hissedar', 'ਹਿੱਸੇਦਾਰ')}</option>
+                    <option value="Father">{tr('Father', 'ਪਿਤਾ')}</option>
+                    <option value="Brother">{tr('Brother', 'ਭਰਾ')}</option>
+                    <option value="Other">{tr('Other', 'ਹੋਰ')}</option>
                   </select>
                 </div>
                 <div className="col-span-3">
                   <label className="block text-[10.5px] font-semibold text-slate-600 mb-1">
-                    J-Form Holder Name *
+                    {tr('J-Form Holder Name *', 'ਜੇ-ਫਾਰਮ ਧਾਰਕ ਦਾ ਨਾਮ *')}
                   </label>
                   <input
                     type="text"
@@ -352,8 +368,8 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
                     onChange={(e) => setJFormHolderName(e.target.value)}
                     placeholder={
                       holderRelation === 'Self'
-                        ? selectedMainFarmer?.name || 'Farmer Name'
-                        : `Enter ${holderRelation} name...`
+                        ? selectedMainFarmer?.name || tr('Farmer Name', 'ਕਿਸਾਨ ਦਾ ਨਾਮ')
+                        : tr(`Enter ${holderRelation} name...`, 'ਧਾਰਕ ਦਾ ਨਾਮ ਲਿਖੋ...')
                     }
                     className="w-full px-2.5 py-1.5 text-xs font-medium border border-slate-300 rounded-lg bg-white focus:outline-none focus:border-blue-600"
                   />
@@ -361,7 +377,9 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
               </div>
               {knownHoldersForFarmer.length > 0 && (
                 <div className="flex flex-wrap items-center gap-1 pt-0.5">
-                  <span className="text-[10px] text-slate-500 mr-1">Quick select:</span>
+                  <span className="text-[10px] text-slate-500 mr-1">
+                    {tr('Quick select:', 'ਤੁਰੰਤ ਚੁਣੋ:')}
+                  </span>
                   {knownHoldersForFarmer.map((h) => (
                     <button
                       key={`${h.name}|${h.relation}`}
@@ -387,7 +405,7 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  J-Form Date (ਤਾਰੀਖ) *
+                  {tr('J-Form Date *', 'ਜੇ-ਫਾਰਮ ਤਾਰੀਖ *')}
                 </label>
                 <input
                   type="date"
@@ -398,13 +416,13 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  J-Form No. (ਨੰਬਰ)
+                  {tr('J-Form No.', 'ਜੇ-ਫਾਰਮ ਨੰਬਰ')}
                 </label>
                 <input
                   type="text"
                   value={jFormNo}
                   onChange={(e) => setJFormNo(e.target.value)}
-                  placeholder="Optional e.g. JF-102"
+                  placeholder={tr('Optional e.g. JF-102', 'ਵਿਕਲਪਿਕ ਜਿਵੇਂ JF-102')}
                   className="w-full px-2.5 py-2 text-xs sm:text-sm font-mono border border-slate-300 rounded-lg focus:outline-none focus:border-blue-600"
                 />
               </div>
@@ -413,7 +431,7 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Number of Bags (ਗੱਟੇ) *
+                  {tr('Number of Bags *', 'ਗੱਟਿਆਂ ਦੀ ਗਿਣਤੀ *')}
                 </label>
                 <input
                   type="number"
@@ -426,7 +444,7 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Rate / Quintal (₹)
+                  {tr('Rate / Quintal (₹)', 'ਰੇਟ / ਕੁਇੰਟਲ (₹)')}
                 </label>
                 <input
                   type="number"
@@ -442,16 +460,18 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="text-xs font-semibold text-slate-700">
-                  J-Form Amount (ਜੇ-ਫਾਰਮ ਰਕਮ ₹) *
+                  {tr('J-Form Amount (₹) *', 'ਜੇ-ਫਾਰਮ ਰਕਮ (₹) *')}
                 </label>
                 <button
                   type="button"
                   onClick={handleAutoCalculateAmount}
                   className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 hover:text-blue-900 cursor-pointer"
-                  title="Calculate Bags × 0.375 Qtl × Rate"
+                  title={tr('Calculate Bags × 0.375 Qtl × Rate', 'ਗੱਟੇ × 0.375 ਕੁਇੰਟਲ × ਰੇਟ ਹਿਸਾਬ ਕਰੋ')}
                 >
                   <Calculator className="w-3 h-3" />
-                  <span>Auto Calc ({(parsedBags * 0.375).toFixed(2)} Qtl)</span>
+                  <span>
+                    {tr('Auto Calc', 'ਆਟੋ ਹਿਸਾਬ')} ({(parsedBags * 0.375).toFixed(2)} {tr('Qtl', 'ਕੁਇੰ')})
+                  </span>
                 </button>
               </div>
               <input
@@ -464,16 +484,15 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
               />
             </div>
 
-
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Notes (ਨੋਟ)
+                {tr('Notes', 'ਨੋਟ')}
               </label>
               <input
                 type="text"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Agency / remarks..."
+                placeholder={tr('Agency / remarks...', 'ਏਜੰਸੀ / ਟਿੱਪਣੀ...')}
                 className="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-blue-600"
               />
             </div>
@@ -483,7 +502,7 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
               className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs sm:text-sm font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-lg transition-colors cursor-pointer"
             >
               <Plus className="w-4 h-4" />
-              <span>{editingId ? 'Update J-Form (ਅੱਪਡੇਟ ਕਰੋ)' : 'Save J-Form (ਜੇ-ਫਾਰਮ ਸੇਵ ਕਰੋ)'}</span>
+              <span>{editingId ? tr('Update J-Form', 'ਜੇ-ਫਾਰਮ ਅੱਪਡੇਟ ਕਰੋ') : tr('Save J-Form', 'ਜੇ-ਫਾਰਮ ਸੇਵ ਕਰੋ')}</span>
             </button>
           </form>
         )}
@@ -494,10 +513,13 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
         <div className="px-4 py-3 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-bold text-slate-900">
-              J-Form Register (ਜੇ-ਫਾਰਮ ਰਜਿਸਟਰ - {filteredJForms.length})
+              {tr('J-Form Register', 'ਜੇ-ਫਾਰਮ ਰਜਿਸਟਰ')} ({filteredJForms.length})
             </h3>
             <p className="text-[11px] text-slate-500">
-              Separate date-wise J-Form ledger & automatic ₹{settings.jFormLaborRate}/bag labour calculation
+              {tr(
+                `Separate date-wise J-Form ledger · Labour ₹${settings.jFormLaborRate}/bag`,
+                `ਵੱਖਰਾ ਤਾਰੀਖ-ਵਾਰ ਜੇ-ਫਾਰਮ ਖਾਤਾ · ਲੇਬਰ ₹${settings.jFormLaborRate}/ਗੱਟਾ`
+              )}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -507,7 +529,7 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search farmer, J-Form..."
+                placeholder={tr('Search farmer, J-Form...', 'ਕਿਸਾਨ ਜਾਂ ਜੇ-ਫਾਰਮ ਖੋਜੋ...')}
                 className="w-full pl-8 pr-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-blue-600"
               />
             </div>
@@ -516,7 +538,7 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
               onChange={(e) => setFilterFarmerId(e.target.value)}
               className="px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg bg-white"
             >
-              <option value="all">All Farmers</option>
+              <option value="all">{tr('All Farmers', 'ਸਾਰੇ ਕਿਸਾਨ')}</option>
               {farmers.map((f) => (
                 <option key={f.id} value={f.id}>
                   {f.name}
@@ -528,7 +550,10 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
 
         {filteredJForms.length === 0 ? (
           <div className="p-8 text-center text-xs text-slate-500">
-            No J-Form entries recorded matching the current filter.
+            {tr(
+              'No J-Form entries recorded matching the current filter.',
+              'ਚੁਣੇ ਹੋਏ ਫਿਲਟਰ ਮੁਤਾਬਕ ਕੋਈ ਜੇ-ਫਾਰਮ ਐਂਟਰੀ ਨਹੀਂ ਮਿਲੀ।'
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -536,14 +561,16 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
               <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
                 <tr>
                   <th className="py-2.5 px-3 font-semibold">#</th>
-                  <th className="py-2.5 px-3 font-semibold">J-Form Date</th>
-                  <th className="py-2.5 px-3 font-semibold">Arrival Farmer / J-Form Name</th>
-                  <th className="py-2.5 px-3 font-semibold">J-Form No.</th>
-                  <th className="py-2.5 px-3 font-semibold text-right">Bags</th>
-                  <th className="py-2.5 px-3 font-semibold text-right">Rate</th>
-                  <th className="py-2.5 px-3 font-semibold text-right">J-Form Amount</th>
-                  <th className="py-2.5 px-3 font-semibold text-right">Labour (₹{settings.jFormLaborRate}/bag)</th>
-                  <th className="py-2.5 px-3 font-semibold text-right">Actions</th>
+                  <th className="py-2.5 px-3 font-semibold">{tr('J-Form Date', 'ਤਾਰੀਖ')}</th>
+                  <th className="py-2.5 px-3 font-semibold">{tr('Arrival Farmer / J-Form Name', 'ਆਵਕ ਕਿਸਾਨ / ਜੇ-ਫਾਰਮ ਨਾਮ')}</th>
+                  <th className="py-2.5 px-3 font-semibold">{tr('J-Form No.', 'ਨੰਬਰ')}</th>
+                  <th className="py-2.5 px-3 font-semibold text-right">{tr('Bags', 'ਗੱਟੇ')}</th>
+                  <th className="py-2.5 px-3 font-semibold text-right">{tr('Rate', 'ਰੇਟ')}</th>
+                  <th className="py-2.5 px-3 font-semibold text-right">{tr('J-Form Amount', 'ਜੇ-ਫਾਰਮ ਰਕਮ')}</th>
+                  <th className="py-2.5 px-3 font-semibold text-right">
+                    {tr('Labour', 'ਲੇਬਰ')} (₹{settings.jFormLaborRate}/{tr('bag', 'ਗੱਟਾ')})
+                  </th>
+                  <th className="py-2.5 px-3 font-semibold text-right">{tr('Actions', 'ਕਾਰਵਾਈ')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -569,7 +596,7 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
                             isDifferentHolder ? 'text-blue-700 font-semibold' : 'text-slate-500'
                           }`}
                         >
-                          J-Form: {holderName} ({holderRel})
+                          {tr('J-Form', 'ਜੇ-ਫਾਰਮ')}: {holderName} ({holderRel})
                         </div>
                       </td>
                       <td className="py-2 px-3 font-mono text-slate-600">
@@ -593,7 +620,7 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
                             type="button"
                             onClick={() => handleEditClick(j)}
                             className="p-1 text-blue-700 hover:bg-blue-50 rounded cursor-pointer"
-                            title="Edit J-Form"
+                            title={tr('Edit J-Form', 'ਜੇ-ਫਾਰਮ ਸੋਧੋ')}
                           >
                             <Edit3 className="w-3.5 h-3.5" />
                           </button>
@@ -601,7 +628,7 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
                             type="button"
                             onClick={() => onDeleteJForm(j)}
                             className="p-1 text-rose-600 hover:bg-rose-50 rounded cursor-pointer"
-                            title="Delete J-Form"
+                            title={tr('Delete J-Form', 'ਜੇ-ਫਾਰਮ ਹਟਾਓ')}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -614,7 +641,7 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
               <tfoot className="bg-slate-100 border-t-2 border-slate-300 font-bold text-slate-900">
                 <tr>
                   <td colSpan={4} className="py-2.5 px-3">
-                    Total ({filteredJForms.length} J-Forms)
+                    {tr(`Total (${filteredJForms.length} J-Forms)`, `ਕੁੱਲ ਜੋੜ (${filteredJForms.length} ਜੇ-ਫਾਰਮ)`)}
                   </td>
                   <td className="py-2.5 px-3 text-right font-mono tabular-nums">
                     {filteredTotals.totalBags.toLocaleString('en-IN')}

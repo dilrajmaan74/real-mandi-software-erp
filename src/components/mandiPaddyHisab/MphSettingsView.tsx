@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { DEFAULT_MPH_SETTINGS, MphSettings } from '../../types/mandiPaddyHisab';
+import { useMphLang } from '../../lib/mandiPaddyHisabI18n';
 import { RotateCcw, Save, Settings } from 'lucide-react';
 
 interface MphSettingsViewProps {
@@ -11,6 +12,7 @@ export const MphSettingsView: React.FC<MphSettingsViewProps> = ({
   settings,
   onSaveSettings,
 }) => {
+  const { tr } = useMphLang();
   const [hybridRate, setHybridRate] = useState(String(settings.hybridPaddyRate));
   const [gradeARate, setGradeARate] = useState(String(settings.paddyAGurdeRate));
   const [jFormLaborRate, setJFormLaborRate] = useState(String(settings.jFormLaborRate));
@@ -34,7 +36,12 @@ export const MphSettingsView: React.FC<MphSettingsViewProps> = ({
     const dl = Number(dryingLaborRate);
 
     if ([h, g, jl, dl].some((n) => isNaN(n) || n < 0)) {
-      setErrorMsg('ਸਾਰੇ ਰੇਟ 0 ਜਾਂ ਇਸ ਤੋਂ ਵੱਧ ਸਹੀ ਨੰਬਰ ਹੋਣੇ ਚਾਹੀਦੇ ਹਨ (All rates must be valid non-negative numbers).');
+      setErrorMsg(
+        tr(
+          'All rates must be valid non-negative numbers.',
+          'ਸਾਰੇ ਰੇਟ 0 ਜਾਂ ਇਸ ਤੋਂ ਵੱਧ ਸਹੀ ਨੰਬਰ ਹੋਣੇ ਚਾਹੀਦੇ ਹਨ।'
+        )
+      );
       return;
     }
 
@@ -63,10 +70,13 @@ export const MphSettingsView: React.FC<MphSettingsViewProps> = ({
           <Settings className="w-5 h-5 text-slate-700" />
           <div>
             <h3 className="text-sm font-bold text-slate-900">
-              Mandi Paddy Hisab Settings (ਰੇਟ ਅਤੇ ਲੇਬਰ ਸੈਟਿੰਗਾਂ)
+              {tr('Mandi Paddy Hisab Settings', 'ਮੰਡੀ ਝੋਨਾ ਹਿਸਾਬ ਰੇਟ ਅਤੇ ਲੇਬਰ ਸੈਟਿੰਗਾਂ')}
             </h3>
             <p className="text-[11px] text-slate-500">
-              Changes apply permanently for your account and automatically update labour deductions
+              {tr(
+                'Changes apply permanently for your account and automatically update labour deductions',
+                'ਇਹ ਬਦਲਾਅ ਤੁਹਾਡੇ ਖਾਤੇ ਲਈ ਪੱਕੇ ਤੌਰ ਤੇ ਸੇਵ ਹੁੰਦੇ ਹਨ ਅਤੇ ਲੇਬਰ ਕਟੌਤੀ ਆਪਣੇ-ਆਪ ਅੱਪਡੇਟ ਕਰਦੇ ਹਨ'
+              )}
             </p>
           </div>
         </div>
@@ -76,7 +86,7 @@ export const MphSettingsView: React.FC<MphSettingsViewProps> = ({
           className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 cursor-pointer whitespace-nowrap"
         >
           <RotateCcw className="w-3.5 h-3.5" />
-          <span>Reset Defaults</span>
+          <span>{tr('Reset Defaults', 'ਡਿਫਾਲਟ ਰੇਟ')}</span>
         </button>
       </div>
 
@@ -89,12 +99,12 @@ export const MphSettingsView: React.FC<MphSettingsViewProps> = ({
 
         <div>
           <h4 className="text-xs font-bold text-slate-900 mb-3 pb-1 border-b border-slate-100">
-            Default Paddy Rates per Quintal (ਝੋਨੇ ਦੇ ਡਿਫਾਲਟ ਰੇਟ)
+            {tr('Default Paddy Rates per Quintal', 'ਝੋਨੇ ਦੇ ਡਿਫਾਲਟ ਰੇਟ (ਪ੍ਰਤੀ ਕੁਇੰਟਲ)')}
           </h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Default Hybrid Paddy Rate (₹ / Quintal)
+                {tr('Default Hybrid Paddy Rate (₹ / Quintal)', 'ਡਿਫਾਲਟ ਹਾਈਬ੍ਰਿਡ ਝੋਨਾ ਰੇਟ (₹ / ਕੁਇੰਟਲ)')}
               </label>
               <input
                 type="number"
@@ -104,12 +114,14 @@ export const MphSettingsView: React.FC<MphSettingsViewProps> = ({
                 onChange={(e) => setHybridRate(e.target.value)}
                 className="w-full px-3 py-2 text-sm font-mono tabular-nums font-bold border border-slate-300 rounded-lg focus:outline-none focus:border-emerald-600"
               />
-              <span className="text-[11px] text-slate-500 mt-1 block">Default: ₹2350</span>
+              <span className="text-[11px] text-slate-500 mt-1 block">
+                {tr('Default: ₹2350', 'ਡਿਫਾਲਟ: ₹2350')}
+              </span>
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Default Paddy A Gurde Rate (₹ / Quintal)
+                {tr('Default Paddy A Grade Rate (₹ / Quintal)', 'ਡਿਫਾਲਟ ਝੋਨਾ A ਗ੍ਰੇਡ ਰੇਟ (₹ / ਕੁਇੰਟਲ)')}
               </label>
               <input
                 type="number"
@@ -119,19 +131,21 @@ export const MphSettingsView: React.FC<MphSettingsViewProps> = ({
                 onChange={(e) => setGradeARate(e.target.value)}
                 className="w-full px-3 py-2 text-sm font-mono tabular-nums font-bold border border-slate-300 rounded-lg focus:outline-none focus:border-emerald-600"
               />
-              <span className="text-[11px] text-slate-500 mt-1 block">Default: ₹2461</span>
+              <span className="text-[11px] text-slate-500 mt-1 block">
+                {tr('Default: ₹2461', 'ਡਿਫਾਲਟ: ₹2461')}
+              </span>
             </div>
           </div>
         </div>
 
         <div>
           <h4 className="text-xs font-bold text-slate-900 mb-3 pb-1 border-b border-slate-100">
-            Labour & Expense Rates per Bag (ਲੇਬਰ ਤੇ ਖਰਚੇ ਪ੍ਰਤੀ ਗੱਟਾ)
+            {tr('Labour & Expense Rates per Bag', 'ਲੇਬਰ ਅਤੇ ਖਰਚੇ ਦੇ ਰੇਟ (ਪ੍ਰਤੀ ਗੱਟਾ)')}
           </h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                J-Form Labour (₹ / Bag)
+                {tr('J-Form Labour (₹ / Bag)', 'ਜੇ-ਫਾਰਮ ਲੇਬਰ (₹ / ਗੱਟਾ)')}
               </label>
               <input
                 type="number"
@@ -141,12 +155,14 @@ export const MphSettingsView: React.FC<MphSettingsViewProps> = ({
                 onChange={(e) => setJFormLaborRate(e.target.value)}
                 className="w-full px-3 py-2 text-sm font-mono tabular-nums font-bold border border-slate-300 rounded-lg focus:outline-none focus:border-emerald-600"
               />
-              <span className="text-[11px] text-slate-500 mt-1 block">Default: ₹8 per bag</span>
+              <span className="text-[11px] text-slate-500 mt-1 block">
+                {tr('Default: ₹8 per bag', 'ਡਿਫਾਲਟ: ₹8 ਪ੍ਰਤੀ ਗੱਟਾ')}
+              </span>
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Paddy Drying Labour (₹ / Bag)
+                {tr('Paddy Drying Labour (₹ / Bag)', 'ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ (₹ / ਗੱਟਾ)')}
               </label>
               <input
                 type="number"
@@ -156,7 +172,9 @@ export const MphSettingsView: React.FC<MphSettingsViewProps> = ({
                 onChange={(e) => setDryingLaborRate(e.target.value)}
                 className="w-full px-3 py-2 text-sm font-mono tabular-nums font-bold border border-slate-300 rounded-lg focus:outline-none focus:border-emerald-600"
               />
-              <span className="text-[11px] text-slate-500 mt-1 block">Default: ₹10 per bag</span>
+              <span className="text-[11px] text-slate-500 mt-1 block">
+                {tr('Default: ₹10 per bag', 'ਡਿਫਾਲਟ: ₹10 ਪ੍ਰਤੀ ਗੱਟਾ')}
+              </span>
             </div>
           </div>
         </div>
@@ -167,7 +185,7 @@ export const MphSettingsView: React.FC<MphSettingsViewProps> = ({
             className="inline-flex items-center gap-1.5 px-5 py-2.5 text-xs sm:text-sm font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer"
           >
             <Save className="w-4 h-4" />
-            <span>Save Settings (ਸੈਟਿੰਗਾਂ ਸੇਵ ਕਰੋ)</span>
+            <span>{tr('Save Settings', 'ਸੈਟਿੰਗਾਂ ਸੇਵ ਕਰੋ')}</span>
           </button>
         </div>
       </form>

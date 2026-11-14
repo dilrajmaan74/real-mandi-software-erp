@@ -31,6 +31,7 @@ import {
   subscribeToMphCloudData,
   syncMphLocalDataToCloud,
 } from '../../lib/mandiPaddyHisabDb';
+import { MphLangProvider, useMphLang } from '../../lib/mandiPaddyHisabI18n';
 import { MphConfirmModal } from './MphConfirmModal';
 import { MphDashboard, MphTab } from './MphDashboard';
 import { MphFarmerMasterView } from './MphFarmerMasterView';
@@ -46,6 +47,7 @@ import {
   CloudUpload,
   FileSpreadsheet,
   FileText,
+  Languages,
   LayoutDashboard,
   Percent,
   RefreshCw,
@@ -59,6 +61,15 @@ interface MandiPaddyHisabAppProps {
 }
 
 export const MandiPaddyHisabApp: React.FC<MandiPaddyHisabAppProps> = ({ user }) => {
+  return (
+    <MphLangProvider>
+      <MandiPaddyHisabInner user={user} />
+    </MphLangProvider>
+  );
+};
+
+const MandiPaddyHisabInner: React.FC<MandiPaddyHisabAppProps> = ({ user }) => {
+  const { lang, setLang, tr } = useMphLang();
   const [activeTab, setActiveTab] = useState<MphTab>('dashboard');
   const [selectedFarmerId, setSelectedFarmerId] = useState<string>('');
 
@@ -165,7 +176,10 @@ export const MandiPaddyHisabApp: React.FC<MandiPaddyHisabAppProps> = ({ user }) 
 
   const handleManualCloudSync = async () => {
     if (!user) {
-      showNotice('error', 'ਕਲਾਊਡ ਸਿੰਕ ਲਈ ਪਹਿਲਾਂ ਉੱਪਰ Google Sign-In ਕਰੋ।');
+      showNotice(
+        'error',
+        tr('Please sign in with Google first for cloud sync.', 'ਕਲਾਊਡ ਸਿੰਕ ਲਈ ਪਹਿਲਾਂ ਉੱਪਰ Google Sign-In ਕਰੋ।')
+      );
       return;
     }
     setIsSyncingLocal(true);
@@ -178,10 +192,19 @@ export const MandiPaddyHisabApp: React.FC<MandiPaddyHisabAppProps> = ({ user }) 
         advances,
         settings,
       });
-      showNotice('success', `Mandi Paddy Hisab ਦੇ ${count} ਰਿਕਾਰਡ ਕਲਾਊਡ ਵਿੱਚ ਸੁਰੱਖਿਅਤ ਸਿੰਕ ਹੋ ਗਏ।`);
+      showNotice(
+        'success',
+        tr(
+          `${count} Mandi Paddy Hisab records synced to cloud.`,
+          `Mandi Paddy Hisab ਦੇ ${count} ਰਿਕਾਰਡ ਕਲਾਊਡ ਵਿੱਚ ਸੁਰੱਖਿਅਤ ਸਿੰਕ ਹੋ ਗਏ।`
+        )
+      );
     } catch (err) {
       console.error(err);
-      showNotice('error', 'Cloud sync failed. Please check your connection.');
+      showNotice(
+        'error',
+        tr('Cloud sync failed. Please check your connection.', 'ਕਲਾਊਡ ਸਿੰਕ ਫੇਲ੍ਹ ਹੋਇਆ। ਕਿਰਪਾ ਕਰਕੇ ਇੰਟਰਨੈੱਟ ਚੈੱਕ ਕਰੋ।')
+      );
     } finally {
       setIsSyncingLocal(false);
     }
@@ -213,10 +236,18 @@ export const MandiPaddyHisabApp: React.FC<MandiPaddyHisabAppProps> = ({ user }) 
     if (user) {
       saveMphFarmerToCloud(user.uid, farmer).catch((err) => {
         console.error(err);
-        showNotice('error', 'Error saving farmer to Firestore.');
+        showNotice(
+          'error',
+          tr('Error saving farmer to Firestore.', 'ਕਿਸਾਨ ਕਲਾਊਡ ਵਿੱਚ ਸੇਵ ਕਰਨ ਵੇਲੇ ਗਲਤੀ ਆਈ।')
+        );
       });
     }
-    showNotice('success', isEdit ? `Farmer "${farmer.name}" updated.` : `Farmer "${farmer.name}" added.`);
+    showNotice(
+      'success',
+      isEdit
+        ? tr(`Farmer "${farmer.name}" updated.`, `ਕਿਸਾਨ "${farmer.name}" ਅੱਪਡੇਟ ਹੋ ਗਿਆ।`)
+        : tr(`Farmer "${farmer.name}" added.`, `ਨਵਾਂ ਕਿਸਾਨ "${farmer.name}" ਦਰਜ ਹੋ ਗਿਆ।`)
+    );
   };
 
   const handleDeleteFarmer = (farmer: MphFarmer) => {
@@ -227,10 +258,13 @@ export const MandiPaddyHisabApp: React.FC<MandiPaddyHisabAppProps> = ({ user }) 
 
     setConfirmState({
       isOpen: true,
-      title: 'Delete Farmer (ਕਿਸਾਨ ਹਟਾਓ)',
+      title: tr('Delete Farmer', 'ਕਿਸਾਨ ਹਟਾਓ'),
       tone: 'danger',
-      confirmLabel: 'Delete Permanently',
-      message: `Are you sure you want to delete farmer "${farmer.name}" (${farmer.village})?\n\nThis will also delete ${linkedArrivals.length} Paddy Arrivals, ${linkedJForms.length} J-Forms, ${linkedOthers.length} Other Entries, and ${linkedAdvances.length} Advances for this farmer.`,
+      confirmLabel: tr('Delete Permanently', 'ਪੱਕਾ ਹਟਾਓ'),
+      message: tr(
+        `Are you sure you want to delete farmer "${farmer.name}" (${farmer.village})?\n\nThis will also delete ${linkedArrivals.length} Paddy Arrivals, ${linkedJForms.length} J-Forms, ${linkedOthers.length} Other Entries, and ${linkedAdvances.length} Advances for this farmer.`,
+        `ਕੀ ਤੁਸੀਂ ਕਿਸਾਨ "${farmer.name}" (${farmer.village}) ਨੂੰ ਹਟਾਉਣਾ ਚਾਹੁੰਦੇ ਹੋ?\n\nਇਸ ਨਾਲ ਇਸ ਕਿਸਾਨ ਦੀਆਂ ${linkedArrivals.length} ਝੋਨਾ ਆਵਕਾਂ, ${linkedJForms.length} ਜੇ-ਫਾਰਮ, ${linkedOthers.length} ਹੋਰ ਐਂਟਰੀਆਂ ਅਤੇ ${linkedAdvances.length} ਪੇਸ਼ਗੀਆਂ ਵੀ ਹਟ ਜਾਣਗੀਆਂ।`
+      ),
       onConfirm: () => {
         setConfirmState((s) => ({ ...s, isOpen: false }));
         setFarmers((prev) => prev.filter((f) => f.id !== farmer.id));
@@ -250,7 +284,7 @@ export const MandiPaddyHisabApp: React.FC<MandiPaddyHisabAppProps> = ({ user }) 
             linkedAdvances.map((adv) => adv.id)
           ).catch(console.error);
         }
-        showNotice('success', `Farmer "${farmer.name}" removed.`);
+        showNotice('success', tr(`Farmer "${farmer.name}" removed.`, `ਕਿਸਾਨ "${farmer.name}" ਹਟਾ ਦਿੱਤਾ ਗਿਆ।`));
       },
     });
   };
@@ -264,26 +298,29 @@ export const MandiPaddyHisabApp: React.FC<MandiPaddyHisabAppProps> = ({ user }) 
     if (user) {
       saveMphArrivalToCloud(user.uid, arrival).catch((err) => {
         console.error(err);
-        showNotice('error', 'Error saving paddy arrival to Firestore.');
+        showNotice('error', tr('Error saving paddy arrival to Firestore.', 'ਝੋਨਾ ਆਵਕ ਕਲਾਊਡ ਵਿੱਚ ਸੇਵ ਕਰਨ ਵੇਲੇ ਗਲਤੀ ਆਈ।'));
       });
     }
-    showNotice('success', isEdit ? 'Paddy Arrival updated.' : 'Paddy Arrival saved.');
+    showNotice('success', isEdit ? tr('Paddy Arrival updated.', 'ਝੋਨਾ ਆਵਕ ਅੱਪਡੇਟ ਹੋ ਗਈ।') : tr('Paddy Arrival saved.', 'ਝੋਨਾ ਆਵਕ ਸੇਵ ਹੋ ਗਈ।'));
   };
 
   const handleDeleteArrival = (arrival: MphArrival) => {
     setConfirmState({
       isOpen: true,
-      title: 'Delete Paddy Arrival (ਆਵਕ ਹਟਾਓ)',
+      title: tr('Delete Paddy Arrival', 'ਝੋਨਾ ਆਵਕ ਹਟਾਓ'),
       tone: 'danger',
-      confirmLabel: 'Delete Entry',
-      message: `Delete paddy arrival for "${arrival.farmerName}" (${arrival.bags} Bags, ${arrival.paddyType})?`,
+      confirmLabel: tr('Delete Entry', 'ਐਂਟਰੀ ਹਟਾਓ'),
+      message: tr(
+        `Delete paddy arrival for "${arrival.farmerName}" (${arrival.bags} Bags, ${arrival.paddyType})?`,
+        `ਕੀ ਤੁਸੀਂ "${arrival.farmerName}" ਦੀ ਝੋਨਾ ਆਵਕ (${arrival.bags} ਗੱਟੇ, ${arrival.paddyType}) ਹਟਾਉਣਾ ਚਾਹੁੰਦੇ ਹੋ?`
+      ),
       onConfirm: () => {
         setConfirmState((s) => ({ ...s, isOpen: false }));
         setArrivals((prev) => prev.filter((a) => a.id !== arrival.id));
         if (user) {
           deleteMphArrivalFromCloud(user.uid, arrival.id).catch(console.error);
         }
-        showNotice('success', 'Paddy Arrival entry deleted.');
+        showNotice('success', tr('Paddy Arrival entry deleted.', 'ਝੋਨਾ ਆਵਕ ਐਂਟਰੀ ਹਟਾ ਦਿੱਤੀ ਗਈ।'));
       },
     });
   };
@@ -297,26 +334,29 @@ export const MandiPaddyHisabApp: React.FC<MandiPaddyHisabAppProps> = ({ user }) 
     if (user) {
       saveMphJFormToCloud(user.uid, jForm).catch((err) => {
         console.error(err);
-        showNotice('error', 'Error saving J-Form to Firestore.');
+        showNotice('error', tr('Error saving J-Form to Firestore.', 'ਜੇ-ਫਾਰਮ ਕਲਾਊਡ ਵਿੱਚ ਸੇਵ ਕਰਨ ਵੇਲੇ ਗਲਤੀ ਆਈ।'));
       });
     }
-    showNotice('success', isEdit ? 'J-Form updated.' : 'J-Form saved.');
+    showNotice('success', isEdit ? tr('J-Form updated.', 'ਜੇ-ਫਾਰਮ ਅੱਪਡੇਟ ਹੋ ਗਿਆ।') : tr('J-Form saved.', 'ਜੇ-ਫਾਰਮ ਸੇਵ ਹੋ ਗਿਆ।'));
   };
 
   const handleDeleteJForm = (jForm: MphJForm) => {
     setConfirmState({
       isOpen: true,
-      title: 'Delete J-Form (ਜੇ-ਫਾਰਮ ਹਟਾਓ)',
+      title: tr('Delete J-Form', 'ਜੇ-ਫਾਰਮ ਹਟਾਓ'),
       tone: 'danger',
-      confirmLabel: 'Delete J-Form',
-      message: `Delete J-Form entry for "${jForm.farmerName}" (${jForm.bags} Bags)?`,
+      confirmLabel: tr('Delete J-Form', 'ਜੇ-ਫਾਰਮ ਹਟਾਓ'),
+      message: tr(
+        `Delete J-Form entry for "${jForm.farmerName}" (${jForm.bags} Bags)?`,
+        `ਕੀ ਤੁਸੀਂ "${jForm.farmerName}" ਦਾ ਜੇ-ਫਾਰਮ (${jForm.bags} ਗੱਟੇ) ਹਟਾਉਣਾ ਚਾਹੁੰਦੇ ਹੋ?`
+      ),
       onConfirm: () => {
         setConfirmState((s) => ({ ...s, isOpen: false }));
         setJForms((prev) => prev.filter((j) => j.id !== jForm.id));
         if (user) {
           deleteMphJFormFromCloud(user.uid, jForm.id).catch(console.error);
         }
-        showNotice('success', 'J-Form entry deleted.');
+        showNotice('success', tr('J-Form entry deleted.', 'ਜੇ-ਫਾਰਮ ਐਂਟਰੀ ਹਟਾ ਦਿੱਤੀ ਗਈ।'));
       },
     });
   };
@@ -330,26 +370,29 @@ export const MandiPaddyHisabApp: React.FC<MandiPaddyHisabAppProps> = ({ user }) 
     if (user) {
       saveMphOtherEntryToCloud(user.uid, entry).catch((err) => {
         console.error(err);
-        showNotice('error', 'Error saving entry to Firestore.');
+        showNotice('error', tr('Error saving entry to Firestore.', 'ਐਂਟਰੀ ਕਲਾਊਡ ਵਿੱਚ ਸੇਵ ਕਰਨ ਵੇਲੇ ਗਲਤੀ ਆਈ।'));
       });
     }
-    showNotice('success', isEdit ? 'Entry updated.' : 'Expense / payment entry saved.');
+    showNotice('success', isEdit ? tr('Entry updated.', 'ਐਂਟਰੀ ਅੱਪਡੇਟ ਹੋ ਗਈ।') : tr('Expense / payment entry saved.', 'ਖਰਚ / ਅਦਾਇਗੀ ਐਂਟਰੀ ਸੇਵ ਹੋ ਗਈ।'));
   };
 
   const handleDeleteOtherEntry = (entry: MphOtherEntry) => {
     setConfirmState({
       isOpen: true,
-      title: 'Delete Entry (ਐਂਟਰੀ ਹਟਾਓ)',
+      title: tr('Delete Entry', 'ਐਂਟਰੀ ਹਟਾਓ'),
       tone: 'danger',
-      confirmLabel: 'Delete',
-      message: `Delete "${entry.description}" (₹${entry.amount})?`,
+      confirmLabel: tr('Delete', 'ਹਟਾਓ'),
+      message: tr(
+        `Delete "${entry.description}" (₹${entry.amount})?`,
+        `ਕੀ ਤੁਸੀਂ "${entry.description}" (₹${entry.amount}) ਹਟਾਉਣਾ ਚਾਹੁੰਦੇ ਹੋ?`
+      ),
       onConfirm: () => {
         setConfirmState((s) => ({ ...s, isOpen: false }));
         setOtherEntries((prev) => prev.filter((o) => o.id !== entry.id));
         if (user) {
           deleteMphOtherEntryFromCloud(user.uid, entry.id).catch(console.error);
         }
-        showNotice('success', 'Entry deleted.');
+        showNotice('success', tr('Entry deleted.', 'ਐਂਟਰੀ ਹਟਾ ਦਿੱਤੀ ਗਈ।'));
       },
     });
   };
@@ -363,26 +406,32 @@ export const MandiPaddyHisabApp: React.FC<MandiPaddyHisabAppProps> = ({ user }) 
     if (user) {
       saveMphAdvanceToCloud(user.uid, advance).catch((err) => {
         console.error(err);
-        showNotice('error', 'Error saving advance entry to Firestore.');
+        showNotice('error', tr('Error saving advance entry to Firestore.', 'ਪੇਸ਼ਗੀ ਐਂਟਰੀ ਕਲਾਊਡ ਵਿੱਚ ਸੇਵ ਕਰਨ ਵੇਲੇ ਗਲਤੀ ਆਈ।'));
       });
     }
-    showNotice('success', isEdit ? 'Advance & interest updated.' : 'Advance & interest saved.');
+    showNotice(
+      'success',
+      isEdit ? tr('Advance & interest updated.', 'ਪੇਸ਼ਗੀ ਅਤੇ ਵਿਆਜ ਅੱਪਡੇਟ ਹੋ ਗਏ।') : tr('Advance & interest saved.', 'ਪੇਸ਼ਗੀ ਅਤੇ ਵਿਆਜ ਸੇਵ ਹੋ ਗਏ।')
+    );
   };
 
   const handleDeleteAdvance = (advance: MphAdvance) => {
     setConfirmState({
       isOpen: true,
-      title: 'Delete Advance (ਪੇਸ਼ਗੀ ਹਟਾਓ)',
+      title: tr('Delete Advance', 'ਪੇਸ਼ਗੀ ਹਟਾਓ'),
       tone: 'danger',
-      confirmLabel: 'Delete Advance',
-      message: `Delete advance for "${advance.farmerName}" (Principal ₹${advance.principalAmount} + Interest ₹${advance.interestAmount})?`,
+      confirmLabel: tr('Delete Advance', 'ਪੇਸ਼ਗੀ ਹਟਾਓ'),
+      message: tr(
+        `Delete advance for "${advance.farmerName}" (Principal ₹${advance.principalAmount} + Interest ₹${advance.interestAmount})?`,
+        `ਕੀ ਤੁਸੀਂ "${advance.farmerName}" ਦੀ ਪੇਸ਼ਗੀ (ਮੂਲ ₹${advance.principalAmount} + ਵਿਆਜ ₹${advance.interestAmount}) ਹਟਾਉਣਾ ਚਾਹੁੰਦੇ ਹੋ?`
+      ),
       onConfirm: () => {
         setConfirmState((s) => ({ ...s, isOpen: false }));
         setAdvances((prev) => prev.filter((a) => a.id !== advance.id));
         if (user) {
           deleteMphAdvanceFromCloud(user.uid, advance.id).catch(console.error);
         }
-        showNotice('success', 'Advance entry deleted.');
+        showNotice('success', tr('Advance entry deleted.', 'ਪੇਸ਼ਗੀ ਐਂਟਰੀ ਹਟਾ ਦਿੱਤੀ ਗਈ।'));
       },
     });
   };
@@ -393,10 +442,10 @@ export const MandiPaddyHisabApp: React.FC<MandiPaddyHisabAppProps> = ({ user }) 
     if (user) {
       saveMphSettingsToCloud(user.uid, nextSettings).catch((err) => {
         console.error(err);
-        showNotice('error', 'Error saving settings to Firestore.');
+        showNotice('error', tr('Error saving settings to Firestore.', 'ਸੈਟਿੰਗਾਂ ਕਲਾਊਡ ਵਿੱਚ ਸੇਵ ਕਰਨ ਵੇਲੇ ਗਲਤੀ ਆਈ।'));
       });
     }
-    showNotice('success', 'Mandi Paddy Hisab rates and settings saved.');
+    showNotice('success', tr('Mandi Paddy Hisab rates and settings saved.', 'ਮੰਡੀ ਝੋਨਾ ਹਿਸਾਬ ਰੇਟ ਅਤੇ ਸੈਟਿੰਗਾਂ ਸੇਵ ਹੋ ਗਈਆਂ।'));
   };
 
   const handleNavigate = (tab: MphTab, farmerId?: string) => {
@@ -407,46 +456,46 @@ export const MandiPaddyHisabApp: React.FC<MandiPaddyHisabAppProps> = ({ user }) 
   const navItems: Array<{ id: MphTab; label: string; count?: number; icon: React.ReactNode }> = [
     {
       id: 'dashboard',
-      label: 'Dashboard (ਡੈਸ਼ਬੋਰਡ)',
+      label: tr('Dashboard', 'ਡੈਸ਼ਬੋਰਡ'),
       icon: <LayoutDashboard className="w-4 h-4" />,
     },
     {
       id: 'farmers',
-      label: 'Farmer Master (ਕਿਸਾਨ)',
+      label: tr('Farmer Master', 'ਕਿਸਾਨ ਸੂਚੀ'),
       count: farmers.length,
       icon: <Users className="w-4 h-4" />,
     },
     {
       id: 'arrivals',
-      label: 'Paddy Arrival (ਆਵਕ)',
+      label: tr('Paddy Arrival', 'ਝੋਨਾ ਆਵਕ'),
       count: arrivals.length,
       icon: <Wheat className="w-4 h-4" />,
     },
     {
       id: 'jforms',
-      label: 'J-Form Entry (ਜੇ-ਫਾਰਮ)',
+      label: tr('J-Form Entry', 'ਜੇ-ਫਾਰਮ'),
       count: jForms.length,
       icon: <FileSpreadsheet className="w-4 h-4" />,
     },
     {
       id: 'advances',
-      label: 'Advance & Interest (ਪੇਸ਼ਗੀ/ਵਿਆਜ)',
+      label: tr('Advance & Interest', 'ਪੇਸ਼ਗੀ ਅਤੇ ਵਿਆਜ'),
       count: advances.length,
       icon: <Percent className="w-4 h-4" />,
     },
     {
       id: 'ledger',
-      label: 'Farmer Account (ਹਿਸਾਬ)',
+      label: tr('Farmer Account', 'ਕਿਸਾਨ ਹਿਸਾਬ'),
       icon: <BookOpen className="w-4 h-4" />,
     },
     {
       id: 'reports',
-      label: 'Reports & PDF (ਰਿਪੋਰਟਾਂ)',
+      label: tr('Reports & PDF', 'ਰਿਪੋਰਟਾਂ ਅਤੇ PDF'),
       icon: <FileText className="w-4 h-4" />,
     },
     {
       id: 'settings',
-      label: 'Settings (ਰੇਟ ਸੈਟਿੰਗ)',
+      label: tr('Settings', 'ਰੇਟ ਸੈਟਿੰਗ'),
       icon: <Settings className="w-4 h-4" />,
     },
   ];
@@ -454,8 +503,8 @@ export const MandiPaddyHisabApp: React.FC<MandiPaddyHisabAppProps> = ({ user }) 
   return (
     <div className="space-y-4">
       {/* Independent Module Menu Bar */}
-      <div className="print:hidden bg-white border border-slate-200 rounded-xl p-2 flex flex-col lg:flex-row lg:items-center justify-between gap-2">
-        <div className="flex items-center gap-1 overflow-x-auto pb-1 lg:pb-0">
+      <div className="print:hidden bg-white border border-slate-200 rounded-xl p-2 flex flex-col xl:flex-row xl:items-center justify-between gap-2">
+        <div className="flex items-center gap-1 overflow-x-auto pb-1 xl:pb-0">
           {navItems.map((item) => {
             const active = activeTab === item.id;
             return (
@@ -485,22 +534,54 @@ export const MandiPaddyHisabApp: React.FC<MandiPaddyHisabAppProps> = ({ user }) 
           })}
         </div>
 
-        {user && (
-          <button
-            type="button"
-            onClick={handleManualCloudSync}
-            disabled={isSyncingLocal}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer whitespace-nowrap self-end lg:self-auto shrink-0"
-            title="Upload local Mandi Paddy Hisab records to Firebase Firestore"
+        <div className="flex items-center gap-2 self-end xl:self-auto shrink-0">
+          {/* Language Switcher: English / ਪੰਜਾਬੀ */}
+          <div
+            className="inline-flex items-center bg-slate-100 border border-slate-200 rounded-lg p-0.5"
+            title="Switch Language / ਭਾਸ਼ਾ ਬਦਲੋ"
           >
-            {isSyncingLocal ? (
-              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <CloudUpload className="w-3.5 h-3.5 text-emerald-700" />
-            )}
-            <span>Sync Cloud</span>
-          </button>
-        )}
+            <Languages className="w-3.5 h-3.5 text-slate-500 ml-1.5 mr-1" />
+            <button
+              type="button"
+              onClick={() => setLang('en')}
+              className={`px-2.5 py-1 text-xs font-bold rounded-md transition-colors cursor-pointer whitespace-nowrap ${
+                lang === 'en'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              English
+            </button>
+            <button
+              type="button"
+              onClick={() => setLang('pa')}
+              className={`px-2.5 py-1 text-xs font-bold rounded-md transition-colors cursor-pointer whitespace-nowrap ${
+                lang === 'pa'
+                  ? 'bg-emerald-700 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              ਪੰਜਾਬੀ
+            </button>
+          </div>
+
+          {user && (
+            <button
+              type="button"
+              onClick={handleManualCloudSync}
+              disabled={isSyncingLocal}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer whitespace-nowrap shrink-0"
+              title={tr('Upload local Mandi Paddy Hisab records to Firebase Firestore', 'ਲੋਕਲ ਰਿਕਾਰਡ ਕਲਾਊਡ ਵਿੱਚ ਅਪਲੋਡ ਕਰੋ')}
+            >
+              {isSyncingLocal ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <CloudUpload className="w-3.5 h-3.5 text-emerald-700" />
+              )}
+              <span>{tr('Sync Cloud', 'ਕਲਾਊਡ ਸਿੰਕ')}</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Inline Status Notice */}

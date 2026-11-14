@@ -15,6 +15,7 @@ import {
   formatWeightQKG,
   sumPaddyWeights,
 } from '../../lib/mandiPaddyHisabUtils';
+import { useMphLang } from '../../lib/mandiPaddyHisabI18n';
 import { Edit3, Plus, Search, Trash2, Wheat, X } from 'lucide-react';
 
 interface MphArrivalViewProps {
@@ -42,6 +43,7 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
   onGoToFarmers,
   requestConfirm,
 }) => {
+  const { tr } = useMphLang();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [farmerId, setFarmerId] = useState<string>(farmers[0]?.id || '');
   const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -161,19 +163,19 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
 
     const selectedFarmer = farmers.find((f) => f.id === farmerId);
     if (!selectedFarmer) {
-      setErrorMsg('ਕਿਰਪਾ ਕਰਕੇ ਪਹਿਲਾਂ ਕਿਸਾਨ ਚੁਣੋ (Please select a farmer).');
+      setErrorMsg(tr('Please select a farmer first.', 'ਕਿਰਪਾ ਕਰਕੇ ਪਹਿਲਾਂ ਕਿਸਾਨ ਚੁਣੋ।'));
       return;
     }
     if (!date) {
-      setErrorMsg('ਕਿਰਪਾ ਕਰਕੇ ਆਵਕ ਤਾਰੀਖ (Arrival Date) ਚੁਣੋ।');
+      setErrorMsg(tr('Please select Arrival Date.', 'ਕਿਰਪਾ ਕਰਕੇ ਆਵਕ ਤਾਰੀਖ ਚੁਣੋ।'));
       return;
     }
     if (parsedRate <= 0) {
-      setErrorMsg('ਰੇਟ 0 ਤੋਂ ਵੱਧ ਹੋਣਾ ਚਾਹੀਦਾ ਹੈ (Rate per quintal must be greater than 0).');
+      setErrorMsg(tr('Rate per quintal must be greater than 0.', 'ਰੇਟ 0 ਤੋਂ ਵੱਧ ਹੋਣਾ ਚਾਹੀਦਾ ਹੈ।'));
       return;
     }
     if (parsedBags === 0 && parsedLooseKg === 0 && parsedLooseGm === 0) {
-      setErrorMsg('ਗੱਟੇ ਜਾਂ ਖੁੱਲ੍ਹਾ ਵਜ਼ਨ ਦਰਜ ਕਰੋ (Enter bags or loose weight).');
+      setErrorMsg(tr('Please enter bags or loose weight.', 'ਗੱਟੇ ਜਾਂ ਖੁੱਲ੍ਹਾ ਵਜ਼ਨ ਦਰਜ ਕਰੋ।'));
       return;
     }
 
@@ -196,9 +198,12 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
 
     if (dup) {
       requestConfirm({
-        title: 'Duplicate Paddy Arrival Warning (ਡੁਪਲੀਕੇਟ ਚੇਤਾਵਨੀ)',
-        message: `Farmer "${selectedFarmer.name}" already has an identical ${paddyType} entry on ${formatDateDMY(date)} (${parsedBags} Bags, ${formatLooseKgGm(normalizedLooseKg, normalizedLooseGm)}).\n\nDo you still want to save this entry?`,
-        confirmLabel: 'Save Anyway (ਫਿਰ ਵੀ ਸੇਵ ਕਰੋ)',
+        title: tr('Duplicate Paddy Arrival Warning', 'ਡੁਪਲੀਕੇਟ ਝੋਨਾ ਆਵਕ ਚੇਤਾਵਨੀ'),
+        message: tr(
+          `Farmer "${selectedFarmer.name}" already has an identical ${paddyType} entry on ${formatDateDMY(date)} (${parsedBags} Bags, ${formatLooseKgGm(normalizedLooseKg, normalizedLooseGm)}).\n\nDo you still want to save this entry?`,
+          `ਕਿਸਾਨ "${selectedFarmer.name}" ਦੀ ${formatDateDMY(date)} ਨੂੰ ${paddyType} ਦੀ ਇਹੀ ਐਂਟਰੀ (${parsedBags} ਗੱਟੇ, ${formatLooseKgGm(normalizedLooseKg, normalizedLooseGm)}) ਪਹਿਲਾਂ ਹੀ ਦਰਜ ਹੈ।\n\nਕੀ ਤੁਸੀਂ ਫਿਰ ਵੀ ਇਹ ਐਂਟਰੀ ਸੇਵ ਕਰਨੀ ਚਾਹੁੰਦੇ ਹੋ?`
+        ),
+        confirmLabel: tr('Save Anyway', 'ਫਿਰ ਵੀ ਸੇਵ ਕਰੋ'),
         tone: 'warning',
         onConfirm: () => commitSave(existingItem, selectedFarmer),
       });
@@ -241,7 +246,7 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
           <div className="flex items-center gap-2">
             <Wheat className="w-4 h-4 text-emerald-700" />
             <h3 className="text-sm font-bold text-slate-900">
-              {editingId ? 'Edit Paddy Arrival (ਸੋਧੋ)' : 'Paddy Arrival Entry (ਝੋਨਾ ਆਵਕ)'}
+              {editingId ? tr('Edit Paddy Arrival', 'ਝੋਨਾ ਆਵਕ ਸੋਧੋ') : tr('Paddy Arrival Entry', 'ਝੋਨਾ ਆਵਕ ਐਂਟਰੀ')}
             </h3>
           </div>
           {editingId && (
@@ -251,7 +256,7 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
               className="text-xs text-slate-500 hover:text-slate-800 inline-flex items-center gap-1 cursor-pointer"
             >
               <X className="w-3.5 h-3.5" />
-              <span>Cancel</span>
+              <span>{tr('Cancel', 'ਰੱਦ ਕਰੋ')}</span>
             </button>
           )}
         </div>
@@ -259,14 +264,17 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
         {farmers.length === 0 ? (
           <div className="p-6 text-center space-y-3">
             <p className="text-xs text-slate-600">
-              Please add a farmer in Farmer Master before recording paddy arrivals.
+              {tr(
+                'Please add a farmer in Farmer Master before recording paddy arrivals.',
+                'ਝੋਨਾ ਆਵਕ ਦਰਜ ਕਰਨ ਤੋਂ ਪਹਿਲਾਂ ਕਿਸਾਨ ਸੂਚੀ ਵਿੱਚ ਕਿਸਾਨ ਜੋੜੋ।'
+              )}
             </p>
             <button
               type="button"
               onClick={onGoToFarmers}
               className="px-4 py-2 text-xs font-bold bg-slate-900 text-white rounded-lg hover:bg-slate-800 cursor-pointer"
             >
-              Go to Farmer Master
+              {tr('Go to Farmer Master', 'ਕਿਸਾਨ ਸੂਚੀ ਵਿੱਚ ਜਾਓ')}
             </button>
           </div>
         ) : (
@@ -279,7 +287,7 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Farmer (ਕਿਸਾਨ ਚੁਣੋ) *
+                {tr('Farmer *', 'ਕਿਸਾਨ ਚੁਣੋ *')}
               </label>
               <select
                 value={farmerId}
@@ -297,7 +305,7 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Arrival Date (ਤਾਰੀਖ) *
+                  {tr('Arrival Date *', 'ਆਵਕ ਤਾਰੀਖ *')}
                 </label>
                 <input
                   type="date"
@@ -309,7 +317,7 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Rate / Quintal (₹) *
+                  {tr('Rate / Quintal (₹) *', 'ਰੇਟ / ਕੁਇੰਟਲ (₹) *')}
                 </label>
                 <input
                   type="number"
@@ -324,7 +332,7 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Paddy Type (ਝੋਨੇ ਦੀ ਕਿਸਮ) *
+                {tr('Paddy Type *', 'ਝੋਨੇ ਦੀ ਕਿਸਮ *')}
               </label>
               <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-lg">
                 <button
@@ -336,7 +344,7 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  Paddy A Gurde (₹{settings.paddyAGurdeRate})
+                  {tr('Paddy A Grade', 'ਝੋਨਾ A ਗ੍ਰੇਡ')} (₹{settings.paddyAGurdeRate})
                 </button>
                 <button
                   type="button"
@@ -347,7 +355,7 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  Hybrid Paddy (₹{settings.hybridPaddyRate})
+                  {tr('Hybrid Paddy', 'ਹਾਈਬ੍ਰਿਡ ਝੋਨਾ')} (₹{settings.hybridPaddyRate})
                 </button>
               </div>
             </div>
@@ -355,7 +363,7 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
             <div className="grid grid-cols-3 gap-2.5">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Bags (ਗੱਟੇ)
+                  {tr('Bags', 'ਗੱਟੇ')}
                 </label>
                 <input
                   type="number"
@@ -368,7 +376,7 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Loose KG (ਕਿੱਲੋ)
+                  {tr('Loose KG', 'ਖੁੱਲ੍ਹਾ ਕਿੱਲੋ')}
                 </label>
                 <input
                   type="number"
@@ -381,7 +389,7 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Loose GM (ਗ੍ਰਾਮ)
+                  {tr('Loose GM', 'ਖੁੱਲ੍ਹਾ ਗ੍ਰਾਮ')}
                 </label>
                 <input
                   type="number"
@@ -398,13 +406,15 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
             {/* Live Calculation Preview */}
             <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 space-y-1.5 text-xs">
               <div className="flex items-center justify-between text-slate-700">
-                <span>Bags Weight ({parsedBags} × 37.5 KG) + Loose:</span>
+                <span>
+                  {tr(`Bags Weight (${parsedBags} × 37.5 KG) + Loose:`, `ਗੱਟਿਆਂ ਦਾ ਵਜ਼ਨ (${parsedBags} × 37.5 ਕਿੱਲੋ) + ਖੁੱਲ੍ਹਾ:`)}
+                </span>
                 <span className="font-mono tabular-nums font-semibold">
-                  {liveWeight.totalQuintals.toFixed(3)} Qtl
+                  {liveWeight.totalQuintals.toFixed(3)} {tr('Qtl', 'ਕੁਇੰ')}
                 </span>
               </div>
               <div className="flex items-center justify-between text-emerald-950 font-bold">
-                <span>Total Weight (ਕੁੱਲ ਵਜ਼ਨ):</span>
+                <span>{tr('Total Weight:', 'ਕੁੱਲ ਵਜ਼ਨ:')}</span>
                 <span className="font-mono tabular-nums">
                   {formatWeightQKG(
                     liveWeight.weightQtlPart,
@@ -414,7 +424,7 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
                 </span>
               </div>
               <div className="flex items-center justify-between pt-1.5 border-t border-emerald-200 text-emerald-900 font-bold text-sm">
-                <span>Paddy Amount (ਝੋਨਾ ਰਕਮ):</span>
+                <span>{tr('Paddy Amount:', 'ਝੋਨੇ ਦੀ ਰਕਮ:')}</span>
                 <span className="font-mono tabular-nums">{formatINR(liveAmount)}</span>
               </div>
             </div>
@@ -427,7 +437,8 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
                 className="w-4 h-4 text-emerald-700 rounded cursor-pointer"
               />
               <span>
-                Apply Paddy Drying Labour (₹{settings.paddyDryingLaborRate}/bag ={' '}
+                {tr('Apply Paddy Drying Labour', 'ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ ਲਗਾਓ')} (₹{settings.paddyDryingLaborRate}/
+                {tr('bag', 'ਗੱਟਾ')} ={' '}
                 <strong className="font-mono tabular-nums">
                   {formatINR(parsedBags * settings.paddyDryingLaborRate)}
                 </strong>
@@ -437,13 +448,13 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Notes / Remarks (ਨੋਟ)
+                {tr('Notes / Remarks', 'ਨੋਟ / ਟਿੱਪਣੀ')}
               </label>
               <input
                 type="text"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Optional trolley / lot note..."
+                placeholder={tr('Optional trolley / lot note...', 'ਟਰਾਲੀ / ਲਾਟ ਬਾਰੇ ਨੋਟ (ਵਿਕਲਪਿਕ)...')}
                 className="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-emerald-600"
               />
             </div>
@@ -453,7 +464,7 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
               className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs sm:text-sm font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer"
             >
               <Plus className="w-4 h-4" />
-              <span>{editingId ? 'Update Arrival (ਅੱਪਡੇਟ ਕਰੋ)' : 'Save Paddy Arrival (ਸੇਵ ਕਰੋ)'}</span>
+              <span>{editingId ? tr('Update Arrival', 'ਆਵਕ ਅੱਪਡੇਟ ਕਰੋ') : tr('Save Paddy Arrival', 'ਝੋਨਾ ਆਵਕ ਸੇਵ ਕਰੋ')}</span>
             </button>
           </form>
         )}
@@ -464,10 +475,13 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
         <div className="px-4 py-3 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-bold text-slate-900">
-              Paddy Arrival Register (ਝੋਨਾ ਆਵਕ ਰਜਿਸਟਰ - {filteredArrivals.length})
+              {tr('Paddy Arrival Register', 'ਝੋਨਾ ਆਵਕ ਰਜਿਸਟਰ')} ({filteredArrivals.length})
             </h3>
             <p className="text-[11px] text-slate-500">
-              1 Bag = 37.5 KG · Loose KG/GM tracked separately from bag count
+              {tr(
+                '1 Bag = 37.5 KG · Loose KG/GM tracked separately from bag count',
+                '1 ਗੱਟਾ = 37.5 ਕਿੱਲੋ · ਖੁੱਲ੍ਹਾ ਵਜ਼ਨ ਗੱਟਿਆਂ ਤੋਂ ਵੱਖਰਾ ਦਰਜ ਹੁੰਦਾ ਹੈ'
+              )}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -477,7 +491,7 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search..."
+                placeholder={tr('Search...', 'ਖੋਜੋ...')}
                 className="w-full pl-8 pr-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-emerald-600"
               />
             </div>
@@ -486,7 +500,7 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
               onChange={(e) => setFilterFarmerId(e.target.value)}
               className="px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg bg-white"
             >
-              <option value="all">All Farmers</option>
+              <option value="all">{tr('All Farmers', 'ਸਾਰੇ ਕਿਸਾਨ')}</option>
               {farmers.map((f) => (
                 <option key={f.id} value={f.id}>
                   {f.name}
@@ -498,16 +512,19 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
               onChange={(e) => setFilterType(e.target.value as 'all' | MphPaddyType)}
               className="px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg bg-white"
             >
-              <option value="all">All Types</option>
-              <option value="Paddy A Gurde">Paddy A Gurde</option>
-              <option value="Hybrid Paddy">Hybrid Paddy</option>
+              <option value="all">{tr('All Types', 'ਸਾਰੀਆਂ ਕਿਸਮਾਂ')}</option>
+              <option value="Paddy A Gurde">{tr('Paddy A Grade', 'ਝੋਨਾ A ਗ੍ਰੇਡ')}</option>
+              <option value="Hybrid Paddy">{tr('Hybrid Paddy', 'ਹਾਈਬ੍ਰਿਡ ਝੋਨਾ')}</option>
             </select>
           </div>
         </div>
 
         {filteredArrivals.length === 0 ? (
           <div className="p-8 text-center text-xs text-slate-500">
-            No paddy arrivals recorded matching the current filter.
+            {tr(
+              'No paddy arrivals recorded matching the current filter.',
+              'ਚੁਣੇ ਹੋਏ ਫਿਲਟਰ ਮੁਤਾਬਕ ਕੋਈ ਝੋਨਾ ਆਵਕ ਨਹੀਂ ਮਿਲੀ।'
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -515,15 +532,15 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
               <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
                 <tr>
                   <th className="py-2.5 px-2.5 font-semibold">#</th>
-                  <th className="py-2.5 px-2.5 font-semibold">Date</th>
-                  <th className="py-2.5 px-2.5 font-semibold">Farmer</th>
-                  <th className="py-2.5 px-2.5 font-semibold">Paddy Type</th>
-                  <th className="py-2.5 px-2.5 font-semibold text-right">Bags</th>
-                  <th className="py-2.5 px-2.5 font-semibold text-right">Loose KG/GM</th>
-                  <th className="py-2.5 px-2.5 font-semibold text-right">Total Weight</th>
-                  <th className="py-2.5 px-2.5 font-semibold text-right">Rate</th>
-                  <th className="py-2.5 px-2.5 font-semibold text-right">Amount</th>
-                  <th className="py-2.5 px-2.5 font-semibold text-right">Actions</th>
+                  <th className="py-2.5 px-2.5 font-semibold">{tr('Date', 'ਤਾਰੀਖ')}</th>
+                  <th className="py-2.5 px-2.5 font-semibold">{tr('Farmer', 'ਕਿਸਾਨ')}</th>
+                  <th className="py-2.5 px-2.5 font-semibold">{tr('Paddy Type', 'ਕਿਸਮ')}</th>
+                  <th className="py-2.5 px-2.5 font-semibold text-right">{tr('Bags', 'ਗੱਟੇ')}</th>
+                  <th className="py-2.5 px-2.5 font-semibold text-right">{tr('Loose KG/GM', 'ਖੁੱਲ੍ਹਾ ਵਜ਼ਨ')}</th>
+                  <th className="py-2.5 px-2.5 font-semibold text-right">{tr('Total Weight', 'ਕੁੱਲ ਵਜ਼ਨ')}</th>
+                  <th className="py-2.5 px-2.5 font-semibold text-right">{tr('Rate', 'ਰੇਟ')}</th>
+                  <th className="py-2.5 px-2.5 font-semibold text-right">{tr('Amount', 'ਰਕਮ')}</th>
+                  <th className="py-2.5 px-2.5 font-semibold text-right">{tr('Actions', 'ਕਾਰਵਾਈ')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -562,7 +579,7 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
                           type="button"
                           onClick={() => handleEditClick(a)}
                           className="p-1 text-blue-700 hover:bg-blue-50 rounded cursor-pointer"
-                          title="Edit Entry"
+                          title={tr('Edit Entry', 'ਐਂਟਰੀ ਸੋਧੋ')}
                         >
                           <Edit3 className="w-3.5 h-3.5" />
                         </button>
@@ -570,7 +587,7 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
                           type="button"
                           onClick={() => onDeleteArrival(a)}
                           className="p-1 text-rose-600 hover:bg-rose-50 rounded cursor-pointer"
-                          title="Delete Entry"
+                          title={tr('Delete Entry', 'ਐਂਟਰੀ ਹਟਾਓ')}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -582,7 +599,7 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
               <tfoot className="bg-slate-100 border-t-2 border-slate-300 font-bold text-slate-900">
                 <tr>
                   <td colSpan={4} className="py-2.5 px-2.5">
-                    Total ({filteredArrivals.length} Entries)
+                    {tr(`Total (${filteredArrivals.length} Entries)`, `ਕੁੱਲ ਜੋੜ (${filteredArrivals.length} ਐਂਟਰੀਆਂ)`)}
                   </td>
                   <td className="py-2.5 px-2.5 text-right font-mono tabular-nums">
                     {filteredTotals.weights.totalBags.toLocaleString('en-IN')}

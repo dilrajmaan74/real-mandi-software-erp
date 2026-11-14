@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   MphAdvance,
   MphArrival,
@@ -14,11 +14,14 @@ import {
   formatWeightQKG,
   sumPaddyWeights,
 } from '../../lib/mandiPaddyHisabUtils';
+import { useMphLang } from '../../lib/mandiPaddyHisabI18n';
+import { MphWhatsAppModal } from './MphWhatsAppModal';
 import {
   ArrowRight,
   BookOpen,
   FileSpreadsheet,
   FileText,
+  MessageCircle,
   Percent,
   Plus,
   Scale,
@@ -56,6 +59,8 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
   settings,
   onNavigate,
 }) => {
+  const { tr } = useMphLang();
+  const [whatsappSummary, setWhatsappSummary] = useState<ReturnType<typeof computeFarmerAccountSummary> | null>(null);
   const summaries = useMemo(() => {
     return farmers.map((f) =>
       computeFarmerAccountSummary(f, arrivals, jForms, otherEntries, settings, advances)
@@ -140,10 +145,13 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white border border-slate-200 rounded-xl p-4 sm:p-5">
         <div>
           <h2 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
-            Mandi Paddy Hisab Dashboard (ਮੰਡੀ ਝੋਨਾ ਹਿਸਾਬ ਡੈਸ਼ਬੋਰਡ)
+            {tr('Mandi Paddy Hisab Dashboard', 'ਮੰਡੀ ਝੋਨਾ ਹਿਸਾਬ ਡੈਸ਼ਬੋਰਡ')}
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Hybrid ₹{settings.hybridPaddyRate}/Qtl · Paddy A Gurde ₹{settings.paddyAGurdeRate}/Qtl · J-Form Labour ₹{settings.jFormLaborRate}/bag · Drying Labour ₹{settings.paddyDryingLaborRate}/bag
+            {tr('Hybrid', 'ਹਾਈਬ੍ਰਿਡ')} ₹{settings.hybridPaddyRate}/{tr('Qtl', 'ਕੁਇੰਟਲ')} ·{' '}
+            {tr('Paddy A Grade', 'ਝੋਨਾ A ਗ੍ਰੇਡ')} ₹{settings.paddyAGurdeRate}/{tr('Qtl', 'ਕੁਇੰਟਲ')} ·{' '}
+            {tr('J-Form Labour', 'ਜੇ-ਫਾਰਮ ਲੇਬਰ')} ₹{settings.jFormLaborRate}/{tr('bag', 'ਗੱਟਾ')} ·{' '}
+            {tr('Drying Labour', 'ਸੁਕਾਈ ਲੇਬਰ')} ₹{settings.paddyDryingLaborRate}/{tr('bag', 'ਗੱਟਾ')}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -153,7 +161,7 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
             className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer whitespace-nowrap"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Add Farmer (ਕਿਸਾਨ)</span>
+            <span>{tr('Add Farmer', 'ਨਵਾਂ ਕਿਸਾਨ')}</span>
           </button>
           <button
             type="button"
@@ -161,7 +169,7 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
             className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold bg-emerald-700 text-white rounded-lg hover:bg-emerald-800 transition-colors cursor-pointer whitespace-nowrap"
           >
             <Wheat className="w-3.5 h-3.5" />
-            <span>Paddy Arrival (ਆਵਕ)</span>
+            <span>{tr('Paddy Arrival', 'ਝੋਨਾ ਆਵਕ')}</span>
           </button>
           <button
             type="button"
@@ -169,7 +177,7 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
             className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold bg-blue-700 text-white rounded-lg hover:bg-blue-800 transition-colors cursor-pointer whitespace-nowrap"
           >
             <FileSpreadsheet className="w-3.5 h-3.5" />
-            <span>J-Form Entry (ਜੇ-ਫਾਰਮ)</span>
+            <span>{tr('J-Form Entry', 'ਜੇ-ਫਾਰਮ')}</span>
           </button>
           <button
             type="button"
@@ -177,7 +185,7 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
             className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors cursor-pointer whitespace-nowrap"
           >
             <Percent className="w-3.5 h-3.5" />
-            <span>Advance & Interest</span>
+            <span>{tr('Advance & Interest', 'ਪੇਸ਼ਗੀ ਅਤੇ ਵਿਆਜ')}</span>
           </button>
           <button
             type="button"
@@ -185,7 +193,7 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
             className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold bg-white text-slate-800 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer whitespace-nowrap"
           >
             <FileText className="w-3.5 h-3.5" />
-            <span>Reports & PDF</span>
+            <span>{tr('Reports & PDF', 'ਰਿਪੋਰਟਾਂ ਅਤੇ PDF')}</span>
           </button>
         </div>
       </div>
@@ -194,22 +202,24 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3.5">
         <div className="bg-white border border-slate-200 rounded-xl p-4">
           <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
-            <span>Farmers (ਕਿਸਾਨ)</span>
+            <span>{tr('Farmers', 'ਕਿਸਾਨ')}</span>
             <Users className="w-4 h-4 text-slate-400" />
           </div>
           <div className="text-2xl font-bold font-mono tabular-nums text-slate-900 mt-1.5">
             {farmers.length}
           </div>
-          <div className="text-[11px] text-slate-500 mt-1">Registered in Paddy Hisab</div>
+          <div className="text-[11px] text-slate-500 mt-1">
+            {tr('Registered in Paddy Hisab', 'ਝੋਨਾ ਹਿਸਾਬ ਵਿੱਚ ਦਰਜ')}
+          </div>
         </div>
 
         <div className="bg-white border border-slate-200 rounded-xl p-4">
           <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
-            <span>Arrival Weight (ਵਜ਼ਨ)</span>
+            <span>{tr('Arrival Weight', 'ਆਵਕ ਵਜ਼ਨ')}</span>
             <Scale className="w-4 h-4 text-emerald-600" />
           </div>
           <div className="text-lg font-bold font-mono tabular-nums text-emerald-800 mt-1.5">
-            {totalArrivalWeight.totalBags.toLocaleString('en-IN')} Bags
+            {totalArrivalWeight.totalBags.toLocaleString('en-IN')} {tr('Bags', 'ਗੱਟੇ')}
           </div>
           <div className="text-[11px] font-mono tabular-nums text-slate-600 mt-1">
             {formatWeightQKG(
@@ -222,57 +232,60 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
 
         <div className="bg-white border border-slate-200 rounded-xl p-4">
           <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
-            <span>Total Paddy Amount</span>
+            <span>{tr('Total Paddy Amount', 'ਕੁੱਲ ਝੋਨਾ ਰਕਮ')}</span>
             <Wheat className="w-4 h-4 text-emerald-600" />
           </div>
           <div className="text-lg font-bold font-mono tabular-nums text-slate-900 mt-1.5">
             {formatINR(totalPaddyAmount)}
           </div>
           <div className="text-[11px] text-slate-500 mt-1">
-            {arrivals.length} Arrival entries
+            {arrivals.length} {tr('Arrival entries', 'ਆਵਕ ਐਂਟਰੀਆਂ')}
           </div>
         </div>
 
         <div className="bg-white border border-slate-200 rounded-xl p-4">
           <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
-            <span>Total J-Form Amount</span>
+            <span>{tr('Total J-Form Amount', 'ਕੁੱਲ ਜੇ-ਫਾਰਮ ਰਕਮ')}</span>
             <FileSpreadsheet className="w-4 h-4 text-blue-600" />
           </div>
           <div className="text-lg font-bold font-mono tabular-nums text-blue-800 mt-1.5">
             {formatINR(totalJFormAmount)}
           </div>
           <div className="text-[11px] font-mono tabular-nums text-slate-500 mt-1">
-            {totalJFormBags.toLocaleString('en-IN')} Bags · {jForms.length} J-Forms
+            {totalJFormBags.toLocaleString('en-IN')} {tr('Bags', 'ਗੱਟੇ')} · {jForms.length}{' '}
+            {tr('J-Forms', 'ਜੇ-ਫਾਰਮ')}
           </div>
         </div>
 
         <div className="bg-white border border-slate-200 rounded-xl p-4">
           <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
-            <span>Total Labour (ਲੇਬਰ)</span>
+            <span>{tr('Total Labour', 'ਕੁੱਲ ਲੇਬਰ')}</span>
             <Settings className="w-4 h-4 text-amber-600" />
           </div>
           <div className="text-lg font-bold font-mono tabular-nums text-amber-800 mt-1.5">
             {formatINR(totalJFormLabor + totalDryingLabor)}
           </div>
           <div className="text-[11px] font-mono tabular-nums text-slate-500 mt-1">
-            J-Form {formatINR(totalJFormLabor, false)} · Dry {formatINR(totalDryingLabor, false)}
+            {tr('J-Form', 'ਜੇ-ਫਾਰਮ')} {formatINR(totalJFormLabor, false)} · {tr('Dry', 'ਸੁਕਾਈ')}{' '}
+            {formatINR(totalDryingLabor, false)}
           </div>
         </div>
 
         <div className="bg-white border border-slate-200 rounded-xl p-4">
           <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
-            <span>Net Balances (ਹਿਸਾਬ)</span>
+            <span>{tr('Net Balances', 'ਅੰਤਿਮ ਬਕਾਇਆ')}</span>
             <BookOpen className="w-4 h-4 text-slate-600" />
           </div>
           <div className="text-xs font-bold font-mono tabular-nums text-emerald-700 mt-1.5">
-            Payable: {formatINR(totalPayableToFarmers, false)}
+            {tr('Payable', 'ਦੇਣਦਾਰ')}: {formatINR(totalPayableToFarmers, false)}
           </div>
           <div className="text-xs font-bold font-mono tabular-nums text-rose-700 mt-1">
-            Receivable: {formatINR(totalReceivableFromFarmers, false)}
+            {tr('Receivable', 'ਲੈਣਦਾਰ')}: {formatINR(totalReceivableFromFarmers, false)}
           </div>
           {(totalAdvancePrincipal > 0 || totalAdvanceInterest > 0) && (
             <div className="text-[10px] font-mono tabular-nums text-amber-800 mt-1">
-              Adv P+I: {formatINR(totalAdvancePrincipal + totalAdvanceInterest, false)}
+              {tr('Adv P+I', 'ਪੇਸ਼ਗੀ ਮੂਲ+ਵਿਆਜ')}:{' '}
+              {formatINR(totalAdvancePrincipal + totalAdvanceInterest, false)}
             </div>
           )}
         </div>
@@ -285,10 +298,13 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
           <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
             <div>
               <h3 className="text-sm font-bold text-slate-900">
-                Farmer Final Balance Summary (ਕਿਸਾਨ-ਵਾਰ ਅੰਤਿਮ ਹਿਸਾਬ)
+                {tr('Farmer Final Balance Summary', 'ਕਿਸਾਨ-ਵਾਰ ਅੰਤਿਮ ਹਿਸਾਬ ਵੇਰਵਾ')}
               </h3>
               <p className="text-[11px] text-slate-500">
-                Paddy Amount minus J-Form, Labour, Other Entries & Advances + Interest
+                {tr(
+                  'Paddy Amount minus J-Form, Labour, Other Entries & Advances + Interest',
+                  'ਝੋਨਾ ਰਕਮ ਵਿੱਚੋਂ ਜੇ-ਫਾਰਮ, ਲੇਬਰ, ਹੋਰ ਐਂਟਰੀਆਂ ਅਤੇ ਪੇਸ਼ਗੀ + ਵਿਆਜ ਘਟਾ ਕੇ'
+                )}
               </p>
             </div>
             <button
@@ -296,7 +312,7 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
               onClick={() => onNavigate('ledger')}
               className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 inline-flex items-center gap-1 cursor-pointer whitespace-nowrap"
             >
-              <span>Open Ledgers</span>
+              <span>{tr('Open Ledgers', 'ਖਾਤਾ ਖੋਲ੍ਹੋ')}</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -304,10 +320,13 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
           {summaries.length === 0 ? (
             <div className="p-8 text-center">
               <p className="text-sm font-medium text-slate-700">
-                No farmers added in Mandi Paddy Hisab yet.
+                {tr('No farmers added in Mandi Paddy Hisab yet.', 'ਮੰਡੀ ਝੋਨਾ ਹਿਸਾਬ ਵਿੱਚ ਅਜੇ ਕੋਈ ਕਿਸਾਨ ਦਰਜ ਨਹੀਂ ਹੈ।')}
               </p>
               <p className="text-xs text-slate-500 mt-1">
-                Start by adding your first farmer record to enter arrivals and J-Forms.
+                {tr(
+                  'Start by adding your first farmer record to enter arrivals and J-Forms.',
+                  'ਆਵਕ ਅਤੇ ਜੇ-ਫਾਰਮ ਦਰਜ ਕਰਨ ਲਈ ਪਹਿਲਾਂ ਕਿਸਾਨ ਜੋੜੋ।'
+                )}
               </p>
               <button
                 type="button"
@@ -315,7 +334,7 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
                 className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>Add First Farmer (ਪਹਿਲਾ ਕਿਸਾਨ ਜੋੜੋ)</span>
+                <span>{tr('Add First Farmer', 'ਪਹਿਲਾ ਕਿਸਾਨ ਜੋੜੋ')}</span>
               </button>
             </div>
           ) : (
@@ -324,14 +343,14 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
                 <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
                   <tr>
                     <th className="py-2.5 px-3 font-semibold">#</th>
-                    <th className="py-2.5 px-3 font-semibold">Farmer (ਕਿਸਾਨ)</th>
-                    <th className="py-2.5 px-3 font-semibold text-right">Bags</th>
-                    <th className="py-2.5 px-3 font-semibold text-right">Weight (Qtl/KG/GM)</th>
-                    <th className="py-2.5 px-3 font-semibold text-right">Paddy Amt</th>
-                    <th className="py-2.5 px-3 font-semibold text-right">J-Form + Lab</th>
-                    <th className="py-2.5 px-3 font-semibold text-right">Adv (P+I)</th>
-                    <th className="py-2.5 px-3 font-semibold text-right">Final Balance</th>
-                    <th className="py-2.5 px-3 font-semibold text-right">Action</th>
+                    <th className="py-2.5 px-3 font-semibold">{tr('Farmer', 'ਕਿਸਾਨ')}</th>
+                    <th className="py-2.5 px-3 font-semibold text-right">{tr('Bags', 'ਗੱਟੇ')}</th>
+                    <th className="py-2.5 px-3 font-semibold text-right">{tr('Weight (Qtl/KG/GM)', 'ਵਜ਼ਨ (ਕੁਇੰ/ਕਿੱਲੋ/ਗ੍ਰਾਮ)')}</th>
+                    <th className="py-2.5 px-3 font-semibold text-right">{tr('Paddy Amt', 'ਝੋਨਾ ਰਕਮ')}</th>
+                    <th className="py-2.5 px-3 font-semibold text-right">{tr('J-Form + Lab', 'ਜੇ-ਫਾਰਮ + ਲੇਬਰ')}</th>
+                    <th className="py-2.5 px-3 font-semibold text-right">{tr('Adv (P+I)', 'ਪੇਸ਼ਗੀ (ਮੂਲ+ਵਿਆਜ)')}</th>
+                    <th className="py-2.5 px-3 font-semibold text-right">{tr('Final Balance', 'ਅੰਤਿਮ ਬਕਾਇਆ')}</th>
+                    <th className="py-2.5 px-3 font-semibold text-right">{tr('Action', 'ਕਾਰਵਾਈ')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -345,7 +364,7 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
                         <td className="py-2.5 px-3">
                           <div className="font-semibold text-slate-900">{s.farmer.name}</div>
                           <div className="text-[11px] text-slate-500">
-                            {s.farmer.fatherName ? `S/O ${s.farmer.fatherName} · ` : ''}
+                            {s.farmer.fatherName ? `${tr('S/O', 'ਪੁੱਤਰ')} ${s.farmer.fatherName} · ` : ''}
                             {s.farmer.village}
                           </div>
                         </td>
@@ -380,20 +399,30 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
                           </div>
                           <div className="text-[10px] text-slate-500">
                             {s.combinedBalanceStatus === 'payable'
-                              ? 'Dene Hai (Payable)'
+                              ? tr('Payable (Dene Hai)', 'ਪੈਸੇ ਦੇਣੇ ਹਨ')
                               : s.combinedBalanceStatus === 'receivable'
-                              ? 'Lene Hai (Receivable)'
-                              : 'Settled'}
+                              ? tr('Receivable (Lene Hai)', 'ਪੈਸੇ ਲੈਣੇ ਹਨ')
+                              : tr('Settled', 'ਬਰਾਬਰ')}
                           </div>
                         </td>
-                        <td className="py-2.5 px-3 text-right">
-                          <button
-                            type="button"
-                            onClick={() => onNavigate('ledger', s.farmer.id)}
-                            className="px-2.5 py-1 text-[11px] font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors cursor-pointer whitespace-nowrap"
-                          >
-                            View Hisab
-                          </button>
+                        <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                          <div className="inline-flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setWhatsappSummary(s)}
+                              className="p-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-md transition-colors cursor-pointer"
+                              title={tr('Send Pura Hisab on WhatsApp', 'ਪੂਰਾ ਹਿਸਾਬ WhatsApp ਤੇ ਭੇਜੋ')}
+                            >
+                              <MessageCircle className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onNavigate('ledger', s.farmer.id)}
+                              className="px-2.5 py-1 text-[11px] font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors cursor-pointer whitespace-nowrap"
+                            >
+                              {tr('View Hisab', 'ਹਿਸਾਬ ਦੇਖੋ')}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -408,19 +437,19 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-900">
-              Recent Arrivals (ਤਾਜ਼ਾ ਝੋਨਾ ਆਵਕ)
+              {tr('Recent Arrivals', 'ਤਾਜ਼ਾ ਝੋਨਾ ਆਵਕ')}
             </h3>
             <button
               type="button"
               onClick={() => onNavigate('arrivals')}
               className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 cursor-pointer whitespace-nowrap"
             >
-              View All
+              {tr('View All', 'ਸਭ ਦੇਖੋ')}
             </button>
           </div>
           {recentArrivals.length === 0 ? (
             <div className="p-6 text-center text-xs text-slate-500">
-              No paddy arrival entries recorded yet.
+              {tr('No paddy arrival entries recorded yet.', 'ਅਜੇ ਕੋਈ ਝੋਨਾ ਆਵਕ ਦਰਜ ਨਹੀਂ ਹੈ।')}
             </div>
           ) : (
             <div className="divide-y divide-slate-100">
@@ -431,7 +460,7 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
                       {a.farmerName}
                     </div>
                     <div className="text-[11px] text-slate-500 mt-0.5">
-                      {formatDateDMY(a.date)} · {a.paddyType} · {a.bags} Bags
+                      {formatDateDMY(a.date)} · {a.paddyType} · {a.bags} {tr('Bags', 'ਗੱਟੇ')}
                     </div>
                   </div>
                   <div className="text-right shrink-0">
@@ -448,6 +477,13 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
           )}
         </div>
       </div>
+
+      <MphWhatsAppModal
+        open={Boolean(whatsappSummary)}
+        summary={whatsappSummary}
+        settings={settings}
+        onClose={() => setWhatsappSummary(null)}
+      />
     </div>
   );
 };

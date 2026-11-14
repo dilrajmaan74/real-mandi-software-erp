@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertTriangle, X } from 'lucide-react';
+import { useMphLang } from '../../lib/mandiPaddyHisabI18n';
 
 interface MphConfirmModalProps {
   isOpen: boolean;
@@ -16,13 +17,16 @@ export const MphConfirmModal: React.FC<MphConfirmModalProps> = ({
   isOpen,
   title,
   message,
-  confirmLabel = 'Confirm (ਪੱਕਾ ਕਰੋ)',
-  cancelLabel = 'Cancel (ਰੱਦ ਕਰੋ)',
+  confirmLabel,
+  cancelLabel,
   tone = 'danger',
   onConfirm,
   onCancel,
 }) => {
+  const { tr } = useMphLang();
   if (!isOpen) return null;
+  const resolvedConfirm = confirmLabel || tr('Confirm', 'ਪੱਕਾ ਕਰੋ');
+  const resolvedCancel = cancelLabel || tr('Cancel', 'ਰੱਦ ਕਰੋ');
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 print:hidden">
@@ -56,7 +60,7 @@ export const MphConfirmModal: React.FC<MphConfirmModalProps> = ({
             onClick={onCancel}
             className="px-4 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer whitespace-nowrap"
           >
-            {cancelLabel}
+            {resolvedCancel}
           </button>
           <button
             type="button"
@@ -67,7 +71,7 @@ export const MphConfirmModal: React.FC<MphConfirmModalProps> = ({
                 : 'bg-amber-600 hover:bg-amber-700'
             }`}
           >
-            {confirmLabel}
+            {resolvedConfirm}
           </button>
         </div>
       </div>

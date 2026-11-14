@@ -10,6 +10,7 @@ import {
   formatINR,
 } from '../../lib/mandiPaddyHisabUtils';
 import { Calculator, Edit3, Percent, Plus, Search, Trash2, X } from 'lucide-react';
+import { useMphLang } from '../../lib/mandiPaddyHisabI18n';
 
 interface MphAdvanceViewProps {
   farmers: MphFarmer[];
@@ -20,12 +21,6 @@ interface MphAdvanceViewProps {
 }
 
 const QUICK_RATES = ['0', '1', '1.5', '2'];
-const QUICK_PURPOSES = [
-  'Pre-Season Advance (ਸੀਜ਼ਨ ਤੋਂ ਪਹਿਲਾਂ ਪੇਸ਼ਗੀ)',
-  'Other Work Payment (ਹੋਰ ਕੰਮ ਲਈ ਰਕਮ)',
-  'Fertilizer / Seed (ਖਾਦ / ਬੀਜ)',
-  'Diesel / Tractor (ਡੀਜ਼ਲ / ਟਰੈਕਟਰ)',
-];
 
 export const MphAdvanceView: React.FC<MphAdvanceViewProps> = ({
   farmers,
@@ -34,13 +29,38 @@ export const MphAdvanceView: React.FC<MphAdvanceViewProps> = ({
   onDeleteAdvance,
   onGoToFarmers,
 }) => {
+  const { lang, tr } = useMphLang();
   const today = new Date().toISOString().split('T')[0];
+
+  const quickPurposes = useMemo(
+    () => [
+      {
+        en: 'Pre-Season Advance',
+        pa: 'ਸੀਜ਼ਨ ਤੋਂ ਪਹਿਲਾਂ ਪੇਸ਼ਗੀ',
+      },
+      {
+        en: 'Other Work Payment',
+        pa: 'ਹੋਰ ਕੰਮ ਲਈ ਰਕਮ',
+      },
+      {
+        en: 'Fertilizer / Seed',
+        pa: 'ਖਾਦ / ਬੀਜ',
+      },
+      {
+        en: 'Diesel / Tractor',
+        pa: 'ਡੀਜ਼ਲ / ਟਰੈਕਟਰ',
+      },
+    ],
+    []
+  );
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [farmerId, setFarmerId] = useState<string>(farmers[0]?.id || '');
   const [startDate, setStartDate] = useState<string>(today);
   const [endDate, setEndDate] = useState<string>(today);
-  const [purpose, setPurpose] = useState<string>('Pre-Season Advance (ਸੀਜ਼ਨ ਤੋਂ ਪਹਿਲਾਂ ਪੇਸ਼ਗੀ)');
+  const [purpose, setPurpose] = useState<string>(
+    lang === 'pa' ? 'ਸੀਜ਼ਨ ਤੋਂ ਪਹਿਲਾਂ ਪੇਸ਼ਗੀ' : 'Pre-Season Advance'
+  );
   const [principalAmount, setPrincipalAmount] = useState<string>('');
   const [interestRateMonthly, setInterestRateMonthly] = useState<string>('1.5');
   const [interestBasis, setInterestBasis] = useState<MphInterestBasis>('daily_30');
@@ -70,6 +90,9 @@ export const MphAdvanceView: React.FC<MphAdvanceViewProps> = ({
     );
   }, [parsedPrincipal, parsedRate, startDate, endDate, interestBasis]);
 
+  const perDayInterest =
+    Math.round((liveCalc.monthlyInterestAmount / 30) * 100) / 100;
+
   const effectiveInterest =
     customInterestOverride.trim() !== ''
       ? Math.max(0, Math.round((Number(customInterestOverride) || 0) * 100) / 100)
@@ -81,7 +104,7 @@ export const MphAdvanceView: React.FC<MphAdvanceViewProps> = ({
     setEditingId(null);
     setStartDate(today);
     setEndDate(today);
-    setPurpose('Pre-Season Advance (ਸੀਜ਼ਨ ਤੋਂ ਪਹਿਲਾਂ ਪੇਸ਼ਗੀ)');
+    setPurpose(lang === 'pa' ? 'ਸੀਜ਼ਨ ਤੋਂ ਪਹਿਲਾਂ ਪੇਸ਼ਗੀ' : 'Pre-Season Advance');
     setPrincipalAmount('');
     setInterestRateMonthly('1.5');
     setInterestBasis('daily_30');
@@ -120,23 +143,37 @@ export const MphAdvanceView: React.FC<MphAdvanceViewProps> = ({
 
     const selectedFarmer = farmers.find((f) => f.id === farmerId);
     if (!selectedFarmer) {
-      setErrorMsg('ਕਿਰਪਾ ਕਰਕੇ ਕਿਸਾਨ ਚੁਣੋ (Please select a farmer).');
+      setErrorMsg(tr('Please select a farmer.', 'ਕਿਰਪਾ ਕਰਕੇ ਕਿਸਾਨ ਚੁਣੋ।'));
       return;
     }
     if (!startDate || !endDate) {
-      setErrorMsg('ਕਿਰਪਾ ਕਰਕੇ ਸ਼ੁਰੂ ਅਤੇ ਅੰਤ ਦੀ ਤਾਰੀਖ ਦਰਜ ਕਰੋ।');
+      setErrorMsg(
+        tr('Please enter both Start Date and End Date.', 'ਕਿਰਪਾ ਕਰਕੇ ਸ਼ੁਰੂ ਅਤੇ ਅੰਤ ਦੀ ਤਾਰੀਖ ਦਰਜ ਕਰੋ।')
+      );
       return;
     }
     if (endDate < startDate) {
-      setErrorMsg('ਅੰਤ ਤਾਰੀਖ (End Date) ਸ਼ੁਰੂ ਤਾਰੀਖ (Start Date) ਤੋਂ ਪਹਿਲਾਂ ਨਹੀਂ ਹੋ ਸਕਦੀ।');
+      setErrorMsg(
+        tr(
+          'End Date cannot be before Start Date.',
+          'ਅੰਤ ਤਾਰੀਖ ਸ਼ੁਰੂ ਤਾਰੀਖ ਤੋਂ ਪਹਿਲਾਂ ਨਹੀਂ ਹੋ ਸਕਦੀ।'
+        )
+      );
       return;
     }
     if (!purpose.trim()) {
-      setErrorMsg('ਕਿਰਪਾ ਕਰਕੇ ਵੇਰਵਾ / ਕਿਸ ਕੰਮ ਲਈ (Purpose) ਲਿਖੋ।');
+      setErrorMsg(
+        tr('Please enter purpose / description.', 'ਕਿਰਪਾ ਕਰਕੇ ਵੇਰਵਾ / ਕਿਸ ਕੰਮ ਲਈ ਲਿਖੋ।')
+      );
       return;
     }
     if (parsedPrincipal <= 0) {
-      setErrorMsg('ਮੂਲ ਰਕਮ 0 ਤੋਂ ਵੱਧ ਹੋਣੀ ਚਾਹੀਦੀ ਹੈ (Principal amount must be > 0).');
+      setErrorMsg(
+        tr(
+          'Principal amount must be greater than 0.',
+          'ਮੂਲ ਰਕਮ 0 ਤੋਂ ਵੱਧ ਹੋਣੀ ਚਾਹੀਦੀ ਹੈ।'
+        )
+      );
       return;
     }
 
@@ -202,7 +239,9 @@ export const MphAdvanceView: React.FC<MphAdvanceViewProps> = ({
           <div className="flex items-center gap-2">
             <Percent className="w-4 h-4 text-amber-700" />
             <h3 className="text-sm font-bold text-slate-900">
-              {editingId ? 'Edit Advance / Interest (ਸੋਧੋ)' : 'New Advance & Interest (ਪੇਸ਼ਗੀ/ਵਿਆਜ)'}
+              {editingId
+                ? tr('Edit Advance / Interest', 'ਪੇਸ਼ਗੀ / ਵਿਆਜ ਸੋਧੋ')
+                : tr('New Advance & Interest', 'ਨਵੀਂ ਪੇਸ਼ਗੀ ਅਤੇ ਵਿਆਜ')}
             </h3>
           </div>
           {editingId && (
@@ -212,7 +251,7 @@ export const MphAdvanceView: React.FC<MphAdvanceViewProps> = ({
               className="text-xs text-slate-500 hover:text-slate-800 inline-flex items-center gap-1 cursor-pointer"
             >
               <X className="w-3.5 h-3.5" />
-              <span>Cancel</span>
+              <span>{tr('Cancel', 'ਰੱਦ ਕਰੋ')}</span>
             </button>
           )}
         </div>
@@ -220,14 +259,17 @@ export const MphAdvanceView: React.FC<MphAdvanceViewProps> = ({
         {farmers.length === 0 ? (
           <div className="p-6 text-center space-y-3">
             <p className="text-xs text-slate-600">
-              Please add a farmer in Farmer Master before recording advances & interest.
+              {tr(
+                'Please add a farmer in Farmer Master before recording advances & interest.',
+                'ਪੇਸ਼ਗੀ ਅਤੇ ਵਿਆਜ ਦਰਜ ਕਰਨ ਤੋਂ ਪਹਿਲਾਂ ਕਿਸਾਨ ਮਾਸਟਰ ਵਿੱਚ ਕਿਸਾਨ ਜੋੜੋ।'
+              )}
             </p>
             <button
               type="button"
               onClick={onGoToFarmers}
               className="px-4 py-2 text-xs font-bold bg-slate-900 text-white rounded-lg hover:bg-slate-800 cursor-pointer"
             >
-              Go to Farmer Master
+              {tr('Go to Farmer Master', 'ਕਿਸਾਨ ਮਾਸਟਰ ਤੇ ਜਾਓ')}
             </button>
           </div>
         ) : (
@@ -240,7 +282,7 @@ export const MphAdvanceView: React.FC<MphAdvanceViewProps> = ({
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Farmer (ਕਿਸਾਨ ਚੁਣੋ) *
+                {tr('Farmer *', 'ਕਿਸਾਨ ਚੁਣੋ *')}
               </label>
               <select
                 value={farmerId}
@@ -257,37 +299,43 @@ export const MphAdvanceView: React.FC<MphAdvanceViewProps> = ({
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Purpose / Payment For (ਕਿਸ ਕੰਮ ਲਈ / ਵੇਰਵਾ) *
+                {tr('Purpose / Payment For *', 'ਕਿਸ ਕੰਮ ਲਈ / ਵੇਰਵਾ *')}
               </label>
               <input
                 type="text"
                 value={purpose}
                 onChange={(e) => setPurpose(e.target.value)}
-                placeholder="Season Advance, Diesel, Seed, Other Payment..."
+                placeholder={tr(
+                  'Season Advance, Diesel, Seed, Other Payment...',
+                  'ਸੀਜ਼ਨ ਪੇਸ਼ਗੀ, ਡੀਜ਼ਲ, ਬੀਜ, ਹੋਰ ਅਦਾਇਗੀ...'
+                )}
                 className="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-amber-600"
               />
               <div className="flex flex-wrap gap-1 mt-1.5">
-                {QUICK_PURPOSES.map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => setPurpose(p)}
-                    className={`px-2 py-0.5 text-[10px] rounded border cursor-pointer ${
-                      purpose === p
-                        ? 'bg-slate-900 text-white border-slate-900'
-                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    {p.split('(')[0].trim()}
-                  </button>
-                ))}
+                {quickPurposes.map((p) => {
+                  const label = lang === 'pa' ? p.pa : p.en;
+                  return (
+                    <button
+                      key={p.en}
+                      type="button"
+                      onClick={() => setPurpose(label)}
+                      className={`px-2 py-0.5 text-[10px] rounded border cursor-pointer ${
+                        purpose === label
+                          ? 'bg-slate-900 text-white border-slate-900'
+                          : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Principal Amount (ਮੂਲ ਰਕਮ ₹) *
+                  {tr('Principal Amount (₹) *', 'ਮੂਲ ਰਕਮ (₹) *')}
                 </label>
                 <input
                   type="number"
@@ -298,13 +346,13 @@ export const MphAdvanceView: React.FC<MphAdvanceViewProps> = ({
                     setPrincipalAmount(e.target.value);
                     setCustomInterestOverride('');
                   }}
-                  placeholder="e.g. 100000"
+                  placeholder={tr('e.g. 100000', 'ਜਿਵੇਂ 100000')}
                   className="w-full px-2.5 py-2 text-xs sm:text-sm font-mono tabular-nums font-bold border border-slate-300 rounded-lg focus:outline-none focus:border-amber-600"
                 />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Monthly Rate % (ਵਿਆਜ ਦਰ) *
+                  {tr('Monthly Rate % *', 'ਮਹੀਨਾਵਾਰ ਵਿਆਜ ਦਰ % *')}
                 </label>
                 <input
                   type="number"
@@ -315,7 +363,7 @@ export const MphAdvanceView: React.FC<MphAdvanceViewProps> = ({
                     setInterestRateMonthly(e.target.value);
                     setCustomInterestOverride('');
                   }}
-                  placeholder="e.g. 1.5"
+                  placeholder={tr('e.g. 1.5', 'ਜਿਵੇਂ 1.5')}
                   className="w-full px-2.5 py-2 text-xs sm:text-sm font-mono tabular-nums font-bold border border-slate-300 rounded-lg focus:outline-none focus:border-amber-600"
                 />
                 <div className="flex items-center gap-1 mt-1">
@@ -343,7 +391,7 @@ export const MphAdvanceView: React.FC<MphAdvanceViewProps> = ({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Start Date (ਪੇਸ਼ਗੀ ਤਾਰੀਖ) *
+                  {tr('Start Date *', 'ਪੇਸ਼ਗੀ ਤਾਰੀਖ *')}
                 </label>
                 <input
                   type="date"
@@ -357,7 +405,7 @@ export const MphAdvanceView: React.FC<MphAdvanceViewProps> = ({
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  End Date (ਵਿਆਜ ਅੰਤ ਤਾਰੀਖ) *
+                  {tr('End Date *', 'ਵਿਆਜ ਅੰਤ ਤਾਰੀਖ *')}
                 </label>
                 <input
                   type="date"
@@ -373,7 +421,7 @@ export const MphAdvanceView: React.FC<MphAdvanceViewProps> = ({
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Interest Calculation Method (ਵਿਆਜ ਹਿਸਾਬ ਤਰੀਕਾ)
+                {tr('Interest Calculation Method', 'ਵਿਆਜ ਹਿਸਾਬ ਤਰੀਕਾ')}
               </label>
               <select
                 value={interestBasis}
@@ -383,8 +431,18 @@ export const MphAdvanceView: React.FC<MphAdvanceViewProps> = ({
                 }}
                 className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg bg-white"
               >
-                <option value="daily_30">Auto Days Basis (Exact Days ÷ 30 × Monthly Rate)</option>
-                <option value="monthly_30">Calendar Month Basis (30-Day Months + Extra Days)</option>
+                <option value="daily_30">
+                  {tr(
+                    'Auto Days Basis (Exact Days ÷ 30 × Monthly Rate)',
+                    'ਕੁੱਲ ਦਿਨ ਆਧਾਰ (ਅਸਲ ਦਿਨ ÷ 30 × ਮਹੀਨਾ ਵਿਆਜ)'
+                  )}
+                </option>
+                <option value="monthly_30">
+                  {tr(
+                    'Calendar Month Basis (30-Day Months + Extra Days)',
+                    'ਮਹੀਨਾਵਾਰ ਆਧਾਰ (30 ਦਿਨ ਮਹੀਨੇ + ਵਾਧੂ ਦਿਨ)'
+                  )}
+                </option>
               </select>
             </div>
 
@@ -393,27 +451,40 @@ export const MphAdvanceView: React.FC<MphAdvanceViewProps> = ({
               <div className="flex items-center justify-between text-slate-700">
                 <span className="inline-flex items-center gap-1">
                   <Calculator className="w-3.5 h-3.5 text-amber-700" />
-                  <span>Auto Days ({formatDateDMY(startDate)} → {formatDateDMY(endDate)}):</span>
+                  <span>
+                    {tr('Auto Days', 'ਕੁੱਲ ਦਿਨ')} ({formatDateDMY(startDate)} → {formatDateDMY(endDate)}):
+                  </span>
                 </span>
                 <span className="font-mono tabular-nums font-bold text-slate-900">
-                  {liveCalc.days} Days
+                  {liveCalc.days} {tr('Days', 'ਦਿਨ')}
                 </span>
               </div>
               <div className="flex items-center justify-between text-slate-700">
-                <span>Monthly Interest ({parsedRate}% / month):</span>
+                <span>
+                  {tr('Monthly Interest', 'ਮਹੀਨਾ ਵਿਆਜ')} ({parsedRate}% / {tr('month', 'ਮਹੀਨਾ')}):
+                </span>
                 <span className="font-mono tabular-nums font-semibold text-slate-900">
-                  {formatINR(liveCalc.monthlyInterestAmount)} / mo
+                  {formatINR(liveCalc.monthlyInterestAmount)} / {tr('mo', 'ਮਹੀਨਾ')}
                 </span>
               </div>
               <div className="flex items-center justify-between text-slate-700">
-                <span>Auto Calculated Interest:</span>
+                <span>{tr('Per Day Interest (÷ 30):', 'ਰੋਜ਼ਾਨਾ ਵਿਆਜ (÷ 30):')}</span>
+                <span className="font-mono tabular-nums font-semibold text-slate-900">
+                  {formatINR(perDayInterest)} / {tr('day', 'ਦਿਨ')}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-slate-700">
+                <span>{tr('Auto Calculated Interest:', 'ਆਟੋ ਬਣਿਆ ਵਿਆਜ:')}</span>
                 <span className="font-mono tabular-nums font-bold text-rose-700">
                   {formatINR(liveCalc.interestAmount)}
                 </span>
               </div>
               <div className="pt-1.5 border-t border-amber-200/80">
                 <label className="block text-[10.5px] font-semibold text-slate-600 mb-1">
-                  Edit Interest Manually (Optional — leave blank for auto)
+                  {tr(
+                    'Edit Interest Manually (Optional — leave blank for auto)',
+                    'ਵਿਆਜ ਖੁਦ ਬਦਲੋ (ਵਿਕਲਪਿਕ — ਆਟੋ ਲਈ ਖਾਲੀ ਛੱਡੋ)'
+                  )}
                 </label>
                 <input
                   type="number"
@@ -421,12 +492,12 @@ export const MphAdvanceView: React.FC<MphAdvanceViewProps> = ({
                   step="0.01"
                   value={customInterestOverride}
                   onChange={(e) => setCustomInterestOverride(e.target.value)}
-                  placeholder={`Auto: ${liveCalc.interestAmount}`}
+                  placeholder={`${tr('Auto', 'ਆਟੋ')}: ${liveCalc.interestAmount}`}
                   className="w-full px-2.5 py-1.5 text-xs font-mono tabular-nums border border-amber-300 rounded bg-white focus:outline-none focus:border-amber-600"
                 />
               </div>
               <div className="flex items-center justify-between pt-1 border-t border-amber-200 font-bold text-sm text-slate-950">
-                <span>Total (Principal + Interest):</span>
+                <span>{tr('Total (Principal + Interest):', 'ਕੁੱਲ (ਮੂਲ + ਵਿਆਜ):')}</span>
                 <span className="font-mono tabular-nums text-rose-800">
                   {formatINR(effectiveTotal)}
                 </span>
@@ -438,7 +509,11 @@ export const MphAdvanceView: React.FC<MphAdvanceViewProps> = ({
               className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs sm:text-sm font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
             >
               <Plus className="w-4 h-4" />
-              <span>{editingId ? 'Update Advance Entry (ਅੱਪਡੇਟ ਕਰੋ)' : 'Save Advance & Interest (ਸੇਵ ਕਰੋ)'}</span>
+              <span>
+                {editingId
+                  ? tr('Update Advance Entry', 'ਪੇਸ਼ਗੀ ਐਂਟਰੀ ਅੱਪਡੇਟ ਕਰੋ')
+                  : tr('Save Advance & Interest', 'ਪੇਸ਼ਗੀ ਅਤੇ ਵਿਆਜ ਸੇਵ ਕਰੋ')}
+              </span>
             </button>
           </form>
         )}
@@ -449,10 +524,13 @@ export const MphAdvanceView: React.FC<MphAdvanceViewProps> = ({
         <div className="px-4 py-3 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-bold text-slate-900">
-              Advance & Interest Register (ਪੇਸ਼ਗੀ ਅਤੇ ਵਿਆਜ ਰਜਿਸਟਰ - {filteredAdvances.length})
+              {tr('Advance & Interest Register', 'ਪੇਸ਼ਗੀ ਅਤੇ ਵਿਆਜ ਰਜਿਸਟਰ')} ({filteredAdvances.length})
             </h3>
             <p className="text-[11px] text-slate-500">
-              Multiple dates, independent end dates, auto days & custom monthly interest rates
+              {tr(
+                'Multiple dates, independent end dates, auto days & custom monthly interest rates',
+                'ਵੱਖ-ਵੱਖ ਤਾਰੀਖਾਂ, ਅੰਤ ਤਾਰੀਖ, ਆਟੋ ਦਿਨ ਅਤੇ ਆਪਣੀ ਮਰਜ਼ੀ ਦੀ ਵਿਆਜ ਦਰ'
+              )}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -462,7 +540,7 @@ export const MphAdvanceView: React.FC<MphAdvanceViewProps> = ({
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search farmer, purpose..."
+                placeholder={tr('Search farmer, purpose...', 'ਕਿਸਾਨ, ਵੇਰਵਾ ਖੋਜੋ...')}
                 className="w-full pl-8 pr-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-amber-600"
               />
             </div>
@@ -471,7 +549,7 @@ export const MphAdvanceView: React.FC<MphAdvanceViewProps> = ({
               onChange={(e) => setFilterFarmerId(e.target.value)}
               className="px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg bg-white"
             >
-              <option value="all">All Farmers</option>
+              <option value="all">{tr('All Farmers', 'ਸਾਰੇ ਕਿਸਾਨ')}</option>
               {farmers.map((f) => (
                 <option key={f.id} value={f.id}>
                   {f.name}
@@ -483,7 +561,10 @@ export const MphAdvanceView: React.FC<MphAdvanceViewProps> = ({
 
         {filteredAdvances.length === 0 ? (
           <div className="p-8 text-center text-xs text-slate-500">
-            No Advance or Interest entries recorded matching the current filter.
+            {tr(
+              'No Advance or Interest entries recorded matching the current filter.',
+              'ਮੌਜੂਦਾ ਫਿਲਟਰ ਮੁਤਾਬਕ ਕੋਈ ਪੇਸ਼ਗੀ ਜਾਂ ਵਿਆਜ ਐਂਟਰੀ ਨਹੀਂ ਮਿਲੀ।'
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -491,14 +572,14 @@ export const MphAdvanceView: React.FC<MphAdvanceViewProps> = ({
               <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
                 <tr>
                   <th className="py-2.5 px-2.5 font-semibold">#</th>
-                  <th className="py-2.5 px-2.5 font-semibold">Farmer & Purpose</th>
-                  <th className="py-2.5 px-2.5 font-semibold">Start → End Date</th>
-                  <th className="py-2.5 px-2.5 font-semibold text-right">Days</th>
-                  <th className="py-2.5 px-2.5 font-semibold text-right">Principal</th>
-                  <th className="py-2.5 px-2.5 font-semibold text-right">Rate</th>
-                  <th className="py-2.5 px-2.5 font-semibold text-right">Interest</th>
-                  <th className="py-2.5 px-2.5 font-semibold text-right">Total (P+I)</th>
-                  <th className="py-2.5 px-2.5 font-semibold text-right">Actions</th>
+                  <th className="py-2.5 px-2.5 font-semibold">{tr('Farmer & Purpose', 'ਕਿਸਾਨ ਅਤੇ ਵੇਰਵਾ')}</th>
+                  <th className="py-2.5 px-2.5 font-semibold">{tr('Start → End Date', 'ਸ਼ੁਰੂ → ਅੰਤ ਤਾਰੀਖ')}</th>
+                  <th className="py-2.5 px-2.5 font-semibold text-right">{tr('Days', 'ਦਿਨ')}</th>
+                  <th className="py-2.5 px-2.5 font-semibold text-right">{tr('Principal', 'ਮੂਲ ਰਕਮ')}</th>
+                  <th className="py-2.5 px-2.5 font-semibold text-right">{tr('Rate', 'ਦਰ %')}</th>
+                  <th className="py-2.5 px-2.5 font-semibold text-right">{tr('Interest', 'ਵਿਆਜ')}</th>
+                  <th className="py-2.5 px-2.5 font-semibold text-right">{tr('Total (P+I)', 'ਕੁੱਲ (ਮੂਲ+ਵਿਆਜ)')}</th>
+                  <th className="py-2.5 px-2.5 font-semibold text-right">{tr('Actions', 'ਕਾਰਵਾਈ')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -515,7 +596,7 @@ export const MphAdvanceView: React.FC<MphAdvanceViewProps> = ({
                       {formatDateDMY(adv.startDate)} → {formatDateDMY(adv.endDate)}
                     </td>
                     <td className="py-2 px-2.5 text-right font-mono tabular-nums text-slate-700">
-                      {adv.days}d
+                      {adv.days}{tr('d', ' ਦਿਨ')}
                     </td>
                     <td className="py-2 px-2.5 text-right font-mono tabular-nums font-semibold text-slate-900 whitespace-nowrap">
                       {formatINR(adv.principalAmount)}
@@ -535,7 +616,7 @@ export const MphAdvanceView: React.FC<MphAdvanceViewProps> = ({
                           type="button"
                           onClick={() => handleEditClick(adv)}
                           className="p-1 text-blue-700 hover:bg-blue-50 rounded cursor-pointer"
-                          title="Edit"
+                          title={tr('Edit', 'ਸੋਧੋ')}
                         >
                           <Edit3 className="w-3.5 h-3.5" />
                         </button>
@@ -543,7 +624,7 @@ export const MphAdvanceView: React.FC<MphAdvanceViewProps> = ({
                           type="button"
                           onClick={() => onDeleteAdvance(adv)}
                           className="p-1 text-rose-600 hover:bg-rose-50 rounded cursor-pointer"
-                          title="Delete"
+                          title={tr('Delete', 'ਮਿਟਾਓ')}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -555,7 +636,7 @@ export const MphAdvanceView: React.FC<MphAdvanceViewProps> = ({
               <tfoot className="bg-slate-100 border-t-2 border-slate-300 font-bold text-slate-900">
                 <tr>
                   <td colSpan={4} className="py-2.5 px-2.5">
-                    Total ({filteredAdvances.length} Entries)
+                    {tr('Total', 'ਕੁੱਲ')} ({filteredAdvances.length} {tr('Entries', 'ਐਂਟਰੀਆਂ')})
                   </td>
                   <td className="py-2.5 px-2.5 text-right font-mono tabular-nums whitespace-nowrap">
                     {formatINR(totals.principal)}
