@@ -60,7 +60,7 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
   settings,
   onNavigate,
 }) => {
-  const { tr } = useMphLang();
+  const { lang, tr } = useMphLang();
   const [whatsappSummary, setWhatsappSummary] = useState<ReturnType<typeof computeFarmerAccountSummary> | null>(null);
   const summaries = useMemo(() => {
     return farmers.map((f) =>
@@ -231,7 +231,8 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
             {formatWeightQKG(
               totalArrivalWeight.weightQtlPart,
               totalArrivalWeight.weightKgPart,
-              totalArrivalWeight.weightGmPart
+              totalArrivalWeight.weightGmPart,
+              lang
             )}
           </div>
         </div>
@@ -378,7 +379,7 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
                           {s.totalArrivalBags}
                         </td>
                         <td className="py-2.5 px-3 text-right font-mono tabular-nums text-slate-700 whitespace-nowrap">
-                          {formatWeightQKG(s.weightQtlPart, s.weightKgPart, s.weightGmPart)}
+                          {formatWeightQKG(s.weightQtlPart, s.weightKgPart, s.weightGmPart, lang)}
                         </td>
                         <td className="py-2.5 px-3 text-right font-mono tabular-nums font-semibold text-emerald-800">
                           {formatINR(s.totalPaddyAmount)}
@@ -474,7 +475,7 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
                       {formatINR(a.paddyAmount)}
                     </div>
                     <div className="text-[10px] font-mono tabular-nums text-slate-500">
-                      {formatWeightQKG(a.weightQtlPart, a.weightKgPart, a.weightGmPart)}
+                      {formatWeightQKG(a.weightQtlPart, a.weightKgPart, a.weightGmPart, lang)}
                     </div>
                   </div>
                 </div>

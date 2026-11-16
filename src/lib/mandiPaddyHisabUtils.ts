@@ -146,17 +146,576 @@ export function calculatePaddyAmount(totalQuintals: number, ratePerQuintal: numb
   return Math.round(qtl * rate * 100) / 100;
 }
 
-export function formatWeightQKG(qtl: number, kg: number, gm: number): string {
-  return `${Math.floor(safeNum(qtl))} Qtl ${Math.floor(safeNum(kg))} KG ${Math.floor(safeNum(gm))} GM`;
+export function formatWeightQKG(
+  qtl: number,
+  kg: number,
+  gm: number,
+  lang: 'en' | 'pa' = 'en'
+): string {
+  const q = Math.floor(safeNum(qtl));
+  const k = Math.floor(safeNum(kg));
+  const g = Math.floor(safeNum(gm));
+  if (lang === 'pa') {
+    return `${q} ਕੁਇੰ ${k} ਕਿੱਲੋ ${g} ਗ੍ਰਾਮ`;
+  }
+  return `${q} Qtl ${k} KG ${g} GM`;
 }
 
-export function formatLooseKgGm(kg: number, gm: number): string {
+export function formatLooseKgGm(
+  kg: number,
+  gm: number,
+  lang: 'en' | 'pa' = 'en'
+): string {
   const safeKg = Math.max(0, Math.floor(safeNum(kg)));
   const safeGm = Math.max(0, Math.floor(safeNum(gm)));
+  if (lang === 'pa') {
+    if (safeKg === 0 && safeGm === 0) return '0 ਕਿੱਲੋ';
+    if (safeGm === 0) return `${safeKg} ਕਿੱਲੋ`;
+    if (safeKg === 0) return `${safeGm} ਗ੍ਰਾਮ`;
+    return `${safeKg} ਕਿੱਲੋ ${safeGm} ਗ੍ਰਾਮ`;
+  }
   if (safeKg === 0 && safeGm === 0) return '0 KG';
   if (safeGm === 0) return `${safeKg} KG`;
   if (safeKg === 0) return `${safeGm} GM`;
   return `${safeKg} KG ${safeGm} GM`;
+}
+
+const PA_WORD_MAP: Record<string, string> = {
+  // Common Punjabi names & surnames
+  singh: 'ਸਿੰਘ',
+  kaur: 'ਕੌਰ',
+  kumar: 'ਕੁਮਾਰ',
+  kumari: 'ਕੁਮਾਰੀ',
+  sharma: 'ਸ਼ਰਮਾ',
+  verma: 'ਵਰਮਾ',
+  gupta: 'ਗੁਪਤਾ',
+  mittal: 'ਮਿੱਤਲ',
+  bansal: 'ਬਾਂਸਲ',
+  mahajan: 'ਮਹਾਜਨ',
+  arora: 'ਅਰੋੜਾ',
+  malhotra: 'ਮਲਹੋਤਰਾ',
+  chopra: 'ਚੋਪੜਾ',
+  bedi: 'ਬੇਦੀ',
+  maan: 'ਮਾਨ',
+  mann: 'ਮਾਨ',
+  gill: 'ਗਿੱਲ',
+  sandhu: 'ਸੰਧੂ',
+  sidhu: 'ਸਿੱਧੂ',
+  dhillon: 'ਢਿੱਲੋਂ',
+  brar: 'ਬਰਾੜ',
+  virk: 'ਵਿਰਕ',
+  cheema: 'ਚੀਮਾ',
+  bajwa: 'ਬਾਜਵਾ',
+  randhawa: 'ਰੰਧਾਵਾ',
+  grewal: 'ਗਰੇਵਾਲ',
+  bains: 'ਬੈਂਸ',
+  kaler: 'ਕਲੇਰ',
+  aujla: 'ਔਜਲਾ',
+  bhullar: 'ਭੁੱਲਰ',
+  chahal: 'ਚਾਹਲ',
+  johal: 'ਜੋਹਲ',
+  kang: 'ਕੰਗ',
+  saini: 'ਸੈਣੀ',
+  kamboj: 'ਕੰਬੋਜ',
+  sohi: 'ਸੋਹੀ',
+  sekhon: 'ਸੇਖੋਂ',
+  deol: 'ਦਿਓਲ',
+  tiwana: 'ਟਿਵਾਣਾ',
+  dhaliwal: 'ਧਾਲੀਵਾਲ',
+  uppal: 'ਉੱਪਲ',
+  dosanjh: 'ਦੋਸਾਂਝ',
+  heer: 'ਹੀਰ',
+  jatt: 'ਜੱਟ',
+  ram: 'ਰਾਮ',
+  lal: 'ਲਾਲ',
+  chand: 'ਚੰਦ',
+  devi: 'ਦੇਵੀ',
+  rani: 'ਰਾਣੀ',
+  bibi: 'ਬੀਬੀ',
+  harpreet: 'ਹਰਪ੍ਰੀਤ',
+  gurpreet: 'ਗੁਰਪ੍ਰੀਤ',
+  manpreet: 'ਮਨਪ੍ਰੀਤ',
+  jaspreet: 'ਜਸਪ੍ਰੀਤ',
+  lovepreet: 'ਲਵਪ੍ਰੀਤ',
+  arshdeep: 'ਅਰਸ਼ਦੀਪ',
+  amandeep: 'ਅਮਨਦੀਪ',
+  mandeep: 'ਮਨਦੀਪ',
+  sandeep: 'ਸੰਦੀਪ',
+  navdeep: 'ਨਵਦੀਪ',
+  kuldeep: 'ਕੁਲਦੀਪ',
+  sukhdev: 'ਸੁਖਦੇਵ',
+  baldev: 'ਬਲਦੇਵ',
+  gurdev: 'ਗੁਰਦੇਵ',
+  hardev: 'ਹਰਦੇਵ',
+  harjinder: 'ਹਰਜਿੰਦਰ',
+  rajinder: 'ਰਾਜਿੰਦਰ',
+  surinder: 'ਸੁਰਿੰਦਰ',
+  narinder: 'ਨਰਿੰਦਰ',
+  varinder: 'ਵਰਿੰਦਰ',
+  parminder: 'ਪਰਮਿੰਦਰ',
+  harminder: 'ਹਰਮਿੰਦਰ',
+  sukhwinder: 'ਸੁਖਵਿੰਦਰ',
+  sukhvinder: 'ਸੁਖਵਿੰਦਰ',
+  lakhwinder: 'ਲਖਵਿੰਦਰ',
+  balwinder: 'ਬਲਵਿੰਦਰ',
+  kulwinder: 'ਕੁਲਵਿੰਦਰ',
+  bhupinder: 'ਭੁਪਿੰਦਰ',
+  joginder: 'ਜੋਗਿੰਦਰ',
+  mohinder: 'ਮੋਹਿੰਦਰ',
+  paramjit: 'ਪਰਮਜੀਤ',
+  paramjeet: 'ਪਰਮਜੀਤ',
+  simranjit: 'ਸਿਮਰਨਜੀਤ',
+  simranjeet: 'ਸਿਮਰਨਜੀਤ',
+  baljit: 'ਬਲਜੀਤ',
+  baljeet: 'ਬਲਜੀਤ',
+  manjit: 'ਮਨਜੀਤ',
+  manjeet: 'ਮਨਜੀਤ',
+  ranjit: 'ਰਣਜੀਤ',
+  ranjeet: 'ਰਣਜੀਤ',
+  charanjit: 'ਚਰਨਜੀਤ',
+  amarjit: 'ਅਮਰਜੀਤ',
+  sarabjit: 'ਸਰਬਜੀਤ',
+  harjit: 'ਹਰਜੀਤ',
+  harjeet: 'ਹਰਜੀਤ',
+  gurjit: 'ਗੁਰਜੀਤ',
+  gurjeet: 'ਗੁਰਜੀਤ',
+  jagjit: 'ਜਗਜੀਤ',
+  jagjeet: 'ਜਗਜੀਤ',
+  kuljit: 'ਕੁਲਜੀਤ',
+  kuljeet: 'ਕੁਲਜੀਤ',
+  daljit: 'ਦਲਜੀਤ',
+  daljeet: 'ਦਲਜੀਤ',
+  baljinder: 'ਬਲਜਿੰਦਰ',
+  satwinder: 'ਸਤਵਿੰਦਰ',
+  satpal: 'ਸਤਪਾਲ',
+  satnam: 'ਸਤਨਾਮ',
+  gurmeet: 'ਗੁਰਮੀਤ',
+  harmeet: 'ਹਰਮੀਤ',
+  darshan: 'ਦਰਸ਼ਨ',
+  tarsem: 'ਤਰਸੇਮ',
+  jarnail: 'ਜਰਨੈਲ',
+  karnail: 'ਕਰਨੈਲ',
+  balbir: 'ਬਲਬੀਰ',
+  harbans: 'ਹਰਬੰਸ',
+  gurbachan: 'ਗੁਰਬਚਨ',
+  avtar: 'ਅਵਤਾਰ',
+  jagtar: 'ਜਗਤਾਰ',
+  dilraj: 'ਦਿਲਰਾਜ',
+  gurmej: 'ਗੁਰਮੇਜ',
+  gurjant: 'ਗੁਰਜੰਟ',
+  jagsir: 'ਜਗਸੀਰ',
+  nirmal: 'ਨਿਰਮਲ',
+  gursewak: 'ਗੁਰਸੇਵਕ',
+  gursevak: 'ਗੁਰਸੇਵਕ',
+  jagdish: 'ਜਗਦੀਸ਼',
+  harbhajan: 'ਹਰਭਜਨ',
+  gurmukh: 'ਗੁਰਮੁਖ',
+  piara: 'ਪਿਆਰਾ',
+  gian: 'ਗਿਆਨ',
+  sewa: 'ਸੇਵਾ',
+  banta: 'ਬੰਤਾ',
+  santa: 'ਸੰਤਾ',
+  sona: 'ਸੋਨਾ',
+  kaka: 'ਕਾਕਾ',
+  raju: 'ਰਾਜੂ',
+  happy: 'ਹੈਪੀ',
+  sunny: 'ਸਨੀ',
+  vicky: 'ਵਿੱਕੀ',
+  // Villages & Towns
+  pind: 'ਪਿੰਡ',
+  village: 'ਪਿੰਡ',
+  mandi: 'ਮੰਡੀ',
+  kalan: 'ਕਲਾਂ',
+  khurd: 'ਖੁਰਦ',
+  chak: 'ਚੱਕ',
+  kot: 'ਕੋਟ',
+  majra: 'ਮਾਜਰਾ',
+  kapurthala: 'ਕਪੂਰਥਲਾ',
+  jalandhar: 'ਜਲੰਧਰ',
+  ludhiana: 'ਲੁਧਿਆਣਾ',
+  amritsar: 'ਅੰਮ੍ਰਿਤਸਰ',
+  patiala: 'ਪਟਿਆਲਾ',
+  bathinda: 'ਬਠਿੰਡਾ',
+  moga: 'ਮੋਗਾ',
+  firozpur: 'ਫਿਰੋਜ਼ਪੁਰ',
+  ferozepur: 'ਫਿਰੋਜ਼ਪੁਰ',
+  hoshiarpur: 'ਹੁਸ਼ਿਆਰਪੁਰ',
+  sangrur: 'ਸੰਗਰੂਰ',
+  mansa: 'ਮਾਨਸਾ',
+  tarn: 'ਤਰਨ',
+  taran: 'ਤਾਰਨ',
+  muktsar: 'ਮੁਕਤਸਰ',
+  faridkot: 'ਫਰੀਦਕੋਟ',
+  fazilka: 'ਫਾਜ਼ਿਲਕਾ',
+  barnala: 'ਬਰਨਾਲਾ',
+  gurdaspur: 'ਗੁਰਦਾਸਪੁਰ',
+  pathankot: 'ਪਠਾਨਕੋਟ',
+  rupnagar: 'ਰੋਪੜ',
+  ropar: 'ਰੋਪੜ',
+  mohali: 'ਮੋਹਾਲੀ',
+  fatehgarh: 'ਫਤਿਹਗੜ੍ਹ',
+  sahib: 'ਸਾਹਿਬ',
+  nawanshahr: 'ਨਵਾਂਸ਼ਹਿਰ',
+  malerkotla: 'ਮਲੇਰਕੋਟਲਾ',
+  sultanpur: 'ਸੁਲਤਾਨਪੁਰ',
+  lodhi: 'ਲੋਧੀ',
+  nakodar: 'ਨਕੋਦਰ',
+  phagwara: 'ਫਗਵਾੜਾ',
+  batala: 'ਬਟਾਲਾ',
+  khanna: 'ਖੰਨਾ',
+  raikot: 'ਰਾਏਕੋਟ',
+  jagraon: 'ਜਗਰਾਉਂ',
+  jagron: 'ਜਗਰਾਉਂ',
+  abohar: 'ਅਬੋਹਰ',
+  zira: 'ਜ਼ੀਰਾ',
+  bholath: 'ਭੋਲਥ',
+  nadala: 'ਨਡਾਲਾ',
+  begowal: 'ਬੇਗੋਵਾਲ',
+  bhadaur: 'ਭਦੌੜ',
+  talwandi: 'ਤਲਵੰਡੀ',
+  kala: 'ਕਾਲਾ',
+  sanghian: 'ਸੰਘਿਆਂ',
+  // Common Mandi / Accounting terms
+  'pre-season': 'ਸੀਜ਼ਨ ਤੋਂ ਪਹਿਲਾਂ',
+  preseason: 'ਸੀਜ਼ਨ ਤੋਂ ਪਹਿਲਾਂ',
+  pre: 'ਪਹਿਲਾਂ',
+  season: 'ਸੀਜ਼ਨ',
+  advance: 'ਪੇਸ਼ਗੀ',
+  cash: 'ਨਕਦ',
+  diesel: 'ਡੀਜ਼ਲ',
+  petrol: 'ਪੈਟਰੋਲ',
+  tractor: 'ਟਰੈਕਟਰ',
+  trolley: 'ਟਰਾਲੀ',
+  seed: 'ਬੀਜ',
+  seeds: 'ਬੀਜ',
+  fertilizer: 'ਖਾਦ',
+  khaad: 'ਖਾਦ',
+  urea: 'ਯੂਰੀਆ',
+  dap: 'ਡੀ.ਏ.ਪੀ.',
+  spray: 'ਸਪਰੇਅ',
+  payment: 'ਅਦਾਇਗੀ',
+  payments: 'ਅਦਾਇਗੀਆਂ',
+  received: 'ਪ੍ਰਾਪਤ',
+  paid: 'ਦਿੱਤੇ',
+  given: 'ਦਿੱਤੇ',
+  nagad: 'ਨਕਦ',
+  kharcha: 'ਖਰਚਾ',
+  theka: 'ਠੇਕਾ',
+  khad: 'ਖਾਦ',
+  beej: 'ਬੀਜ',
+  other: 'ਹੋਰ',
+  work: 'ਕੰਮ',
+  for: 'ਲਈ',
+  from: 'ਤੋਂ',
+  to: 'ਨੂੰ',
+  and: 'ਅਤੇ',
+  or: 'ਜਾਂ',
+  labour: 'ਲੇਬਰ',
+  labor: 'ਲੇਬਰ',
+  drying: 'ਸੁਕਾਈ',
+  commission: 'ਆੜ੍ਹਤ',
+  interest: 'ਵਿਆਜ',
+  loan: 'ਕਰਜ਼ਾ',
+  bank: 'ਬੈਂਕ',
+  transfer: 'ਟਰਾਂਸਫਰ',
+  cheque: 'ਚੈੱਕ',
+  check: 'ਚੈੱਕ',
+  rtgs: 'ਆਰ.ਟੀ.ਜੀ.ਐਸ.',
+  neft: 'ਐਨ.ਈ.ਐਫ.ਟੀ.',
+  upi: 'ਯੂ.ਪੀ.ਆਈ.',
+  account: 'ਖਾਤਾ',
+  balance: 'ਬਕਾਇਆ',
+  paddy: 'ਝੋਨਾ',
+  hybrid: 'ਹਾਈਬ੍ਰਿਡ',
+  grade: 'ਗ੍ਰੇਡ',
+  gurde: 'ਗ੍ਰੇਡ',
+  lot: 'ਲਾਟ',
+  bag: 'ਬੈਗ',
+  bags: 'ਬੈਗ',
+  wife: 'ਪਤਨੀ',
+  son: 'ਪੁੱਤਰ',
+  father: 'ਪਿਤਾ',
+  brother: 'ਭਰਾ',
+  hissedar: 'ਹਿੱਸੇਦਾਰ',
+  self: 'ਖੁਦ',
+  kisan: 'ਕਿਸਾਨ',
+  farmer: 'ਕਿਸਾਨ',
+  punjab: 'ਪੰਜਾਬ',
+  traders: 'ਟ੍ਰੇਡਰਜ਼',
+  trading: 'ਟ੍ਰੇਡਿੰਗ',
+  company: 'ਕੰਪਨੀ',
+  co: 'ਕੰਪਨੀ',
+  bill: 'ਬਿੱਲ',
+  no: 'ਨੰ.',
+  date: 'ਤਾਰੀਖ',
+  note: 'ਨੋਟ',
+  extra: 'ਵਾਧੂ',
+  less: 'ਘੱਟ',
+  return: 'ਵਾਪਸੀ',
+};
+
+const PA_PHRASE_MAP: Array<[RegExp, string]> = [
+  [/\bpre[-\s]*season\s+advance\b/gi, 'ਸੀਜ਼ਨ ਤੋਂ ਪਹਿਲਾਂ ਪੇਸ਼ਗੀ'],
+  [/\bother\s+work\s+payment\b/gi, 'ਹੋਰ ਕੰਮ ਲਈ ਰਕਮ'],
+  [/\bother\s+payment\b/gi, 'ਹੋਰ ਅਦਾਇਗੀ'],
+  [/\bcash\s+advance\b/gi, 'ਨਕਦ ਪੇਸ਼ਗੀ'],
+  [/\bcash\s+paid\b/gi, 'ਨਕਦ ਦਿੱਤੇ'],
+  [/\bpayment\s+received\b/gi, 'ਅਦਾਇਗੀ ਪ੍ਰਾਪਤ'],
+  [/\bfertilizer\s*\/\s*seed\b/gi, 'ਖਾਦ / ਬੀਜ'],
+  [/\bdiesel\s*\/\s*tractor\b/gi, 'ਡੀਜ਼ਲ / ਟਰੈਕਟਰ'],
+  [/\bhybrid\s+paddy\b/gi, 'ਹਾਈਬ੍ਰਿਡ ਝੋਨਾ'],
+  [/\bpaddy\s+a\s+gurde\b/gi, 'ਝੋਨਾ ਏ ਗ੍ਰੇਡ'],
+  [/\bpaddy\s+a\s+grade\b/gi, 'ਝੋਨਾ ਏ ਗ੍ਰੇਡ'],
+  [/\bs\s*\/\s*o\b/gi, 'ਪੁੱਤਰ'],
+  [/\bw\s*\/\s*o\b/gi, 'ਪਤਨੀ'],
+  [/\bd\s*\/\s*o\b/gi, 'ਪੁੱਤਰੀ'],
+];
+
+const INITIAL_VOWELS: Array<[string, string]> = [
+  ['aa', 'ਆ'],
+  ['ee', 'ਈ'],
+  ['ii', 'ਈ'],
+  ['oo', 'ਊ'],
+  ['uu', 'ਊ'],
+  ['ai', 'ਐ'],
+  ['au', 'ਔ'],
+  ['ou', 'ਔ'],
+  ['a', 'ਅ'],
+  ['i', 'ਇ'],
+  ['e', 'ਏ'],
+  ['u', 'ਉ'],
+  ['o', 'ਓ'],
+];
+
+const MEDIAL_VOWELS: Array<[string, string]> = [
+  ['aa', 'ਾ'],
+  ['ee', 'ੀ'],
+  ['ii', 'ੀ'],
+  ['oo', 'ੂ'],
+  ['uu', 'ੂ'],
+  ['ai', 'ੈ'],
+  ['au', 'ੌ'],
+  ['ou', 'ੌ'],
+  ['ey', 'ੇ'],
+  ['ay', 'ੇ'],
+  ['ia', 'ਿਆ'],
+  ['ea', 'ੀ'],
+  ['a', ''],
+  ['i', 'ਿ'],
+  ['e', 'ੇ'],
+  ['u', 'ੁ'],
+  ['o', 'ੋ'],
+];
+
+const CONSONANTS: Array<[string, string]> = [
+  ['chh', 'ਛ'],
+  ['ksh', 'ਕਸ਼'],
+  ['sh', 'ਸ਼'],
+  ['kh', 'ਖ'],
+  ['gh', 'ਘ'],
+  ['ch', 'ਚ'],
+  ['jh', 'ਝ'],
+  ['th', 'ਥ'],
+  ['dh', 'ਧ'],
+  ['bh', 'ਭ'],
+  ['ph', 'ਫ'],
+  ['ng', 'ੰਗ'],
+  ['nk', 'ੰਕ'],
+  ['k', 'ਕ'],
+  ['g', 'ਗ'],
+  ['c', 'ਕ'],
+  ['j', 'ਜ'],
+  ['z', 'ਜ਼'],
+  ['t', 'ਤ'],
+  ['d', 'ਦ'],
+  ['n', 'ਨ'],
+  ['p', 'ਪ'],
+  ['f', 'ਫ'],
+  ['b', 'ਬ'],
+  ['m', 'ਮ'],
+  ['y', 'ਯ'],
+  ['r', 'ਰ'],
+  ['l', 'ਲ'],
+  ['v', 'ਵ'],
+  ['w', 'ਵ'],
+  ['s', 'ਸ'],
+  ['h', 'ਹ'],
+  ['q', 'ਕ'],
+  ['x', 'ਕਸ'],
+];
+
+const VOWEL_CHARS = new Set(['a', 'e', 'i', 'o', 'u']);
+const LONG_MATRAS = new Set(['ਾ', 'ੀ', 'ੇ', 'ੈ', 'ੋ', 'ੌ', 'ੂ']);
+
+function transliterateRomanWordToGurmukhi(word: string): string {
+  const lower = word.toLowerCase();
+  if (!lower) return word;
+  if (PA_WORD_MAP[lower]) return PA_WORD_MAP[lower];
+
+  // Handle common village/name suffixes when attached directly (e.g. Gobindpur, Rampura)
+  if (lower.endsWith('singh') && lower.length > 5) {
+    return `${transliterateRomanWordToGurmukhi(lower.slice(0, -5))} ਸਿੰਘ`;
+  }
+  if (lower.endsWith('pur') && lower.length > 3) {
+    return `${transliterateRomanWordToGurmukhi(lower.slice(0, -3))}ਪੁਰ`;
+  }
+  if (lower.endsWith('wala') && lower.length > 4) {
+    return `${transliterateRomanWordToGurmukhi(lower.slice(0, -4))}ਵਾਲਾ`;
+  }
+  if (lower.endsWith('wali') && lower.length > 4) {
+    return `${transliterateRomanWordToGurmukhi(lower.slice(0, -4))}ਵਾਲੀ`;
+  }
+  if (lower.endsWith('garh') && lower.length > 4) {
+    return `${transliterateRomanWordToGurmukhi(lower.slice(0, -4))}ਗੜ੍ਹ`;
+  }
+
+  let out = '';
+  let i = 0;
+  let lastMatra = '';
+  let prevWasConsonant = false;
+
+  while (i < lower.length) {
+    const rest = lower.slice(i);
+
+    // Word-initial vowel
+    if (i === 0) {
+      let matchedVowel = false;
+      for (const [pat, g] of INITIAL_VOWELS) {
+        if (rest.startsWith(pat)) {
+          out += g;
+          i += pat.length;
+          lastMatra = g;
+          prevWasConsonant = false;
+          matchedVowel = true;
+          break;
+        }
+      }
+      if (matchedVowel) continue;
+    }
+
+    // Medial/final vowel after consonant (or another vowel)
+    if (VOWEL_CHARS.has(lower[i])) {
+      let matched = false;
+      for (const [pat, matra] of MEDIAL_VOWELS) {
+        if (rest.startsWith(pat)) {
+          // Trailing 'a' -> 'ਾ', trailing 'i' -> 'ੀ', trailing 'u' -> 'ੂ'
+          if (i + pat.length === lower.length && prevWasConsonant) {
+            if (pat === 'a') {
+              out += 'ਾ';
+              lastMatra = 'ਾ';
+            } else if (pat === 'i') {
+              out += 'ੀ';
+              lastMatra = 'ੀ';
+            } else if (pat === 'u') {
+              out += 'ੂ';
+              lastMatra = 'ੂ';
+            } else {
+              out += matra;
+              lastMatra = matra;
+            }
+          } else {
+            out += matra;
+            lastMatra = matra;
+          }
+          i += pat.length;
+          prevWasConsonant = false;
+          matched = true;
+          break;
+        }
+      }
+      if (matched) continue;
+    }
+
+    // Handle doubled identical consonant (e.g., 'll', 'pp', 'kk', 'tt', 'dd', 'ss', 'nn', 'mm', 'bb', 'gg')
+    if (
+      i + 1 < lower.length &&
+      lower[i] === lower[i + 1] &&
+      !VOWEL_CHARS.has(lower[i]) &&
+      'klptdsmnbg'.includes(lower[i])
+    ) {
+      out += 'ੱ';
+      i += 1;
+      prevWasConsonant = false;
+      continue;
+    }
+
+    // Handle nasal 'n' or 'm' before a stop consonant (nt, nd, nk, mp, mb, nj, nch)
+    if (
+      (lower[i] === 'n' || lower[i] === 'm') &&
+      i > 0 &&
+      i + 1 < lower.length &&
+      !VOWEL_CHARS.has(lower[i + 1]) &&
+      lower[i + 1] !== 'h' &&
+      lower[i + 1] !== 'y' &&
+      lower[i + 1] !== 'r' &&
+      lower[i + 1] !== 'l' &&
+      lower[i + 1] !== 'v' &&
+      lower[i + 1] !== 'w' &&
+      !(lower[i] === 'm' && lower[i + 1] !== 'p' && lower[i + 1] !== 'b')
+    ) {
+      out += LONG_MATRAS.has(lastMatra) ? 'ਂ' : 'ੰ';
+      i += 1;
+      prevWasConsonant = false;
+      continue;
+    }
+
+    // Trailing 'y' after consonant -> 'ੀ' (e.g., Bobby -> ਬੌਬੀ, Happy -> ਹੈਪੀ)
+    if (lower[i] === 'y' && i === lower.length - 1 && prevWasConsonant) {
+      out += 'ੀ';
+      i += 1;
+      prevWasConsonant = false;
+      continue;
+    }
+
+    // Consonant match
+    let matchedCons = false;
+    for (const [pat, g] of CONSONANTS) {
+      if (rest.startsWith(pat)) {
+        out += g;
+        i += pat.length;
+        lastMatra = '';
+        prevWasConsonant = true;
+        matchedCons = true;
+        break;
+      }
+    }
+    if (matchedCons) continue;
+
+    // Fallback: emit char as-is
+    out += word[i];
+    i += 1;
+    prevWasConsonant = false;
+  }
+
+  return out;
+}
+
+export function transliterateToPunjabi(input: unknown): string {
+  const text = safeStr(input);
+  if (!text) return '';
+
+  let result = text;
+  for (const [regex, replacement] of PA_PHRASE_MAP) {
+    result = result.replace(regex, replacement);
+  }
+
+  return result.replace(/[A-Za-z]+(?:[-'][A-Za-z]+)*/g, (token) => {
+    const lowerToken = token.toLowerCase();
+    if (PA_WORD_MAP[lowerToken]) return PA_WORD_MAP[lowerToken];
+    if (token.includes('-')) {
+      return token
+        .split('-')
+        .map((part) => transliterateRomanWordToGurmukhi(part))
+        .join('-');
+    }
+    return transliterateRomanWordToGurmukhi(token);
+  });
+}
+
+export function displayMphText(input: unknown, lang: 'en' | 'pa'): string {
+  const str = safeStr(input);
+  if (!str || lang !== 'pa') return str;
+  return transliterateToPunjabi(str);
 }
 
 export function formatINR(value: number, showDecimals = true): string {

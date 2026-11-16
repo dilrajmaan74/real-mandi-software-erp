@@ -78,6 +78,17 @@ export const MphAdvanceView: React.FC<MphAdvanceViewProps> = ({
     }
   }, [farmers, farmerId]);
 
+  useEffect(() => {
+    if (!editingId) {
+      setPurpose((prev) => {
+        if (prev === 'Pre-Season Advance' || prev === 'ਸੀਜ਼ਨ ਤੋਂ ਪਹਿਲਾਂ ਪੇਸ਼ਗੀ') {
+          return lang === 'pa' ? 'ਸੀਜ਼ਨ ਤੋਂ ਪਹਿਲਾਂ ਪੇਸ਼ਗੀ' : 'Pre-Season Advance';
+        }
+        return prev;
+      });
+    }
+  }, [lang, editingId]);
+
   const parsedPrincipal = Math.max(0, Number(principalAmount) || 0);
   const parsedRate = Math.max(0, Number(interestRateMonthly) || 0);
 

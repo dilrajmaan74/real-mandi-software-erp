@@ -456,7 +456,8 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
                       {formatWeightQKG(
                         farmerSummary.weightQtlPart,
                         farmerSummary.weightKgPart,
-                        farmerSummary.weightGmPart
+                        farmerSummary.weightGmPart,
+                        lang
                       )}
                     </span>
                   </div>
@@ -535,7 +536,7 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
                             <td className="py-1.5 px-2">{trPaddyType(a.paddyType)}</td>
                             <td className="py-1.5 px-2 text-right font-mono">{a.bags}</td>
                             <td className="py-1.5 px-2 text-right font-mono whitespace-nowrap">
-                              {formatWeightQKG(a.weightQtlPart, a.weightKgPart, a.weightGmPart)}
+                              {formatWeightQKG(a.weightQtlPart, a.weightKgPart, a.weightGmPart, lang)}
                             </td>
                             <td className="py-1.5 px-2 text-right font-mono">
                               ₹{a.ratePerQuintal}
@@ -796,10 +797,10 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
                     <td className="py-2 px-2.5">{trPaddyType(a.paddyType)}</td>
                     <td className="py-2 px-2.5 text-right font-mono tabular-nums">{a.bags}</td>
                     <td className="py-2 px-2.5 text-right font-mono tabular-nums whitespace-nowrap">
-                      {formatLooseKgGm(a.looseKg, a.looseGm)}
+                      {formatLooseKgGm(a.looseKg, a.looseGm, lang)}
                     </td>
                     <td className="py-2 px-2.5 text-right font-mono tabular-nums whitespace-nowrap">
-                      {formatWeightQKG(a.weightQtlPart, a.weightKgPart, a.weightGmPart)}
+                      {formatWeightQKG(a.weightQtlPart, a.weightKgPart, a.weightGmPart, lang)}
                     </td>
                     <td className="py-2 px-2.5 text-right font-mono tabular-nums">
                       ₹{a.ratePerQuintal}
@@ -821,14 +822,16 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
                   <td className="py-2.5 px-2.5 text-right font-mono tabular-nums whitespace-nowrap">
                     {formatLooseKgGm(
                       arrivalTotals.weights.totalLooseKg,
-                      arrivalTotals.weights.totalLooseGm
+                      arrivalTotals.weights.totalLooseGm,
+                      lang
                     )}
                   </td>
                   <td className="py-2.5 px-2.5 text-right font-mono tabular-nums whitespace-nowrap">
                     {formatWeightQKG(
                       arrivalTotals.weights.weightQtlPart,
                       arrivalTotals.weights.weightKgPart,
-                      arrivalTotals.weights.weightGmPart
+                      arrivalTotals.weights.weightGmPart,
+                      lang
                     )}
                   </td>
                   <td className="py-2.5 px-2.5 text-right">—</td>
@@ -937,7 +940,7 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
                       {s.totalArrivalBags}
                     </td>
                     <td className="py-2 px-2.5 text-right font-mono tabular-nums whitespace-nowrap">
-                      {formatWeightQKG(s.weightQtlPart, s.weightKgPart, s.weightGmPart)}
+                      {formatWeightQKG(s.weightQtlPart, s.weightKgPart, s.weightGmPart, lang)}
                     </td>
                     <td className="py-2 px-2.5 text-right font-mono tabular-nums font-semibold text-emerald-800 whitespace-nowrap">
                       {formatINR(s.totalPaddyAmount)}
@@ -994,7 +997,8 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
                     {formatWeightQKG(
                       grandTotals.allWeights.weightQtlPart,
                       grandTotals.allWeights.weightKgPart,
-                      grandTotals.allWeights.weightGmPart
+                      grandTotals.allWeights.weightGmPart,
+                      lang
                     )}
                   </td>
                   <td className="py-2.5 px-2.5 text-right font-mono tabular-nums text-emerald-900 whitespace-nowrap">

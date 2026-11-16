@@ -35,6 +35,26 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
   requestConfirm,
 }) => {
   const { tr } = useMphLang();
+  const trRelation = (rel: string) => {
+    switch (rel) {
+      case 'Self':
+        return tr('Self', 'ਖੁਦ');
+      case 'Son':
+        return tr('Son', 'ਪੁੱਤਰ');
+      case 'Wife':
+        return tr('Wife', 'ਪਤਨੀ');
+      case 'Hissedar':
+        return tr('Hissedar', 'ਹਿੱਸੇਦਾਰ');
+      case 'Father':
+        return tr('Father', 'ਪਿਤਾ');
+      case 'Brother':
+        return tr('Brother', 'ਭਰਾ');
+      case 'Other':
+        return tr('Other', 'ਹੋਰ');
+      default:
+        return rel;
+    }
+  };
   const [editingId, setEditingId] = useState<string | null>(null);
   const [farmerId, setFarmerId] = useState<string>(farmers[0]?.id || '');
   const [holderRelation, setHolderRelation] = useState<string>('Self');
@@ -401,7 +421,7 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
                           : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
                       }`}
                     >
-                      {h.name} ({h.relation})
+                      {h.name} ({trRelation(h.relation)})
                     </button>
                   ))}
                 </div>
@@ -603,7 +623,7 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
                             isDifferentHolder ? 'text-blue-700 font-semibold' : 'text-slate-500'
                           }`}
                         >
-                          {tr('J-Form', 'ਜੇ-ਫਾਰਮ')}: {holderName} ({holderRel})
+                          {tr('J-Form', 'ਜੇ-ਫਾਰਮ')}: {holderName} ({trRelation(holderRel)})
                         </div>
                       </td>
                       <td className="py-2 px-3 font-mono text-slate-600">

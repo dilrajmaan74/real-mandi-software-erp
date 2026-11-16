@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   MphAdvance,
   MphArrival,
@@ -11,6 +11,7 @@ import {
 import {
   calculateAdvanceDaysAndInterest,
   computeFarmerAccountSummary,
+  displayMphText,
   formatDateDMY,
   formatDryingBreakdownText,
   formatINR,
@@ -132,6 +133,17 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
   const [advBasis, setAdvBasis] = useState<MphInterestBasis>('daily_30');
   const [advInterestOverride, setAdvInterestOverride] = useState<string>('');
   const [advError, setAdvError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!editingAdvId) {
+      setAdvPurpose((prev) => {
+        if (prev === 'Pre-Season Advance' || prev === 'ਸੀਜ਼ਨ ਤੋਂ ਪਹਿਲਾਂ ਪੇਸ਼ਗੀ') {
+          return lang === 'pa' ? 'ਸੀਜ਼ਨ ਤੋਂ ਪਹਿਲਾਂ ਪੇਸ਼ਗੀ' : 'Pre-Season Advance';
+        }
+        return prev;
+      });
+    }
+  }, [lang, editingAdvId]);
 
   const parsedAdvPrincipal = Math.max(0, Number(advPrincipal) || 0);
   const parsedAdvRate = Math.max(0, Number(advRate) || 0);
@@ -436,11 +448,16 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
             className="w-full sm:w-80 px-3 py-2 text-xs sm:text-sm font-semibold border border-slate-300 rounded-lg bg-white focus:outline-none focus:border-emerald-600"
           >
             {farmers.map((f) => {
-              const fatherPart = f.fatherName ? ` ${tr('S/O', 'ਪੁੱਤਰ')} ${safeStr(f.fatherName)}` : '';
-              const villagePart = f.village ? ` — ${safeStr(f.village)}` : '';
+              const dispName = displayMphText(safeStr(f.name, 'Farmer'), lang);
+              const fatherPart = f.fatherName
+                ? ` ${tr('S/O', 'ਪੁੱਤਰ')} ${displayMphText(safeStr(f.fatherName), lang)}`
+                : '';
+              const villagePart = f.village
+                ? ` — ${displayMphText(safeStr(f.village), lang)}`
+                : '';
               return (
                 <option key={f.id} value={f.id}>
-                  {`${safeStr(f.name, 'Farmer')}${fatherPart}${villagePart}`}
+                  {`${dispName}${fatherPart}${villagePart}`}
                 </option>
               );
             })}
@@ -515,11 +532,12 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200">
           <div>
             <h2 className="text-lg font-bold text-slate-900">
-              {activeFarmer.name}
+              {displayMphText(activeFarmer.name, lang)}
             </h2>
             <p className="text-xs text-slate-600 mt-0.5">
-              {tr('Father:', 'ਪਿਤਾ:')} {activeFarmer.fatherName || '—'} ·{' '}
-              {tr('Village:', 'ਪਿੰਡ:')} {activeFarmer.village} ·{' '}
+              {tr('Father:', 'ਪਿਤਾ:')}{' '}
+              {activeFarmer.fatherName ? displayMphText(activeFarmer.fatherName, lang) : '—'} ·{' '}
+              {tr('Village:', 'ਪਿੰਡ:')} {displayMphText(activeFarmer.village, lang)} ·{' '}
               {tr('Mobile:', 'ਮੋਬਾਈਲ:')}{' '}
               <span className="font-mono">{activeFarmer.mobile || '—'}</span>
             </p>
@@ -553,7 +571,8 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                     {formatWeightQKG(
                       summary.weightQtlPart,
                       summary.weightKgPart,
-                      summary.weightGmPart
+                      summary.weightGmPart,
+                      lang
                     )}
                   </span>
                 </div>
@@ -577,7 +596,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                       {jFormHolderBreakdown
                         .map(
                           (h) =>
-                            `${h.name} (${trRelation(h.relation)}): ${h.bags} ${tr('Bags', 'ਬੈਗ')} · ${formatINR(h.amount)}`
+                            `${displayMphText(h.name, lang)} (${trRelation(h.relation)}): ${h.bags} ${tr('Bags', 'ਬੈਗ')} · ${formatINR(h.amount)}`
                         )
                         .join(' | ')}
                     </span>
@@ -761,10 +780,10 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                           {a.bags}
                         </td>
                         <td className="py-2 px-2 text-right font-mono tabular-nums text-slate-600 whitespace-nowrap">
-                          {formatLooseKgGm(a.looseKg, a.looseGm)}
+                          {formatLooseKgGm(a.looseKg, a.looseGm, lang)}
                         </td>
                         <td className="py-2 px-2 text-right font-mono tabular-nums whitespace-nowrap">
-                          {formatWeightQKG(a.weightQtlPart, a.weightKgPart, a.weightGmPart)}
+                          {formatWeightQKG(a.weightQtlPart, a.weightKgPart, a.weightGmPart, lang)}
                         </td>
                         <td className="py-2 px-2 text-right font-mono tabular-nums">
                           ₹{a.ratePerQuintal}
@@ -784,13 +803,14 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                         {summary.totalArrivalBags}
                       </td>
                       <td className="py-2 px-2 text-right font-mono tabular-nums whitespace-nowrap">
-                        {formatLooseKgGm(summary.totalLooseKg, summary.totalLooseGm)}
+                        {formatLooseKgGm(summary.totalLooseKg, summary.totalLooseGm, lang)}
                       </td>
                       <td className="py-2 px-2 text-right font-mono tabular-nums whitespace-nowrap">
                         {formatWeightQKG(
                           summary.weightQtlPart,
                           summary.weightKgPart,
-                          summary.weightGmPart
+                          summary.weightGmPart,
+                          lang
                         )}
                       </td>
                       <td className="py-2 px-2 text-right">—</td>
@@ -862,7 +882,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                                 isOther ? 'text-blue-800' : 'text-slate-800'
                               }`}
                             >
-                              {holderName}
+                              {displayMphText(holderName, lang)}
                             </span>
                             <span className="ml-1 text-[10px] text-slate-500">
                               ({trRelation(holderRel)})
@@ -918,7 +938,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                           className="flex items-center justify-between bg-white border border-slate-200 rounded px-2 py-1"
                         >
                           <span className="font-medium text-slate-800">
-                            {h.name}{' '}
+                            {displayMphText(h.name, lang)}{' '}
                             <span className="text-[10px] text-slate-500">
                               ({trRelation(h.relation)})
                             </span>
@@ -995,7 +1015,9 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                       <td className="py-2 px-3 font-medium text-slate-800 whitespace-nowrap">
                         {trPaddyType(d.paddyType)}
                       </td>
-                      <td className="py-2 px-3 text-slate-500">{d.notes || '—'}</td>
+                      <td className="py-2 px-3 text-slate-500">
+                        {d.notes ? displayMphText(d.notes, lang) : '—'}
+                      </td>
                       <td className="py-2 px-3 text-right font-mono tabular-nums font-semibold text-slate-900">
                         {d.bags}
                       </td>
@@ -1167,7 +1189,9 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                             : tr('(-) Expense / Paid', '(-) ਖਰਚ / ਦਿੱਤੇ')}
                         </span>
                       </td>
-                      <td className="py-2 px-3 text-slate-800">{o.description}</td>
+                      <td className="py-2 px-3 text-slate-800">
+                        {displayMphText(o.description, lang)}
+                      </td>
                       <td
                         className={`py-2 px-3 text-right font-mono tabular-nums font-bold ${
                           o.entryType === 'add' ? 'text-emerald-700' : 'text-rose-700'
@@ -1439,7 +1463,9 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                       <td className="py-2 px-2.5 font-mono tabular-nums text-slate-400">
                         {idx + 1}
                       </td>
-                      <td className="py-2 px-2.5 text-slate-800 font-medium">{adv.purpose}</td>
+                      <td className="py-2 px-2.5 text-slate-800 font-medium">
+                        {displayMphText(adv.purpose, lang)}
+                      </td>
                       <td className="py-2 px-2.5 font-mono tabular-nums whitespace-nowrap text-slate-700">
                         {formatDateDMY(adv.startDate)} → {formatDateDMY(adv.endDate)}
                       </td>

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 
 export type MphLang = 'en' | 'pa';
 
@@ -33,10 +33,14 @@ export const MphLangProvider: React.FC<{ children: React.ReactNode }> = ({ child
     } catch {
       // ignore storage errors
     }
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('translate', 'no');
+      document.documentElement.classList.add('notranslate');
+    }
   }, [lang]);
 
-  const setLang = (next: MphLang) => setLangState(next);
-  const tr = (en: string, pa: string) => (lang === 'pa' ? pa : en);
+  const setLang = useCallback((next: MphLang) => setLangState(next), []);
+  const tr = useCallback((en: string, pa: string) => (lang === 'pa' ? pa : en), [lang]);
 
   return (
     <MphLangContext.Provider value={{ lang, setLang, tr }}>

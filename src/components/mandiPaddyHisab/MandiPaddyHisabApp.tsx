@@ -577,7 +577,7 @@ const MandiPaddyHisabInner: React.FC<MandiPaddyHisabAppProps> = ({ user }) => {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 notranslate" translate="no">
       {/* Independent Module Menu Bar */}
       <div className="print:hidden bg-white border border-slate-200 rounded-xl p-2 flex flex-col xl:flex-row xl:items-center justify-between gap-2">
         <div className="flex items-center gap-1 overflow-x-auto pb-1 xl:pb-0">

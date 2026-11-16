@@ -2,6 +2,7 @@ import { toJpeg } from 'html-to-image';
 import { MphFarmerAccountSummary, MphSettings } from '../types/mandiPaddyHisab';
 import { MphLang } from './mandiPaddyHisabI18n';
 import {
+  displayMphText,
   formatDateDMY,
   formatDryingBreakdownText,
   formatINR,
@@ -79,9 +80,9 @@ export function buildFarmerPuraHisabWhatsAppText(
     lines.push('🌾 *ਮੰਡੀ ਝੋਨਾ ਹਿਸਾਬ — ਪੂਰਾ ਖਾਤਾ ਸਟੇਟਮੈਂਟ*');
     lines.push(`*ਤਾਰੀਖ:* ${todayStr}`);
     lines.push('─────────────────────');
-    lines.push(`*ਕਿਸਾਨ:* ${safeStr(f.name)}`);
-    if (f.fatherName) lines.push(`*ਪਿਤਾ ਦਾ ਨਾਮ:* ${safeStr(f.fatherName)}`);
-    lines.push(`*ਪਿੰਡ:* ${safeStr(f.village)}`);
+    lines.push(`*ਕਿਸਾਨ:* ${displayMphText(f.name, 'pa')}`);
+    if (f.fatherName) lines.push(`*ਪਿਤਾ ਦਾ ਨਾਮ:* ${displayMphText(f.fatherName, 'pa')}`);
+    lines.push(`*ਪਿੰਡ:* ${displayMphText(f.village, 'pa')}`);
     if (f.mobile) lines.push(`*ਮੋਬਾਈਲ:* ${safeStr(f.mobile)}`);
   } else {
     lines.push('🌾 *Mandi Paddy Hisab — Complete Account Statement*');
@@ -101,10 +102,10 @@ export function buildFarmerPuraHisabWhatsAppText(
       summary.arrivals.forEach((a, i) => {
         const looseText =
           a.looseKg > 0 || a.looseGm > 0
-            ? ` (+${formatLooseKgGm(a.looseKg, a.looseGm)})`
+            ? ` (+${formatLooseKgGm(a.looseKg, a.looseGm, 'pa')})`
             : '';
         lines.push(
-          `${i + 1}. ${formatDateDMY(a.date)} | ${trPaddyType(a.paddyType, lang)} | ${a.bags} ਬੈਗ${looseText} | ${formatWeightQKG(a.weightQtlPart, a.weightKgPart, a.weightGmPart)} @ ₹${a.ratePerQuintal} = *${formatINR(a.paddyAmount)}*`
+          `${i + 1}. ${formatDateDMY(a.date)} | ${trPaddyType(a.paddyType, lang)} | ${a.bags} ਬੈਗ${looseText} | ${formatWeightQKG(a.weightQtlPart, a.weightKgPart, a.weightGmPart, 'pa')} @ ₹${a.ratePerQuintal} = *${formatINR(a.paddyAmount)}*`
         );
       });
     }
@@ -112,7 +113,8 @@ export function buildFarmerPuraHisabWhatsAppText(
       `• *ਕੁੱਲ ਬੈਗ:* ${summary.totalArrivalBags} | *ਕੁੱਲ ਵਜ਼ਨ:* ${formatWeightQKG(
         summary.weightQtlPart,
         summary.weightKgPart,
-        summary.weightGmPart
+        summary.weightGmPart,
+        'pa'
       )}`
     );
     lines.push(`• *ਕੁੱਲ ਝੋਨੇ ਦੀ ਰਕਮ:* *${formatINR(summary.totalPaddyAmount)}*`);
@@ -145,7 +147,7 @@ export function buildFarmerPuraHisabWhatsAppText(
     lines.push(`*2. ਜੇ-ਫਾਰਮ ਵੇਰਵਾ (${summary.jForms.length} ਜੇ-ਫਾਰਮ):*`);
     if (mode === 'full' && summary.jForms.length > 0) {
       summary.jForms.forEach((j, i) => {
-        const holder = j.jFormHolderName || j.farmerName;
+        const holder = displayMphText(j.jFormHolderName || j.farmerName, 'pa');
         const rel = trRelation(j.holderRelation || 'Self', lang);
         const noPart = j.jFormNo ? ` #${j.jFormNo}` : '';
         lines.push(
@@ -203,7 +205,7 @@ export function buildFarmerPuraHisabWhatsAppText(
     if (mode === 'full' && summary.otherEntries.length > 0) {
       summary.otherEntries.forEach((o, i) => {
         lines.push(
-          `  ${i + 1}. ${formatDateDMY(o.date)} | ${o.description}: ${o.entryType === 'add' ? '+' : '-'}${formatINR(o.amount)}`
+          `  ${i + 1}. ${formatDateDMY(o.date)} | ${displayMphText(o.description, 'pa')}: ${o.entryType === 'add' ? '+' : '-'}${formatINR(o.amount)}`
         );
       });
     }
@@ -291,7 +293,7 @@ export function buildFarmerPuraHisabWhatsAppText(
       if (mode === 'full') {
         summary.advances.forEach((adv, i) => {
           lines.push(
-            `${i + 1}. ${adv.purpose} (${formatDateDMY(adv.startDate)} → ${formatDateDMY(adv.endDate)}, ${adv.days} ਦਿਨ) | ਮੂਲ: ${formatINR(adv.principalAmount)} @ ${adv.interestRateMonthly}% + ਵਿਆਜ: ${formatINR(adv.interestAmount)} = *-${formatINR(adv.totalAmount)}*`
+            `${i + 1}. ${displayMphText(adv.purpose, 'pa')} (${formatDateDMY(adv.startDate)} → ${formatDateDMY(adv.endDate)}, ${adv.days} ਦਿਨ) | ਮੂਲ: ${formatINR(adv.principalAmount)} @ ${adv.interestRateMonthly}% + ਵਿਆਜ: ${formatINR(adv.interestAmount)} = *-${formatINR(adv.totalAmount)}*`
           );
         });
       }
@@ -363,14 +365,16 @@ export async function exportOrShareStatementJpg(
       const blob = await (await fetch(dataUrl)).blob();
       const file = new File([blob], fileName, { type: 'image/jpeg' });
       if (navigator.canShare({ files: [file] })) {
+        const shareFarmerName =
+          lang === 'pa' ? displayMphText(summary.farmer.name, 'pa') : summary.farmer.name;
         await navigator.share({
           title:
             lang === 'pa'
-              ? `ਮੰਡੀ ਝੋਨਾ ਹਿਸਾਬ - ${summary.farmer.name}`
+              ? `ਮੰਡੀ ਝੋਨਾ ਹਿਸਾਬ - ${shareFarmerName}`
               : `Mandi Paddy Hisab - ${summary.farmer.name}`,
           text:
             lang === 'pa'
-              ? `🌾 ${summary.farmer.name} ਦਾ ਪੂਰਾ ਝੋਨਾ ਹਿਸਾਬ`
+              ? `🌾 ${shareFarmerName} ਦਾ ਪੂਰਾ ਝੋਨਾ ਹਿਸਾਬ`
               : `🌾 Complete Paddy Account Statement for ${summary.farmer.name}`,
           files: [file],
         });

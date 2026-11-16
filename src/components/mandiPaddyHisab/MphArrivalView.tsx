@@ -45,7 +45,13 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
   onGoToFarmers,
   requestConfirm,
 }) => {
-  const { tr } = useMphLang();
+  const { lang, tr } = useMphLang();
+  const trPaddyType = (type: string) =>
+    type === 'Hybrid Paddy'
+      ? tr('Hybrid Paddy', 'ਹਾਈਬ੍ਰਿਡ ਝੋਨਾ')
+      : type === 'Paddy A Gurde'
+      ? tr('Paddy A Grade', 'ਝੋਨਾ ਏ ਗ੍ਰੇਡ')
+      : type;
   const [editingId, setEditingId] = useState<string | null>(null);
   const [farmerId, setFarmerId] = useState<string>(farmers[0]?.id || '');
   const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -260,8 +266,8 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
       requestConfirm({
         title: tr('Duplicate Paddy Arrival Warning', 'ਡੁਪਲੀਕੇਟ ਝੋਨਾ ਆਵਕ ਚੇਤਾਵਨੀ'),
         message: tr(
-          `Farmer "${selectedFarmer.name}" already has an identical ${paddyType} entry on ${formatDateDMY(date)} (${parsedBags} Bags, ${formatLooseKgGm(normalizedLooseKg, normalizedLooseGm)}).\n\nDo you still want to save this entry?`,
-          `ਕਿਸਾਨ "${selectedFarmer.name}" ਦੀ ${formatDateDMY(date)} ਨੂੰ ${paddyType} ਦੀ ਇਹੀ ਐਂਟਰੀ (${parsedBags} ਬੈਗ, ${formatLooseKgGm(normalizedLooseKg, normalizedLooseGm)}) ਪਹਿਲਾਂ ਹੀ ਦਰਜ ਹੈ।\n\nਕੀ ਤੁਸੀਂ ਫਿਰ ਵੀ ਇਹ ਐਂਟਰੀ ਸੇਵ ਕਰਨੀ ਚਾਹੁੰਦੇ ਹੋ?`
+          `Farmer "${selectedFarmer.name}" already has an identical ${paddyType} entry on ${formatDateDMY(date)} (${parsedBags} Bags, ${formatLooseKgGm(normalizedLooseKg, normalizedLooseGm, 'en')}).\n\nDo you still want to save this entry?`,
+          `ਕਿਸਾਨ "${selectedFarmer.name}" ਦੀ ${formatDateDMY(date)} ਨੂੰ ${trPaddyType(paddyType)} ਦੀ ਇਹੀ ਐਂਟਰੀ (${parsedBags} ਬੈਗ, ${formatLooseKgGm(normalizedLooseKg, normalizedLooseGm, 'pa')}) ਪਹਿਲਾਂ ਹੀ ਦਰਜ ਹੈ।\n\nਕੀ ਤੁਸੀਂ ਫਿਰ ਵੀ ਇਹ ਐਂਟਰੀ ਸੇਵ ਕਰਨੀ ਚਾਹੁੰਦੇ ਹੋ?`
         ),
         confirmLabel: tr('Save Anyway', 'ਫਿਰ ਵੀ ਸੇਵ ਕਰੋ'),
         tone: 'warning',
@@ -483,7 +489,8 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
                   {formatWeightQKG(
                     liveWeight.weightQtlPart,
                     liveWeight.weightKgPart,
-                    liveWeight.weightGmPart
+                    liveWeight.weightGmPart,
+                    lang
                   )}
                 </span>
               </div>
@@ -656,16 +663,16 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
                         {a.farmerName}
                       </td>
                       <td className="py-2 px-2.5 text-slate-700 whitespace-nowrap">
-                        {a.paddyType}
+                        {trPaddyType(a.paddyType)}
                       </td>
                       <td className="py-2 px-2.5 text-right font-mono tabular-nums font-semibold">
                         {a.bags}
                       </td>
                       <td className="py-2 px-2.5 text-right font-mono tabular-nums text-slate-600 whitespace-nowrap">
-                        {formatLooseKgGm(a.looseKg, a.looseGm)}
+                        {formatLooseKgGm(a.looseKg, a.looseGm, lang)}
                       </td>
                       <td className="py-2 px-2.5 text-right font-mono tabular-nums text-slate-800 whitespace-nowrap">
-                        {formatWeightQKG(a.weightQtlPart, a.weightKgPart, a.weightGmPart)}
+                        {formatWeightQKG(a.weightQtlPart, a.weightKgPart, a.weightGmPart, lang)}
                       </td>
                       <td className="py-2 px-2.5 text-right font-mono tabular-nums text-slate-700">
                         ₹{a.ratePerQuintal}
@@ -717,14 +724,16 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
                   <td className="py-2.5 px-2.5 text-right font-mono tabular-nums whitespace-nowrap">
                     {formatLooseKgGm(
                       filteredTotals.weights.totalLooseKg,
-                      filteredTotals.weights.totalLooseGm
+                      filteredTotals.weights.totalLooseGm,
+                      lang
                     )}
                   </td>
                   <td className="py-2.5 px-2.5 text-right font-mono tabular-nums whitespace-nowrap">
                     {formatWeightQKG(
                       filteredTotals.weights.weightQtlPart,
                       filteredTotals.weights.weightKgPart,
-                      filteredTotals.weights.weightGmPart
+                      filteredTotals.weights.weightGmPart,
+                      lang
                     )}
                   </td>
                   <td className="py-2.5 px-2.5 text-right">—</td>

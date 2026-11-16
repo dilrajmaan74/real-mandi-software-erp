@@ -8,7 +8,7 @@ import {
   MphWhatsappMessageMode,
   normalizeWhatsAppPhone,
 } from '../../lib/mandiPaddyHisabWhatsapp';
-import { formatINR } from '../../lib/mandiPaddyHisabUtils';
+import { displayMphText, formatINR } from '../../lib/mandiPaddyHisabUtils';
 import {
   Check,
   Copy,
@@ -124,7 +124,8 @@ export const MphWhatsAppModal: React.FC<MphWhatsAppModalProps> = ({
                 {tr('Send Pura Hisab on WhatsApp', 'ਪੂਰਾ ਹਿਸਾਬ WhatsApp ਤੇ ਭੇਜੋ')}
               </h3>
               <p className="text-[11px] text-emerald-100">
-                {summary.farmer.name} · {summary.farmer.village} ·{' '}
+                {displayMphText(summary.farmer.name, lang)} ·{' '}
+                {displayMphText(summary.farmer.village, lang)} ·{' '}
                 {tr('Final Balance:', 'ਅੰਤਿਮ ਬਕਾਇਆ:')}{' '}
                 {formatINR(Math.abs(summary.combinedFinalBalance), false)}
               </p>
