@@ -3,12 +3,14 @@ import { MphFarmerAccountSummary, MphSettings } from '../types/mandiPaddyHisab';
 import { MphLang } from './mandiPaddyHisabI18n';
 import {
   displayMphText,
+  formatAdvanceMonthsDays,
   formatDateDMY,
   formatDryingBreakdownText,
   formatINR,
   formatLooseKgGm,
   formatRupeesInWords,
   formatWeightQKG,
+  getAdvanceBreakdown,
   getEffectiveArrivalDryingRate,
   safeNum,
   safeStr,
@@ -298,8 +300,9 @@ export function buildFarmerPuraHisabWhatsAppText(
       lines.push(`*4. ਪੇਸ਼ਗੀ ਅਤੇ ਵਿਆਜ ਖਾਤਾ (${summary.advances.length} ਐਂਟਰੀਆਂ):*`);
       if (mode === 'full') {
         summary.advances.forEach((adv, i) => {
+          const bd = getAdvanceBreakdown(adv);
           lines.push(
-            `${i + 1}. ${displayMphText(adv.purpose, 'pa')} (${formatDateDMY(adv.startDate)} → ${formatDateDMY(adv.endDate)}, ${adv.days} ਦਿਨ) | ਮੂਲ: ${formatINR(adv.principalAmount)} @ ${adv.interestRateMonthly}% + ਵਿਆਜ: ${formatINR(adv.interestAmount)} = *-${formatINR(adv.totalAmount)}*`
+            `${i + 1}. ${displayMphText(adv.purpose, 'pa')} (${formatDateDMY(adv.startDate)} → ${formatDateDMY(adv.endDate)}, ${adv.days} ਦਿਨ / ${formatAdvanceMonthsDays(bd.months, bd.extraDays, 'pa')}) | ਮੂਲ: ${formatINR(adv.principalAmount)} @ ${adv.interestRateMonthly}% (ਮਹੀਨਾ: ${formatINR(bd.monthlyInterestAmount)} | 1 ਦਿਨ: ${formatINR(bd.perDayInterestAmount)}) + ਵਿਆਜ: ${formatINR(adv.interestAmount)} = *-${formatINR(adv.totalAmount)}*`
           );
         });
       }
@@ -310,8 +313,9 @@ export function buildFarmerPuraHisabWhatsAppText(
       lines.push(`*4. Pre-Season Advances & Interest (${summary.advances.length} Entries):*`);
       if (mode === 'full') {
         summary.advances.forEach((adv, i) => {
+          const bd = getAdvanceBreakdown(adv);
           lines.push(
-            `${i + 1}. ${adv.purpose} (${formatDateDMY(adv.startDate)} → ${formatDateDMY(adv.endDate)}, ${adv.days}d) | Principal: ${formatINR(adv.principalAmount)} @ ${adv.interestRateMonthly}% + Int: ${formatINR(adv.interestAmount)} = *-${formatINR(adv.totalAmount)}*`
+            `${i + 1}. ${adv.purpose} (${formatDateDMY(adv.startDate)} → ${formatDateDMY(adv.endDate)}, ${adv.days}d / ${formatAdvanceMonthsDays(bd.months, bd.extraDays, 'en')}) | Principal: ${formatINR(adv.principalAmount)} @ ${adv.interestRateMonthly}% (Mo: ${formatINR(bd.monthlyInterestAmount)} | 1 Day: ${formatINR(bd.perDayInterestAmount)}) + Int: ${formatINR(adv.interestAmount)} = *-${formatINR(adv.totalAmount)}*`
           );
         });
       }

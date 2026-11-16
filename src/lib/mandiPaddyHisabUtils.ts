@@ -1026,20 +1026,27 @@ export function calculateAdvanceDaysAndInterest(
   basis: MphInterestBasis = 'daily_30'
 ): {
   days: number;
+  months: number;
+  extraDays: number;
   monthlyInterestAmount: number;
+  perDayInterestAmount: number;
   interestAmount: number;
   totalAmount: number;
 } {
   const principal = Math.max(0, safeNum(principalAmount));
   const rate = Math.max(0, safeNum(interestRateMonthly));
   const monthlyInterestAmount = Math.round(((principal * rate) / 100) * 100) / 100;
+  const perDayInterestAmount = Math.round((monthlyInterestAmount / 30) * 100) / 100;
 
   const sDate = parseUtcDate(startDate);
   const eDate = parseUtcDate(endDate);
   if (!sDate || !eDate || eDate.getTime() < sDate.getTime()) {
     return {
       days: 0,
+      months: 0,
+      extraDays: 0,
       monthlyInterestAmount,
+      perDayInterestAmount,
       interestAmount: 0,
       totalAmount: Math.round(principal * 100) / 100,
     };
@@ -1048,7 +1055,10 @@ export function calculateAdvanceDaysAndInterest(
   const diffMs = eDate.getTime() - sDate.getTime();
   const days = Math.max(0, Math.round(diffMs / 86400000));
 
+  let months = Math.floor(days / 30);
+  let extraDays = days % 30;
   let monthsEquivalent = days / 30;
+
   if (basis === 'monthly_30') {
     const sy = sDate.getUTCFullYear();
     const sm = sDate.getUTCMonth();
@@ -1064,8 +1074,15 @@ export function calculateAdvanceDaysAndInterest(
       const prevMonthLastDay = new Date(Date.UTC(ey, em, 0)).getUTCDate();
       remDays = prevMonthLastDay - sd + ed;
     }
-    // Treat end of month (e.g., 1st to 31st/30th) cleanly: 30 days = 1 full month
-    monthsEquivalent = Math.max(0, fullMonths) + Math.max(0, remDays) / 30;
+    fullMonths = Math.max(0, fullMonths);
+    remDays = Math.max(0, remDays);
+    if (remDays >= 30) {
+      fullMonths += Math.floor(remDays / 30);
+      remDays = remDays % 30;
+    }
+    months = fullMonths;
+    extraDays = remDays;
+    monthsEquivalent = fullMonths + remDays / 30;
   }
 
   const interestAmount = Math.round(monthlyInterestAmount * monthsEquivalent * 100) / 100;
@@ -1073,10 +1090,78 @@ export function calculateAdvanceDaysAndInterest(
 
   return {
     days,
+    months,
+    extraDays,
     monthlyInterestAmount,
+    perDayInterestAmount,
     interestAmount,
     totalAmount,
   };
+}
+
+export function getAdvanceBreakdown(
+  adv: Pick<
+    MphAdvance,
+    | 'startDate'
+    | 'endDate'
+    | 'days'
+    | 'interestBasis'
+    | 'principalAmount'
+    | 'interestRateMonthly'
+    | 'monthlyInterestAmount'
+  >
+): {
+  days: number;
+  months: number;
+  extraDays: number;
+  monthlyInterestAmount: number;
+  perDayInterestAmount: number;
+} {
+  const calc = calculateAdvanceDaysAndInterest(
+    adv.principalAmount,
+    adv.interestRateMonthly,
+    adv.startDate,
+    adv.endDate,
+    adv.interestBasis || 'daily_30'
+  );
+  const storedMonthly = safeNum(adv.monthlyInterestAmount);
+  const monthlyInterestAmount = storedMonthly > 0 ? storedMonthly : calc.monthlyInterestAmount;
+  const perDayInterestAmount = Math.round((monthlyInterestAmount / 30) * 100) / 100;
+
+  const hasValidDates = Boolean(parseUtcDate(adv.startDate) && parseUtcDate(adv.endDate));
+  if (!hasValidDates) {
+    const safeDays = Math.max(0, Math.floor(safeNum(adv.days)));
+    return {
+      days: safeDays,
+      months: Math.floor(safeDays / 30),
+      extraDays: safeDays % 30,
+      monthlyInterestAmount,
+      perDayInterestAmount,
+    };
+  }
+
+  return {
+    days: calc.days,
+    months: calc.months,
+    extraDays: calc.extraDays,
+    monthlyInterestAmount,
+    perDayInterestAmount,
+  };
+}
+
+export function formatAdvanceMonthsDays(
+  months: number,
+  extraDays: number,
+  lang: 'en' | 'pa'
+): string {
+  const m = Math.max(0, Math.floor(safeNum(months)));
+  const d = Math.max(0, Math.floor(safeNum(extraDays)));
+  if (lang === 'pa') {
+    return `${m} ਮਹੀਨੇ + ${d} ਦਿਨ`;
+  }
+  const mLabel = m === 1 ? 'Month' : 'Months';
+  const dLabel = d === 1 ? 'Day' : 'Days';
+  return `${m} ${mLabel} + ${d} ${dLabel}`;
 }
 
 export function computeFarmerAccountSummary(

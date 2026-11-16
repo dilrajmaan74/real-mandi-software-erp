@@ -9,12 +9,14 @@ import {
 } from '../../types/mandiPaddyHisab';
 import {
   computeFarmerAccountSummary,
+  formatAdvanceMonthsDays,
   formatDateDMY,
   formatDryingBreakdownText,
   formatINR,
   formatLooseKgGm,
   formatRupeesInWords,
   formatWeightQKG,
+  getAdvanceBreakdown,
   getEffectiveArrivalDryingRate,
   safeNum,
   safeStr,
@@ -709,37 +711,54 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
                           <th className="py-1.5 px-2">{tr('Purpose', 'ਵੇਰਵਾ')}</th>
                           <th className="py-1.5 px-2">{tr('Start → End Date', 'ਸ਼ੁਰੂ → ਅੰਤ ਤਾਰੀਖ')}</th>
                           <th className="py-1.5 px-2 text-right">{tr('Days', 'ਦਿਨ')}</th>
+                          <th className="py-1.5 px-2 whitespace-nowrap">
+                            {tr('Months + Extra Days', 'ਮਹੀਨੇ + ਉੱਪਰ ਦਿਨ')}
+                          </th>
                           <th className="py-1.5 px-2 text-right">{tr('Principal', 'ਮੂਲ ਰਕਮ')}</th>
                           <th className="py-1.5 px-2 text-right">{tr('Rate', 'ਦਰ %')}</th>
+                          <th className="py-1.5 px-2 text-right">{tr('Monthly Int.', 'ਮਹੀਨਾ ਵਿਆਜ')}</th>
+                          <th className="py-1.5 px-2 text-right">{tr('1 Day Int.', '1 ਦਿਨ ਵਿਆਜ')}</th>
                           <th className="py-1.5 px-2 text-right">{tr('Interest', 'ਵਿਆਜ')}</th>
                           <th className="py-1.5 px-2 text-right">{tr('Total (P+I)', 'ਕੁੱਲ (ਮੂਲ+ਵਿਆਜ)')}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {farmerSummary.advances.map((adv, idx) => (
-                          <tr key={adv.id}>
-                            <td className="py-1.5 px-2 font-mono text-slate-400">{idx + 1}</td>
-                            <td className="py-1.5 px-2 text-slate-800">{adv.purpose}</td>
-                            <td className="py-1.5 px-2 font-mono whitespace-nowrap">
-                              {formatDateDMY(adv.startDate)} → {formatDateDMY(adv.endDate)}
-                            </td>
-                            <td className="py-1.5 px-2 text-right font-mono">
-                              {adv.days}{tr('d', ' ਦਿਨ')}
-                            </td>
-                            <td className="py-1.5 px-2 text-right font-mono font-semibold">
-                              {formatINR(adv.principalAmount)}
-                            </td>
-                            <td className="py-1.5 px-2 text-right font-mono">
-                              {adv.interestRateMonthly}%
-                            </td>
-                            <td className="py-1.5 px-2 text-right font-mono text-amber-800 font-semibold">
-                              {formatINR(adv.interestAmount)}
-                            </td>
-                            <td className="py-1.5 px-2 text-right font-mono font-bold text-rose-700">
-                              {formatINR(adv.totalAmount)}
-                            </td>
-                          </tr>
-                        ))}
+                        {farmerSummary.advances.map((adv, idx) => {
+                          const bd = getAdvanceBreakdown(adv);
+                          return (
+                            <tr key={adv.id}>
+                              <td className="py-1.5 px-2 font-mono text-slate-400">{idx + 1}</td>
+                              <td className="py-1.5 px-2 text-slate-800">{adv.purpose}</td>
+                              <td className="py-1.5 px-2 font-mono whitespace-nowrap">
+                                {formatDateDMY(adv.startDate)} → {formatDateDMY(adv.endDate)}
+                              </td>
+                              <td className="py-1.5 px-2 text-right font-mono whitespace-nowrap">
+                                {adv.days}{tr('d', ' ਦਿਨ')}
+                              </td>
+                              <td className="py-1.5 px-2 font-mono text-amber-900 font-semibold whitespace-nowrap">
+                                {formatAdvanceMonthsDays(bd.months, bd.extraDays, lang)}
+                              </td>
+                              <td className="py-1.5 px-2 text-right font-mono font-semibold whitespace-nowrap">
+                                {formatINR(adv.principalAmount)}
+                              </td>
+                              <td className="py-1.5 px-2 text-right font-mono">
+                                {adv.interestRateMonthly}%
+                              </td>
+                              <td className="py-1.5 px-2 text-right font-mono whitespace-nowrap">
+                                {formatINR(bd.monthlyInterestAmount)}
+                              </td>
+                              <td className="py-1.5 px-2 text-right font-mono text-blue-800 font-semibold whitespace-nowrap">
+                                {formatINR(bd.perDayInterestAmount)}
+                              </td>
+                              <td className="py-1.5 px-2 text-right font-mono text-amber-800 font-semibold whitespace-nowrap">
+                                {formatINR(adv.interestAmount)}
+                              </td>
+                              <td className="py-1.5 px-2 text-right font-mono font-bold text-rose-700 whitespace-nowrap">
+                                {formatINR(adv.totalAmount)}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   )}

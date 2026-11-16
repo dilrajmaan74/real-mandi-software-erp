@@ -6,8 +6,10 @@ import {
 } from '../../types/mandiPaddyHisab';
 import {
   calculateAdvanceDaysAndInterest,
+  formatAdvanceMonthsDays,
   formatDateDMY,
   formatINR,
+  getAdvanceBreakdown,
   safeStr,
 } from '../../lib/mandiPaddyHisabUtils';
 import { Calculator, Edit3, Percent, Plus, Search, Trash2, X } from 'lucide-react';
@@ -476,6 +478,12 @@ export const MphAdvanceView: React.FC<MphAdvanceViewProps> = ({
                 </span>
               </div>
               <div className="flex items-center justify-between text-slate-700">
+                <span>{tr('Months + Extra Days:', 'ਕੁੱਲ ਮਹੀਨੇ + ਉੱਪਰ ਦਿਨ:')}</span>
+                <span className="font-mono tabular-nums font-bold text-amber-900">
+                  {formatAdvanceMonthsDays(liveCalc.months, liveCalc.extraDays, lang)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-slate-700">
                 <span>
                   {tr('Monthly Interest', 'ਮਹੀਨਾ ਵਿਆਜ')} ({parsedRate}% / {tr('month', 'ਮਹੀਨਾ')}):
                 </span>
@@ -484,8 +492,8 @@ export const MphAdvanceView: React.FC<MphAdvanceViewProps> = ({
                 </span>
               </div>
               <div className="flex items-center justify-between text-slate-700">
-                <span>{tr('Per Day Interest (÷ 30):', 'ਰੋਜ਼ਾਨਾ ਵਿਆਜ (÷ 30):')}</span>
-                <span className="font-mono tabular-nums font-semibold text-slate-900">
+                <span>{tr('1 Day Interest (÷ 30):', '1 ਦਿਨ ਵਿਆਜ (÷ 30):')}</span>
+                <span className="font-mono tabular-nums font-semibold text-blue-800">
                   {formatINR(perDayInterest)} / {tr('day', 'ਦਿਨ')}
                 </span>
               </div>
@@ -587,81 +595,98 @@ export const MphAdvanceView: React.FC<MphAdvanceViewProps> = ({
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
                 <tr>
-                  <th className="py-2.5 px-2.5 font-semibold">#</th>
-                  <th className="py-2.5 px-2.5 font-semibold">{tr('Farmer & Purpose', 'ਕਿਸਾਨ ਅਤੇ ਵੇਰਵਾ')}</th>
-                  <th className="py-2.5 px-2.5 font-semibold">{tr('Start → End Date', 'ਸ਼ੁਰੂ → ਅੰਤ ਤਾਰੀਖ')}</th>
-                  <th className="py-2.5 px-2.5 font-semibold text-right">{tr('Days', 'ਦਿਨ')}</th>
-                  <th className="py-2.5 px-2.5 font-semibold text-right">{tr('Principal', 'ਮੂਲ ਰਕਮ')}</th>
-                  <th className="py-2.5 px-2.5 font-semibold text-right">{tr('Rate', 'ਦਰ %')}</th>
-                  <th className="py-2.5 px-2.5 font-semibold text-right">{tr('Interest', 'ਵਿਆਜ')}</th>
-                  <th className="py-2.5 px-2.5 font-semibold text-right">{tr('Total (P+I)', 'ਕੁੱਲ (ਮੂਲ+ਵਿਆਜ)')}</th>
-                  <th className="py-2.5 px-2.5 font-semibold text-right">{tr('Actions', 'ਕਾਰਵਾਈ')}</th>
+                  <th className="py-2.5 px-2 font-semibold">#</th>
+                  <th className="py-2.5 px-2 font-semibold">{tr('Farmer & Purpose', 'ਕਿਸਾਨ ਅਤੇ ਵੇਰਵਾ')}</th>
+                  <th className="py-2.5 px-2 font-semibold">{tr('Start → End Date', 'ਸ਼ੁਰੂ → ਅੰਤ ਤਾਰੀਖ')}</th>
+                  <th className="py-2.5 px-2 font-semibold text-right">{tr('Days', 'ਕੁੱਲ ਦਿਨ')}</th>
+                  <th className="py-2.5 px-2 font-semibold whitespace-nowrap">
+                    {tr('Months + Extra Days', 'ਮਹੀਨੇ + ਉੱਪਰ ਦਿਨ')}
+                  </th>
+                  <th className="py-2.5 px-2 font-semibold text-right">{tr('Principal', 'ਮੂਲ ਰਕਮ')}</th>
+                  <th className="py-2.5 px-2 font-semibold text-right">{tr('Rate', 'ਦਰ %')}</th>
+                  <th className="py-2.5 px-2 font-semibold text-right">{tr('Monthly Int.', 'ਮਹੀਨਾ ਵਿਆਜ')}</th>
+                  <th className="py-2.5 px-2 font-semibold text-right">{tr('1 Day Int.', '1 ਦਿਨ ਵਿਆਜ')}</th>
+                  <th className="py-2.5 px-2 font-semibold text-right">{tr('Interest', 'ਵਿਆਜ')}</th>
+                  <th className="py-2.5 px-2 font-semibold text-right">{tr('Total (P+I)', 'ਕੁੱਲ (ਮੂਲ+ਵਿਆਜ)')}</th>
+                  <th className="py-2.5 px-2 font-semibold text-right">{tr('Actions', 'ਕਾਰਵਾਈ')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredAdvances.map((adv, idx) => (
-                  <tr key={adv.id} className="hover:bg-slate-50/80">
-                    <td className="py-2 px-2.5 font-mono tabular-nums text-slate-400">
-                      {idx + 1}
-                    </td>
-                    <td className="py-2 px-2.5">
-                      <div className="font-semibold text-slate-900">{adv.farmerName}</div>
-                      <div className="text-[10.5px] text-slate-500">{adv.purpose}</div>
-                    </td>
-                    <td className="py-2 px-2.5 font-mono tabular-nums text-[11px] whitespace-nowrap text-slate-700">
-                      {formatDateDMY(adv.startDate)} → {formatDateDMY(adv.endDate)}
-                    </td>
-                    <td className="py-2 px-2.5 text-right font-mono tabular-nums text-slate-700">
-                      {adv.days}{tr('d', ' ਦਿਨ')}
-                    </td>
-                    <td className="py-2 px-2.5 text-right font-mono tabular-nums font-semibold text-slate-900 whitespace-nowrap">
-                      {formatINR(adv.principalAmount)}
-                    </td>
-                    <td className="py-2 px-2.5 text-right font-mono tabular-nums text-slate-600 whitespace-nowrap">
-                      {adv.interestRateMonthly}%
-                    </td>
-                    <td className="py-2 px-2.5 text-right font-mono tabular-nums font-semibold text-amber-800 whitespace-nowrap">
-                      {formatINR(adv.interestAmount)}
-                    </td>
-                    <td className="py-2 px-2.5 text-right font-mono tabular-nums font-bold text-rose-700 whitespace-nowrap">
-                      {formatINR(adv.totalAmount)}
-                    </td>
-                    <td className="py-2 px-2.5 text-right whitespace-nowrap">
-                      <div className="inline-flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handleEditClick(adv)}
-                          className="p-1 text-blue-700 hover:bg-blue-50 rounded cursor-pointer"
-                          title={tr('Edit', 'ਸੋਧੋ')}
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onDeleteAdvance(adv)}
-                          className="p-1 text-rose-600 hover:bg-rose-50 rounded cursor-pointer"
-                          title={tr('Delete', 'ਮਿਟਾਓ')}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {filteredAdvances.map((adv, idx) => {
+                  const bd = getAdvanceBreakdown(adv);
+                  return (
+                    <tr key={adv.id} className="hover:bg-slate-50/80">
+                      <td className="py-2 px-2 font-mono tabular-nums text-slate-400">
+                        {idx + 1}
+                      </td>
+                      <td className="py-2 px-2">
+                        <div className="font-semibold text-slate-900">{adv.farmerName}</div>
+                        <div className="text-[10.5px] text-slate-500">{adv.purpose}</div>
+                      </td>
+                      <td className="py-2 px-2 font-mono tabular-nums text-[11px] whitespace-nowrap text-slate-700">
+                        {formatDateDMY(adv.startDate)} → {formatDateDMY(adv.endDate)}
+                      </td>
+                      <td className="py-2 px-2 text-right font-mono tabular-nums text-slate-700 whitespace-nowrap">
+                        {adv.days}{tr('d', ' ਦਿਨ')}
+                      </td>
+                      <td className="py-2 px-2 font-mono tabular-nums text-[11px] text-amber-900 font-semibold whitespace-nowrap">
+                        {formatAdvanceMonthsDays(bd.months, bd.extraDays, lang)}
+                      </td>
+                      <td className="py-2 px-2 text-right font-mono tabular-nums font-semibold text-slate-900 whitespace-nowrap">
+                        {formatINR(adv.principalAmount)}
+                      </td>
+                      <td className="py-2 px-2 text-right font-mono tabular-nums text-slate-600 whitespace-nowrap">
+                        {adv.interestRateMonthly}%
+                      </td>
+                      <td className="py-2 px-2 text-right font-mono tabular-nums text-slate-700 whitespace-nowrap">
+                        {formatINR(bd.monthlyInterestAmount)}
+                      </td>
+                      <td className="py-2 px-2 text-right font-mono tabular-nums text-blue-800 font-semibold whitespace-nowrap">
+                        {formatINR(bd.perDayInterestAmount)}
+                      </td>
+                      <td className="py-2 px-2 text-right font-mono tabular-nums font-semibold text-amber-800 whitespace-nowrap">
+                        {formatINR(adv.interestAmount)}
+                      </td>
+                      <td className="py-2 px-2 text-right font-mono tabular-nums font-bold text-rose-700 whitespace-nowrap">
+                        {formatINR(adv.totalAmount)}
+                      </td>
+                      <td className="py-2 px-2 text-right whitespace-nowrap">
+                        <div className="inline-flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleEditClick(adv)}
+                            className="p-1 text-blue-700 hover:bg-blue-50 rounded cursor-pointer"
+                            title={tr('Edit', 'ਸੋਧੋ')}
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDeleteAdvance(adv)}
+                            className="p-1 text-rose-600 hover:bg-rose-50 rounded cursor-pointer"
+                            title={tr('Delete', 'ਮਿਟਾਓ')}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
               <tfoot className="bg-slate-100 border-t-2 border-slate-300 font-bold text-slate-900">
                 <tr>
-                  <td colSpan={4} className="py-2.5 px-2.5">
+                  <td colSpan={5} className="py-2.5 px-2">
                     {tr('Total', 'ਕੁੱਲ')} ({filteredAdvances.length} {tr('Entries', 'ਐਂਟਰੀਆਂ')})
                   </td>
-                  <td className="py-2.5 px-2.5 text-right font-mono tabular-nums whitespace-nowrap">
+                  <td className="py-2.5 px-2 text-right font-mono tabular-nums whitespace-nowrap">
                     {formatINR(totals.principal)}
                   </td>
-                  <td className="py-2.5 px-2.5 text-right">—</td>
-                  <td className="py-2.5 px-2.5 text-right font-mono tabular-nums text-amber-900 whitespace-nowrap">
+                  <td colSpan={3} className="py-2.5 px-2 text-right">—</td>
+                  <td className="py-2.5 px-2 text-right font-mono tabular-nums text-amber-900 whitespace-nowrap">
                     {formatINR(totals.interest)}
                   </td>
-                  <td className="py-2.5 px-2.5 text-right font-mono tabular-nums text-rose-800 whitespace-nowrap">
+                  <td className="py-2.5 px-2 text-right font-mono tabular-nums text-rose-800 whitespace-nowrap">
                     {formatINR(totals.total)}
                   </td>
                   <td></td>
