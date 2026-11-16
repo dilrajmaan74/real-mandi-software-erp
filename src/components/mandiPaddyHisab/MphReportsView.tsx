@@ -15,6 +15,8 @@ import {
   formatLooseKgGm,
   formatRupeesInWords,
   formatWeightQKG,
+  getEffectiveArrivalDryingRate,
+  safeNum,
   safeStr,
   sumPaddyWeights,
 } from '../../lib/mandiPaddyHisabUtils';
@@ -95,6 +97,24 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
       advances
     );
   }, [activeFarmer, arrivals, jForms, otherEntries, settings, advances]);
+
+  const driedRowsForReport = useMemo(() => {
+    if (!farmerSummary) return [];
+    return farmerSummary.arrivals
+      .filter((a) => a && a.applyDryingLabor !== false && Math.floor(safeNum(a.bags)) > 0)
+      .map((a) => {
+        const bagsCount = Math.max(0, Math.floor(safeNum(a.bags)));
+        const rate = getEffectiveArrivalDryingRate(a, farmerSummary.farmer, settings);
+        return {
+          id: a.id,
+          date: a.date,
+          paddyType: a.paddyType,
+          bags: bagsCount,
+          rate,
+          amount: Math.round(bagsCount * rate * 100) / 100,
+        };
+      });
+  }, [farmerSummary, settings]);
 
   const allSummaries = useMemo(
     () =>
@@ -593,6 +613,65 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
                       </tfoot>
                     </table>
                   </div>
+                </div>
+
+                {/* Date-wise Paddy Drying Labour Bags List */}
+                <div className="border border-amber-200 rounded-lg overflow-hidden">
+                  <div className="px-3 py-2 bg-amber-50 border-b border-amber-200 flex items-center justify-between text-xs font-bold text-amber-950">
+                    <span>
+                      {tr(
+                        'Paddy Drying Labour — Date-wise Dried Bags List',
+                        'ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ — ਤਾਰੀਖ-ਵਾਰ ਸੁਕਾਏ ਗੱਟਿਆਂ ਦੀ ਸੂਚੀ'
+                      )}{' '}
+                      ({driedRowsForReport.length})
+                    </span>
+                    <span className="font-mono tabular-nums text-rose-800">
+                      {farmerSummary.totalDryingBags} {tr('Bags', 'ਗੱਟੇ')} · -
+                      {formatINR(farmerSummary.totalDryingLabor)}
+                    </span>
+                  </div>
+                  {driedRowsForReport.length > 0 && (
+                    <table className="w-full text-left text-[11px]">
+                      <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
+                        <tr>
+                          <th className="py-1.5 px-2">#</th>
+                          <th className="py-1.5 px-2">{tr('Date', 'ਤਾਰੀਖ')}</th>
+                          <th className="py-1.5 px-2">{tr('Paddy Type', 'ਕਿਸਮ')}</th>
+                          <th className="py-1.5 px-2 text-right">{tr('Dried Bags', 'ਸੁਕਾਏ ਗੱਟੇ')}</th>
+                          <th className="py-1.5 px-2 text-right">{tr('Rate / Bag', 'ਰੇਟ / ਗੱਟਾ')}</th>
+                          <th className="py-1.5 px-2 text-right">{tr('Drying Amount', 'ਸੁਕਾਈ ਰਕਮ')}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {driedRowsForReport.map((d, idx) => (
+                          <tr key={d.id}>
+                            <td className="py-1.5 px-2 font-mono text-slate-400">{idx + 1}</td>
+                            <td className="py-1.5 px-2 font-mono">{formatDateDMY(d.date)}</td>
+                            <td className="py-1.5 px-2">{trPaddyType(d.paddyType)}</td>
+                            <td className="py-1.5 px-2 text-right font-mono font-semibold">{d.bags}</td>
+                            <td className="py-1.5 px-2 text-right font-mono">₹{d.rate}</td>
+                            <td className="py-1.5 px-2 text-right font-mono font-bold text-rose-700">
+                              -{formatINR(d.amount)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-amber-50/70 border-t border-amber-200 font-bold text-amber-950">
+                        <tr>
+                          <td colSpan={3} className="py-1.5 px-2">
+                            {tr('Total Paddy Drying Labour', 'ਕੁੱਲ ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ')}
+                          </td>
+                          <td className="py-1.5 px-2 text-right font-mono">
+                            {farmerSummary.totalDryingBags}
+                          </td>
+                          <td className="py-1.5 px-2 text-right">—</td>
+                          <td className="py-1.5 px-2 text-right font-mono text-rose-800">
+                            -{formatINR(farmerSummary.totalDryingLabor)}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  )}
                 </div>
 
                 {/* Advances & Interest Register in Complete Ledger Report */}

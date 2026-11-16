@@ -17,6 +17,8 @@ import {
   formatLooseKgGm,
   formatRupeesInWords,
   formatWeightQKG,
+  getEffectiveArrivalDryingRate,
+  safeNum,
   safeStr,
 } from '../../lib/mandiPaddyHisabUtils';
 import { exportElementToPdf } from '../../lib/mandiPaddyHisabPdf';
@@ -197,6 +199,31 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
       }
     }
     return Array.from(map.values());
+  }, [summary]);
+
+  const driedArrivalRows = useMemo(() => {
+    if (!summary) return [];
+    return summary.arrivals
+      .filter((a) => a && a.applyDryingLabor !== false && Math.floor(safeNum(a.bags)) > 0)
+      .map((a) => {
+        const bagsCount = Math.max(0, Math.floor(safeNum(a.bags)));
+        const rate = getEffectiveArrivalDryingRate(a, summary.farmer, settings);
+        const amount = Math.round(bagsCount * rate * 100) / 100;
+        return {
+          id: a.id,
+          date: a.date,
+          paddyType: a.paddyType,
+          bags: bagsCount,
+          rate,
+          amount,
+          notes: safeStr(a.notes).trim(),
+        };
+      });
+  }, [summary, settings]);
+
+  const nonDriedBags = useMemo(() => {
+    if (!summary) return 0;
+    return Math.max(0, summary.totalArrivalBags - summary.totalDryingBags);
   }, [summary]);
 
   const resetOtherForm = () => {
@@ -576,8 +603,8 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                 </span>
               </div>
 
-              <div className="px-4 py-2.5 flex items-center justify-between">
-                <div>
+              <div className="px-4 py-2.5 flex items-start justify-between gap-3">
+                <div className="min-w-0">
                   <span className="font-medium text-slate-800">
                     {tr('(-) Paddy Drying Labour', '(-) ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ')}
                   </span>
@@ -589,8 +616,18 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                       settings.paddyDryingLaborRate
                     )}
                   </span>
+                  {driedArrivalRows.length > 0 && (
+                    <span className="text-[10.5px] text-amber-900 font-mono block mt-0.5 leading-relaxed">
+                      {driedArrivalRows
+                        .map(
+                          (d) =>
+                            `${formatDateDMY(d.date)}: ${d.bags}${tr('B', ' ਗੱਟੇ')} × ₹${d.rate}`
+                        )
+                        .join(' · ')}
+                    </span>
+                  )}
                 </div>
-                <span className="font-mono tabular-nums font-semibold text-rose-700">
+                <span className="font-mono tabular-nums font-semibold text-rose-700 shrink-0">
                   -{formatINR(summary.totalDryingLabor)}
                 </span>
               </div>
@@ -897,6 +934,97 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
               </div>
             )}
           </div>
+        </div>
+
+        {/* Date-Wise Paddy Drying Labour Bags List */}
+        <div className="border border-amber-200 rounded-xl overflow-hidden">
+          <div className="px-4 py-2.5 bg-amber-50 border-b border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+            <div>
+              <h3 className="text-xs font-bold text-amber-950">
+                {tr(
+                  'Paddy Drying Labour — Date-wise Dried Bags List',
+                  'ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ — ਤਾਰੀਖ-ਵਾਰ ਸੁਕਾਏ ਗੱਟਿਆਂ ਦੀ ਸੂਚੀ'
+                )}{' '}
+                ({driedArrivalRows.length})
+              </h3>
+              <p className="text-[10.5px] text-amber-800">
+                {tr(
+                  'Only arrival entries where Paddy Drying Labour was applied',
+                  'ਸਿਰਫ਼ ਉਹਨਾਂ ਗੱਟਿਆਂ ਦੀ ਤਾਰੀਖ-ਵਾਰ ਸੂਚੀ ਜਿਨ੍ਹਾਂ ਉੱਤੇ ਸੁਕਾਈ ਲੇਬਰ ਲੱਗੀ ਹੈ'
+                )}
+                {nonDriedBags > 0
+                  ? ` · ${nonDriedBags} ${tr('bags without drying', 'ਗੱਟੇ ਬਿਨਾਂ ਸੁਕਾਈ ਦੇ')}`
+                  : ''}
+              </p>
+            </div>
+            <span className="text-[11px] font-mono tabular-nums font-bold text-rose-800 whitespace-nowrap">
+              {summary.totalDryingBags} {tr('Bags', 'ਗੱਟੇ')} · -{formatINR(summary.totalDryingLabor)}
+            </span>
+          </div>
+
+          {driedArrivalRows.length === 0 ? (
+            <div className="p-4 text-center text-xs text-slate-500">
+              {tr(
+                'No paddy bags have drying labour applied for this farmer.',
+                'ਇਸ ਕਿਸਾਨ ਦੇ ਕਿਸੇ ਵੀ ਗੱਟੇ ਉੱਤੇ ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ ਨਹੀਂ ਲੱਗੀ।'
+              )}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-[11px]">
+                <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
+                  <tr>
+                    <th className="py-2 px-3 font-semibold">#</th>
+                    <th className="py-2 px-3 font-semibold">{tr('Date', 'ਤਾਰੀਖ')}</th>
+                    <th className="py-2 px-3 font-semibold">{tr('Paddy Type', 'ਝੋਨੇ ਦੀ ਕਿਸਮ')}</th>
+                    <th className="py-2 px-3 font-semibold">{tr('Notes', 'ਨੋਟ')}</th>
+                    <th className="py-2 px-3 font-semibold text-right">{tr('Dried Bags', 'ਸੁਕਾਏ ਗੱਟੇ')}</th>
+                    <th className="py-2 px-3 font-semibold text-right">{tr('Rate / Bag', 'ਰੇਟ / ਗੱਟਾ')}</th>
+                    <th className="py-2 px-3 font-semibold text-right">{tr('Drying Amount', 'ਸੁਕਾਈ ਰਕਮ')}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {driedArrivalRows.map((d, idx) => (
+                    <tr key={d.id} className="hover:bg-slate-50/70">
+                      <td className="py-2 px-3 font-mono tabular-nums text-slate-400">
+                        {idx + 1}
+                      </td>
+                      <td className="py-2 px-3 font-mono tabular-nums whitespace-nowrap text-slate-800">
+                        {formatDateDMY(d.date)}
+                      </td>
+                      <td className="py-2 px-3 font-medium text-slate-800 whitespace-nowrap">
+                        {trPaddyType(d.paddyType)}
+                      </td>
+                      <td className="py-2 px-3 text-slate-500">{d.notes || '—'}</td>
+                      <td className="py-2 px-3 text-right font-mono tabular-nums font-semibold text-slate-900">
+                        {d.bags}
+                      </td>
+                      <td className="py-2 px-3 text-right font-mono tabular-nums text-amber-800 font-semibold">
+                        ₹{d.rate}
+                      </td>
+                      <td className="py-2 px-3 text-right font-mono tabular-nums font-bold text-rose-700 whitespace-nowrap">
+                        -{formatINR(d.amount)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-amber-50/80 border-t-2 border-amber-200 font-bold text-amber-950">
+                  <tr>
+                    <td colSpan={4} className="py-2 px-3">
+                      {tr('Total Paddy Drying Labour', 'ਕੁੱਲ ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ')}
+                    </td>
+                    <td className="py-2 px-3 text-right font-mono tabular-nums">
+                      {summary.totalDryingBags}
+                    </td>
+                    <td className="py-2 px-3 text-right">—</td>
+                    <td className="py-2 px-3 text-right font-mono tabular-nums text-rose-800 whitespace-nowrap">
+                      -{formatINR(summary.totalDryingLabor)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* (+/-) Other Expenses & Payments Ledger */}

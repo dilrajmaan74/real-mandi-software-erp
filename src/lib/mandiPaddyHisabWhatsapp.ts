@@ -8,6 +8,8 @@ import {
   formatLooseKgGm,
   formatRupeesInWords,
   formatWeightQKG,
+  getEffectiveArrivalDryingRate,
+  safeNum,
   safeStr,
 } from './mandiPaddyHisabUtils';
 
@@ -172,6 +174,9 @@ export function buildFarmerPuraHisabWhatsAppText(
   }
 
   // 3. Labour & Other Entries
+  const driedEntries = summary.arrivals.filter(
+    (a) => a && a.applyDryingLabor !== false && Math.floor(safeNum(a.bags)) > 0
+  );
   lines.push('─────────────────────');
   if (isPa) {
     lines.push('*3. ਲੇਬਰ ਅਤੇ ਹੋਰ ਖਰਚੇ:*');
@@ -186,6 +191,15 @@ export function buildFarmerPuraHisabWhatsAppText(
         settings.paddyDryingLaborRate
       )}): -${formatINR(summary.totalDryingLabor)}`
     );
+    if (mode === 'full' && driedEntries.length > 0) {
+      driedEntries.forEach((a, i) => {
+        const rate = getEffectiveArrivalDryingRate(a, f, settings);
+        const amt = Math.round(Math.floor(safeNum(a.bags)) * rate * 100) / 100;
+        lines.push(
+          `  ${i + 1}. ${formatDateDMY(a.date)} | ${a.bags} ਗੱਟੇ × ₹${rate} = -${formatINR(amt)}`
+        );
+      });
+    }
     if (mode === 'full' && summary.otherEntries.length > 0) {
       summary.otherEntries.forEach((o, i) => {
         lines.push(
@@ -212,6 +226,15 @@ export function buildFarmerPuraHisabWhatsAppText(
         settings.paddyDryingLaborRate
       )}): -${formatINR(summary.totalDryingLabor)}`
     );
+    if (mode === 'full' && driedEntries.length > 0) {
+      driedEntries.forEach((a, i) => {
+        const rate = getEffectiveArrivalDryingRate(a, f, settings);
+        const amt = Math.round(Math.floor(safeNum(a.bags)) * rate * 100) / 100;
+        lines.push(
+          `  ${i + 1}. ${formatDateDMY(a.date)} | ${a.bags} Bags × ₹${rate} = -${formatINR(amt)}`
+        );
+      });
+    }
     if (mode === 'full' && summary.otherEntries.length > 0) {
       summary.otherEntries.forEach((o, i) => {
         lines.push(
