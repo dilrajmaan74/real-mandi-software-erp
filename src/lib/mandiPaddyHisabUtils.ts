@@ -2,6 +2,7 @@ import {
   DEFAULT_MPH_SETTINGS,
   MphAdvance,
   MphArrival,
+  MphDryingRateBreakdownItem,
   MphFarmer,
   MphFarmerAccountSummary,
   MphInterestBasis,
@@ -166,6 +167,268 @@ export function formatINR(value: number, showDecimals = true): string {
   })}`;
 }
 
+const EN_ONES = [
+  '',
+  'One',
+  'Two',
+  'Three',
+  'Four',
+  'Five',
+  'Six',
+  'Seven',
+  'Eight',
+  'Nine',
+  'Ten',
+  'Eleven',
+  'Twelve',
+  'Thirteen',
+  'Fourteen',
+  'Fifteen',
+  'Sixteen',
+  'Seventeen',
+  'Eighteen',
+  'Nineteen',
+];
+
+const EN_TENS = [
+  '',
+  '',
+  'Twenty',
+  'Thirty',
+  'Forty',
+  'Fifty',
+  'Sixty',
+  'Seventy',
+  'Eighty',
+  'Ninety',
+];
+
+function twoDigitsEn(n: number): string {
+  if (n === 0) return '';
+  if (n < 20) return EN_ONES[n];
+  const tens = Math.floor(n / 10);
+  const ones = n % 10;
+  return ones > 0 ? `${EN_TENS[tens]} ${EN_ONES[ones]}` : EN_TENS[tens];
+}
+
+function threeDigitsEn(n: number): string {
+  const hundreds = Math.floor(n / 100);
+  const rem = n % 100;
+  const parts: string[] = [];
+  if (hundreds > 0) parts.push(`${EN_ONES[hundreds]} Hundred`);
+  if (rem > 0) parts.push(twoDigitsEn(rem));
+  return parts.join(' ');
+}
+
+function numberToIndianWordsEn(num: number): string {
+  const whole = Math.floor(Math.abs(safeNum(num)));
+  if (whole === 0) return 'Zero';
+
+  const parts: string[] = [];
+  const arab = Math.floor(whole / 1000000000);
+  const afterArab = whole % 1000000000;
+  const crore = Math.floor(afterArab / 10000000);
+  const afterCrore = afterArab % 10000000;
+  const lakh = Math.floor(afterCrore / 100000);
+  const afterLakh = afterCrore % 100000;
+  const thousand = Math.floor(afterLakh / 1000);
+  const rem = afterLakh % 1000;
+
+  if (arab > 0) parts.push(`${numberToIndianWordsEn(arab)} Arab`);
+  if (crore > 0) parts.push(`${twoDigitsEn(crore)} Crore`);
+  if (lakh > 0) parts.push(`${twoDigitsEn(lakh)} Lakh`);
+  if (thousand > 0) parts.push(`${twoDigitsEn(thousand)} Thousand`);
+  if (rem > 0) parts.push(threeDigitsEn(rem));
+
+  return parts.join(' ').trim();
+}
+
+const PA_0_TO_99 = [
+  'ਜ਼ੀਰੋ',
+  'ਇੱਕ',
+  'ਦੋ',
+  'ਤਿੰਨ',
+  'ਚਾਰ',
+  'ਪੰਜ',
+  'ਛੇ',
+  'ਸੱਤ',
+  'ਅੱਠ',
+  'ਨੌਂ',
+  'ਦਸ',
+  'ਗਿਆਰਾਂ',
+  'ਬਾਰਾਂ',
+  'ਤੇਰਾਂ',
+  'ਚੌਦਾਂ',
+  'ਪੰਦਰਾਂ',
+  'ਸੋਲ਼ਾਂ',
+  'ਸਤਾਰਾਂ',
+  'ਅਠਾਰਾਂ',
+  'ਉੱਨੀ',
+  'ਵੀਹ',
+  'ਇੱਕੀ',
+  'ਬਾਈ',
+  'ਤੇਈ',
+  'ਚੌਵੀ',
+  'ਪੰਜੀ',
+  'ਛੱਬੀ',
+  'ਸਤਾਈ',
+  'ਅਠਾਈ',
+  'ਉਨੱਤੀ',
+  'ਤੀਹ',
+  'ਇਕੱਤੀ',
+  'ਬੱਤੀ',
+  'ਤੇਤੀ',
+  'ਚੌਂਤੀ',
+  'ਪੈਂਤੀ',
+  'ਛੱਤੀ',
+  'ਸੈਂਤੀ',
+  'ਅਠੱਤੀ',
+  'ਉਨਤਾਲੀ',
+  'ਚਾਲ਼ੀ',
+  'ਇਕਤਾਲ਼ੀ',
+  'ਬਿਆਲ਼ੀ',
+  'ਤਰਤਾਲ਼ੀ',
+  'ਚੁਤਾਲ਼ੀ',
+  'ਪੰਤਾਲ਼ੀ',
+  'ਛਿਆਲ਼ੀ',
+  'ਸੰਤਾਲ਼ੀ',
+  'ਅਠਤਾਲ਼ੀ',
+  'ਉਣੰਜਾ',
+  'ਪੰਜਾਹ',
+  'ਇਕਵੰਜਾ',
+  'ਬਵੰਜਾ',
+  'ਤਰਵੰਜਾ',
+  'ਚੁਰੰਜਾ',
+  'ਪਚਵੰਜਾ',
+  'ਛਪੰਜਾ',
+  'ਸਤਵੰਜਾ',
+  'ਅਠਵੰਜਾ',
+  'ਉਣਾਹਠ',
+  'ਸੱਠ',
+  'ਇਕਾਹਠ',
+  'ਬਾਹਠ',
+  'ਤ੍ਰੇਹਠ',
+  'ਚੌਂਹਠ',
+  'ਪੈਂਹਠ',
+  'ਛਿਆਹਠ',
+  'ਸਤਾਹਠ',
+  'ਅਠਾਹਠ',
+  'ਉਣੱਤਰ',
+  'ਸੱਤਰ',
+  'ਇਕੱਤਰ',
+  'ਬਹੱਤਰ',
+  'ਤਿਹੱਤਰ',
+  'ਚੁਹੱਤਰ',
+  'ਪੰਜੱਤਰ',
+  'ਛਿਹੱਤਰ',
+  'ਸਤੱਤਰ',
+  'ਅਠੱਤਰ',
+  'ਉਣਾਸੀ',
+  'ਅੱਸੀ',
+  'ਇਕਾਸੀ',
+  'ਬਿਆਸੀ',
+  'ਤਿਰਾਸੀ',
+  'ਚੁਰਾਸੀ',
+  'ਪਚਾਸੀ',
+  'ਛਿਆਸੀ',
+  'ਸਤਾਸੀ',
+  'ਅਠਾਸੀ',
+  'ਉਣਾਨਵੇਂ',
+  'ਨੱਬੇ',
+  'ਇਕਾਨਵੇਂ',
+  'ਬਾਨਵੇਂ',
+  'ਤਿਰਾਨਵੇਂ',
+  'ਚੁਰਾਨਵੇਂ',
+  'ਪਚਾਨਵੇਂ',
+  'ਛਿਆਨਵੇਂ',
+  'ਸਤਾਨਵੇਂ',
+  'ਅਠਾਨਵੇਂ',
+  'ਨੜਿੱਨਵੇਂ',
+];
+
+function threeDigitsPa(n: number): string {
+  const hundreds = Math.floor(n / 100);
+  const rem = n % 100;
+  const parts: string[] = [];
+  if (hundreds > 0) parts.push(`${PA_0_TO_99[hundreds]} ਸੌ`);
+  if (rem > 0) parts.push(PA_0_TO_99[rem]);
+  return parts.join(' ');
+}
+
+function numberToIndianWordsPa(num: number): string {
+  const whole = Math.floor(Math.abs(safeNum(num)));
+  if (whole === 0) return PA_0_TO_99[0];
+
+  const parts: string[] = [];
+  const arab = Math.floor(whole / 1000000000);
+  const afterArab = whole % 1000000000;
+  const crore = Math.floor(afterArab / 10000000);
+  const afterCrore = afterArab % 10000000;
+  const lakh = Math.floor(afterCrore / 100000);
+  const afterLakh = afterCrore % 100000;
+  const thousand = Math.floor(afterLakh / 1000);
+  const rem = afterLakh % 1000;
+
+  if (arab > 0) parts.push(`${numberToIndianWordsPa(arab)} ਅਰਬ`);
+  if (crore > 0) parts.push(`${PA_0_TO_99[crore]} ਕਰੋੜ`);
+  if (lakh > 0) parts.push(`${PA_0_TO_99[lakh]} ਲੱਖ`);
+  if (thousand > 0) parts.push(`${PA_0_TO_99[thousand]} ਹਜ਼ਾਰ`);
+  if (rem > 0) parts.push(threeDigitsPa(rem));
+
+  return parts.join(' ').trim();
+}
+
+export function formatRupeesInWords(amount: number, lang: 'en' | 'pa'): string {
+  const rounded = Math.round(Math.abs(safeNum(amount)));
+  if (lang === 'pa') {
+    if (rounded === 0) return 'ਜ਼ੀਰੋ ਰੁਪਏ ਸਿਰਫ਼';
+    return `${numberToIndianWordsPa(rounded)} ਰੁਪਏ ਸਿਰਫ਼`;
+  }
+  if (rounded === 0) return 'Zero Rupees Only';
+  return `Rupees ${numberToIndianWordsEn(rounded)} Only`;
+}
+
+export function getEffectiveArrivalDryingRate(
+  arrival: Pick<MphArrival, 'dryingLaborRate'> | null | undefined,
+  farmer: Pick<MphFarmer, 'dryingLaborRate'> | null | undefined,
+  settings: Pick<MphSettings, 'paddyDryingLaborRate'> | null | undefined
+): number {
+  if (
+    arrival &&
+    typeof arrival.dryingLaborRate === 'number' &&
+    Number.isFinite(arrival.dryingLaborRate) &&
+    arrival.dryingLaborRate >= 0
+  ) {
+    return arrival.dryingLaborRate;
+  }
+  if (
+    farmer &&
+    typeof farmer.dryingLaborRate === 'number' &&
+    Number.isFinite(farmer.dryingLaborRate) &&
+    farmer.dryingLaborRate >= 0
+  ) {
+    return farmer.dryingLaborRate;
+  }
+  return Math.max(0, safeNum(settings?.paddyDryingLaborRate, DEFAULT_MPH_SETTINGS.paddyDryingLaborRate));
+}
+
+export function formatDryingBreakdownText(
+  breakdown: MphDryingRateBreakdownItem[],
+  lang: 'en' | 'pa',
+  totalDryingBags = 0,
+  fallbackRate = DEFAULT_MPH_SETTINGS.paddyDryingLaborRate
+): string {
+  const bagUnit = lang === 'pa' ? 'ਗੱਟੇ' : 'Bags';
+  const perBag = lang === 'pa' ? 'ਗੱਟਾ' : 'bag';
+  if (!Array.isArray(breakdown) || breakdown.length === 0) {
+    return `${totalDryingBags} ${bagUnit} × ₹${fallbackRate}/${perBag}`;
+  }
+  if (breakdown.length === 1) {
+    return `${breakdown[0].bags} ${bagUnit} × ₹${breakdown[0].rate}/${perBag}`;
+  }
+  return breakdown.map((b) => `${b.bags} ${bagUnit} × ₹${b.rate}`).join(' + ');
+}
+
 export function formatDateDMY(dateStr?: unknown): string {
   const normalized = safeDateStr(dateStr).trim();
   if (!normalized) return '—';
@@ -320,15 +583,38 @@ export function computeFarmerAccountSummary(
     Math.round(jForms.reduce((sum, j) => sum + safeNum(j.jFormAmount), 0) * 100) / 100;
 
   const jFormLaborRate = Math.max(0, safeNum(safeSettings.jFormLaborRate));
-  const dryingLaborRate = Math.max(0, safeNum(safeSettings.paddyDryingLaborRate));
+  const defaultDryingLaborRate = Math.max(0, safeNum(safeSettings.paddyDryingLaborRate));
 
   // J-Form Labour applies on total bags arrived in the Mandi (e.g., 1900 Arrival Bags × ₹8)
   const totalJFormLabor = Math.round(weights.totalBags * jFormLaborRate * 100) / 100;
 
-  const totalDryingBags = arrivals
-    .filter((a) => a.applyDryingLabor !== false)
-    .reduce((sum, a) => sum + Math.max(0, Math.floor(safeNum(a.bags))), 0);
-  const totalDryingLabor = Math.round(totalDryingBags * dryingLaborRate * 100) / 100;
+  let totalDryingBags = 0;
+  let totalDryingLaborRaw = 0;
+  const dryingRateMap = new Map<number, { bags: number; amount: number }>();
+
+  for (const a of arrivals) {
+    if (!a || a.applyDryingLabor === false) continue;
+    const bagsCount = Math.max(0, Math.floor(safeNum(a.bags)));
+    if (bagsCount <= 0) continue;
+    const rate = getEffectiveArrivalDryingRate(a, farmer, safeSettings);
+    const amt = Math.round(bagsCount * rate * 100) / 100;
+    totalDryingBags += bagsCount;
+    totalDryingLaborRaw += amt;
+    const existingRateBucket = dryingRateMap.get(rate);
+    if (existingRateBucket) {
+      existingRateBucket.bags += bagsCount;
+      existingRateBucket.amount = Math.round((existingRateBucket.amount + amt) * 100) / 100;
+    } else {
+      dryingRateMap.set(rate, { bags: bagsCount, amount: amt });
+    }
+  }
+  const totalDryingLabor = Math.round(totalDryingLaborRaw * 100) / 100;
+  const dryingRateBreakdown: MphDryingRateBreakdownItem[] = Array.from(dryingRateMap.entries())
+    .map(([rate, info]) => ({ rate, bags: info.bags, amount: info.amount }))
+    .sort((a, b) => a.rate - b.rate);
+  if (dryingRateBreakdown.length === 0 && totalDryingBags === 0) {
+    void defaultDryingLaborRate;
+  }
 
   const totalOtherAdditions =
     Math.round(
@@ -406,6 +692,7 @@ export function computeFarmerAccountSummary(
     totalJFormLabor,
     totalDryingBags,
     totalDryingLabor,
+    dryingRateBreakdown,
     totalOtherAdditions,
     totalOtherDeductions,
     totalDeductions,

@@ -7,6 +7,7 @@ export interface MphFarmer {
   fatherName: string;
   village: string;
   mobile: string;
+  dryingLaborRate?: number | null; // Optional farmer-specific Paddy Drying Labour rate (₹/Bag)
   createdAt: string;
   updatedAt: string;
 }
@@ -28,6 +29,7 @@ export interface MphArrival {
   weightGmPart: number;
   paddyAmount: number;
   applyDryingLabor: boolean;
+  dryingLaborRate?: number | null; // Optional per-arrival Paddy Drying Labour rate (₹/Bag)
   notes: string;
   createdAt: string;
   updatedAt: string;
@@ -100,6 +102,7 @@ export interface MphSettings {
   paddyAGurdeRate: number;
   jFormLaborRate: number;
   paddyDryingLaborRate: number;
+  dryingLaborRates?: number[]; // Preset multi-rates for Paddy Drying Labour (₹/Bag)
   updatedAt: string;
 }
 
@@ -109,8 +112,15 @@ export const DEFAULT_MPH_SETTINGS: MphSettings = {
   paddyAGurdeRate: 2461,
   jFormLaborRate: 8,
   paddyDryingLaborRate: 10,
+  dryingLaborRates: [8, 10, 12],
   updatedAt: new Date().toISOString(),
 };
+
+export interface MphDryingRateBreakdownItem {
+  rate: number;
+  bags: number;
+  amount: number;
+}
 
 export interface MphFarmerAccountSummary {
   farmer: MphFarmer;
@@ -132,6 +142,7 @@ export interface MphFarmerAccountSummary {
   totalJFormLabor: number;
   totalDryingBags: number;
   totalDryingLabor: number;
+  dryingRateBreakdown: MphDryingRateBreakdownItem[];
   totalOtherAdditions: number;
   totalOtherDeductions: number;
   totalDeductions: number;

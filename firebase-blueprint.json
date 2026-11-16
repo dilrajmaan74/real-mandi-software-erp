@@ -163,6 +163,7 @@
         "fatherName": { "type": "string", "maxLength": 160 },
         "village": { "type": "string", "maxLength": 160 },
         "mobile": { "type": "string", "maxLength": 20 },
+        "dryingLaborRate": { "type": "number" },
         "createdAt": { "type": "string", "maxLength": 64 },
         "updatedAt": { "type": "string", "maxLength": 64 }
       },
@@ -189,6 +190,7 @@
         "weightGmPart": { "type": "number" },
         "paddyAmount": { "type": "number" },
         "applyDryingLabor": { "type": "boolean" },
+        "dryingLaborRate": { "type": "number" },
         "notes": { "type": "string", "maxLength": 400 },
         "createdAt": { "type": "string", "maxLength": 64 },
         "updatedAt": { "type": "string", "maxLength": 64 }
@@ -246,6 +248,7 @@
         "paddyAGurdeRate": { "type": "number" },
         "jFormLaborRate": { "type": "number" },
         "paddyDryingLaborRate": { "type": "number" },
+        "dryingLaborRates": { "type": "array", "items": { "type": "number" } },
         "updatedAt": { "type": "string", "maxLength": 64 }
       },
       "required": ["id", "ownerId", "hybridPaddyRate", "paddyAGurdeRate", "jFormLaborRate", "paddyDryingLaborRate", "updatedAt"]

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { DEFAULT_MPH_SETTINGS, MphSettings } from '../../types/mandiPaddyHisab';
 import { useMphLang } from '../../lib/mandiPaddyHisabI18n';
-import { RotateCcw, Save, Settings } from 'lucide-react';
+import { Plus, RotateCcw, Save, Settings, X } from 'lucide-react';
 
 interface MphSettingsViewProps {
   settings: MphSettings;
@@ -17,6 +17,12 @@ export const MphSettingsView: React.FC<MphSettingsViewProps> = ({
   const [gradeARate, setGradeARate] = useState(String(settings.paddyAGurdeRate));
   const [jFormLaborRate, setJFormLaborRate] = useState(String(settings.jFormLaborRate));
   const [dryingLaborRate, setDryingLaborRate] = useState(String(settings.paddyDryingLaborRate));
+  const [dryingRatesList, setDryingRatesList] = useState<number[]>(
+    settings.dryingLaborRates && settings.dryingLaborRates.length > 0
+      ? settings.dryingLaborRates
+      : DEFAULT_MPH_SETTINGS.dryingLaborRates || [8, 10, 12]
+  );
+  const [newDryingRateInput, setNewDryingRateInput] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -24,7 +30,34 @@ export const MphSettingsView: React.FC<MphSettingsViewProps> = ({
     setGradeARate(String(settings.paddyAGurdeRate));
     setJFormLaborRate(String(settings.jFormLaborRate));
     setDryingLaborRate(String(settings.paddyDryingLaborRate));
+    setDryingRatesList(
+      settings.dryingLaborRates && settings.dryingLaborRates.length > 0
+        ? settings.dryingLaborRates
+        : DEFAULT_MPH_SETTINGS.dryingLaborRates || [8, 10, 12]
+    );
   }, [settings]);
+
+  const handleAddDryingPreset = () => {
+    setErrorMsg(null);
+    const val = Math.round((Number(newDryingRateInput) || 0) * 100) / 100;
+    if (newDryingRateInput.trim() === '' || isNaN(val) || val < 0) {
+      setErrorMsg(
+        tr(
+          'Enter a valid non-negative drying rate to add.',
+          'ਜੋੜਨ ਲਈ ਸਹੀ ਸੁਕਾਈ ਲੇਬਰ ਰੇਟ ਦਰਜ ਕਰੋ।'
+        )
+      );
+      return;
+    }
+    const merged = Array.from(new Set([...dryingRatesList, val])).sort((a, b) => a - b);
+    setDryingRatesList(merged);
+    setNewDryingRateInput('');
+  };
+
+  const handleRemoveDryingPreset = (rate: number) => {
+    if (dryingRatesList.length <= 1) return;
+    setDryingRatesList((prev) => prev.filter((r) => r !== rate));
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,12 +78,18 @@ export const MphSettingsView: React.FC<MphSettingsViewProps> = ({
       return;
     }
 
+    const mergedRates = Array.from(new Set([...dryingRatesList, dl]))
+      .filter((n) => Number.isFinite(n) && n >= 0)
+      .sort((a, b) => a - b)
+      .slice(0, 20);
+
     onSaveSettings({
       id: 'default',
       hybridPaddyRate: h,
       paddyAGurdeRate: g,
       jFormLaborRate: jl,
       paddyDryingLaborRate: dl,
+      dryingLaborRates: mergedRates.length > 0 ? mergedRates : [dl],
       updatedAt: new Date().toISOString(),
     });
   };
@@ -60,6 +99,8 @@ export const MphSettingsView: React.FC<MphSettingsViewProps> = ({
     setGradeARate(String(DEFAULT_MPH_SETTINGS.paddyAGurdeRate));
     setJFormLaborRate(String(DEFAULT_MPH_SETTINGS.jFormLaborRate));
     setDryingLaborRate(String(DEFAULT_MPH_SETTINGS.paddyDryingLaborRate));
+    setDryingRatesList(DEFAULT_MPH_SETTINGS.dryingLaborRates || [8, 10, 12]);
+    setNewDryingRateInput('');
     setErrorMsg(null);
   };
 
@@ -162,7 +203,7 @@ export const MphSettingsView: React.FC<MphSettingsViewProps> = ({
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                {tr('Paddy Drying Labour (₹ / Bag)', 'ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ (₹ / ਗੱਟਾ)')}
+                {tr('Default Paddy Drying Labour (₹ / Bag)', 'ਡਿਫਾਲਟ ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ (₹ / ਗੱਟਾ)')}
               </label>
               <input
                 type="number"
@@ -175,6 +216,80 @@ export const MphSettingsView: React.FC<MphSettingsViewProps> = ({
               <span className="text-[11px] text-slate-500 mt-1 block">
                 {tr('Default: ₹10 per bag', 'ਡਿਫਾਲਟ: ₹10 ਪ੍ਰਤੀ ਗੱਟਾ')}
               </span>
+            </div>
+          </div>
+
+          {/* Multi-rate Paddy Drying Labour Preset Manager */}
+          <div className="mt-4 p-3.5 bg-slate-50 border border-slate-200 rounded-lg space-y-2.5">
+            <div>
+              <label className="block text-xs font-bold text-slate-800">
+                {tr(
+                  'Paddy Drying Labour Multi-Rate Presets (₹ / Gatta)',
+                  'ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ ਮਲਟੀ-ਰੇਟ ਸੂਚੀ (₹ / ਗੱਟਾ)'
+                )}
+              </label>
+              <p className="text-[11px] text-slate-500">
+                {tr(
+                  'Add multiple drying rates (e.g. ₹8, ₹10, ₹12) to quickly assign different rates per farmer or arrival.',
+                  'ਵੱਖ-ਵੱਖ ਸੁਕਾਈ ਰੇਟ (ਜਿਵੇਂ ₹8, ₹10, ₹12) ਜੋੜੋ ਤਾਂ ਜੋ ਹਰ ਕਿਸਾਨ ਜਾਂ ਆਵਕ ਲਈ ਵੱਖਰਾ ਰੇਟ ਚੁਣਿਆ ਜਾ ਸਕੇ।'
+                )}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {dryingRatesList.map((r) => {
+                const isDefault = Number(dryingLaborRate) === r;
+                return (
+                  <div
+                    key={r}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-mono font-bold ${
+                      isDefault
+                        ? 'bg-emerald-700 text-white border-emerald-700'
+                        : 'bg-white text-slate-800 border-slate-300'
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setDryingLaborRate(String(r))}
+                      className="cursor-pointer"
+                      title={tr('Set as Default Rate', 'ਡਿਫਾਲਟ ਰੇਟ ਬਣਾਓ')}
+                    >
+                      ₹{r}/{tr('Bag', 'ਗੱਟਾ')}
+                      {isDefault ? ` (${tr('Default', 'ਡਿਫਾਲਟ')})` : ''}
+                    </button>
+                    {dryingRatesList.length > 1 && !isDefault && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveDryingPreset(r)}
+                        className="text-slate-400 hover:text-rose-600 cursor-pointer"
+                        title={tr('Remove rate', 'ਰੇਟ ਹਟਾਓ')}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={newDryingRateInput}
+                onChange={(e) => setNewDryingRateInput(e.target.value)}
+                placeholder={tr('Add new rate e.g. 6, 8, 12, 15', 'ਨਵਾਂ ਰੇਟ ਲਿਖੋ ਜਿਵੇਂ 6, 8, 12, 15')}
+                className="w-56 px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded-lg bg-white focus:outline-none focus:border-emerald-600"
+              />
+              <button
+                type="button"
+                onClick={handleAddDryingPreset}
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-slate-900 bg-white border border-slate-300 hover:bg-slate-100 rounded-lg cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>{tr('Add Rate', 'ਰੇਟ ਜੋੜੋ')}</span>
+              </button>
             </div>
           </div>
         </div>

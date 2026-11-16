@@ -12,8 +12,10 @@ import {
   calculateAdvanceDaysAndInterest,
   computeFarmerAccountSummary,
   formatDateDMY,
+  formatDryingBreakdownText,
   formatINR,
   formatLooseKgGm,
+  formatRupeesInWords,
   formatWeightQKG,
   safeStr,
 } from '../../lib/mandiPaddyHisabUtils';
@@ -580,8 +582,12 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                     {tr('(-) Paddy Drying Labour', '(-) ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ')}
                   </span>
                   <span className="text-[11px] text-slate-500 block font-mono tabular-nums">
-                    {summary.totalDryingBags} {tr('Bags', 'ਗੱਟੇ')} × ₹{settings.paddyDryingLaborRate}/
-                    {tr('bag', 'ਗੱਟਾ')}
+                    {formatDryingBreakdownText(
+                      summary.dryingRateBreakdown,
+                      lang,
+                      summary.totalDryingBags,
+                      settings.paddyDryingLaborRate
+                    )}
                   </span>
                 </div>
                 <span className="font-mono tabular-nums font-semibold text-rose-700">
@@ -623,6 +629,10 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
               </div>
               <div className="text-3xl font-bold font-mono tabular-nums mt-2">
                 {formatINR(Math.abs(summary.finalBalance), false)}
+              </div>
+              <div className="mt-1.5 text-xs font-semibold opacity-90 leading-snug">
+                <span className="opacity-70">{tr('In Words:', 'ਸ਼ਬਦਾਂ ਵਿੱਚ:')} </span>
+                <span>{formatRupeesInWords(summary.finalBalance, lang)}</span>
               </div>
               <div className="mt-2 text-sm font-bold">
                 {summary.balanceStatus === 'payable' && (
@@ -1462,6 +1472,10 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
               </div>
               <div className="text-3xl font-bold font-mono tabular-nums mt-2">
                 {formatINR(Math.abs(summary.combinedFinalBalance), false)}
+              </div>
+              <div className="mt-1.5 text-xs font-semibold opacity-90 leading-snug">
+                <span className="opacity-70">{tr('In Words:', 'ਸ਼ਬਦਾਂ ਵਿੱਚ:')} </span>
+                <span>{formatRupeesInWords(summary.combinedFinalBalance, lang)}</span>
               </div>
               <div className="mt-2 text-sm font-bold">
                 {summary.combinedBalanceStatus === 'payable' && (

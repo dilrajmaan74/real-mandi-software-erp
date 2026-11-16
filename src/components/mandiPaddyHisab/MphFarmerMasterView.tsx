@@ -45,8 +45,17 @@ export const MphFarmerMasterView: React.FC<MphFarmerMasterViewProps> = ({
   const [fatherName, setFatherName] = useState('');
   const [village, setVillage] = useState('');
   const [mobile, setMobile] = useState('');
+  const [dryingRateInput, setDryingRateInput] = useState<string>(''); // '' = Default
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+
+  const dryingPresets = useMemo(() => {
+    const base =
+      settings.dryingLaborRates && settings.dryingLaborRates.length > 0
+        ? settings.dryingLaborRates
+        : [8, 10, 12];
+    return Array.from(new Set([...base, settings.paddyDryingLaborRate])).sort((a, b) => a - b);
+  }, [settings]);
 
   const resetForm = () => {
     setEditingId(null);
@@ -54,6 +63,7 @@ export const MphFarmerMasterView: React.FC<MphFarmerMasterViewProps> = ({
     setFatherName('');
     setVillage('');
     setMobile('');
+    setDryingRateInput('');
     setErrorMsg(null);
   };
 
@@ -63,6 +73,11 @@ export const MphFarmerMasterView: React.FC<MphFarmerMasterViewProps> = ({
     setFatherName(f.fatherName);
     setVillage(f.village);
     setMobile(f.mobile);
+    setDryingRateInput(
+      typeof f.dryingLaborRate === 'number' && Number.isFinite(f.dryingLaborRate)
+        ? String(f.dryingLaborRate)
+        : ''
+    );
     setErrorMsg(null);
   };
 
@@ -90,6 +105,21 @@ export const MphFarmerMasterView: React.FC<MphFarmerMasterViewProps> = ({
       return;
     }
 
+    let parsedDryingRate: number | null = null;
+    if (dryingRateInput.trim() !== '') {
+      const n = Number(dryingRateInput);
+      if (isNaN(n) || n < 0) {
+        setErrorMsg(
+          tr(
+            'Paddy Drying Rate must be a valid non-negative number.',
+            'ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ ਰੇਟ 0 ਜਾਂ ਇਸ ਤੋਂ ਵੱਧ ਸਹੀ ਨੰਬਰ ਹੋਣਾ ਚਾਹੀਦਾ ਹੈ।'
+          )
+        );
+        return;
+      }
+      parsedDryingRate = Math.round(n * 100) / 100;
+    }
+
     const dup = findDuplicateMphFarmer(
       { name: cleanName, fatherName: cleanFather, village: cleanVillage, mobile: cleanMobile },
       farmers,
@@ -114,6 +144,7 @@ export const MphFarmerMasterView: React.FC<MphFarmerMasterViewProps> = ({
       fatherName: cleanFather,
       village: cleanVillage,
       mobile: cleanMobile.replace(/\D/g, ''),
+      dryingLaborRate: parsedDryingRate,
       createdAt: existing ? existing.createdAt : now,
       updatedAt: now,
     };
@@ -231,6 +262,51 @@ export const MphFarmerMasterView: React.FC<MphFarmerMasterViewProps> = ({
             />
           </div>
 
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
+            <label className="block text-xs font-semibold text-slate-700">
+              {tr('Paddy Drying Labour Rate (₹ / Bag)', 'ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ ਰੇਟ (₹ / ਗੱਟਾ)')}
+            </label>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setDryingRateInput('')}
+                className={`px-2 py-1 text-[11px] font-semibold rounded border cursor-pointer ${
+                  dryingRateInput.trim() === ''
+                    ? 'bg-emerald-700 text-white border-emerald-700'
+                    : 'bg-white text-slate-700 border-slate-300'
+                }`}
+              >
+                {tr('Default', 'ਡਿਫਾਲਟ')} (₹{settings.paddyDryingLaborRate})
+              </button>
+              {dryingPresets.map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setDryingRateInput(String(r))}
+                  className={`px-2 py-1 text-[11px] font-mono font-bold rounded border cursor-pointer ${
+                    dryingRateInput.trim() !== '' && Number(dryingRateInput) === r
+                      ? 'bg-emerald-700 text-white border-emerald-700'
+                      : 'bg-white text-slate-700 border-slate-300'
+                  }`}
+                >
+                  ₹{r}
+                </button>
+              ))}
+            </div>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={dryingRateInput}
+              onChange={(e) => setDryingRateInput(e.target.value)}
+              placeholder={tr(
+                `Leave empty for Default (₹${settings.paddyDryingLaborRate}) or type custom rate`,
+                `ਡਿਫਾਲਟ (₹${settings.paddyDryingLaborRate}) ਲਈ ਖਾਲੀ ਛੱਡੋ ਜਾਂ ਆਪਣਾ ਰੇਟ ਲਿਖੋ`
+              )}
+              className="w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded-lg bg-white focus:outline-none focus:border-emerald-600"
+            />
+          </div>
+
           <button
             type="submit"
             className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs sm:text-sm font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer"
@@ -286,6 +362,7 @@ export const MphFarmerMasterView: React.FC<MphFarmerMasterViewProps> = ({
                   <th className="py-2.5 px-3 font-semibold">{tr('Father Name', 'ਪਿਤਾ ਦਾ ਨਾਮ')}</th>
                   <th className="py-2.5 px-3 font-semibold">{tr('Village', 'ਪਿੰਡ')}</th>
                   <th className="py-2.5 px-3 font-semibold">{tr('Mobile', 'ਮੋਬਾਈਲ')}</th>
+                  <th className="py-2.5 px-3 font-semibold text-right">{tr('Drying Rate', 'ਸੁਕਾਈ ਰੇਟ')}</th>
                   <th className="py-2.5 px-3 font-semibold text-right">{tr('Net Balance', 'ਕੁੱਲ ਬਕਾਇਆ')}</th>
                   <th className="py-2.5 px-3 font-semibold text-right">{tr('Actions', 'ਕਾਰਵਾਈ')}</th>
                 </tr>
@@ -293,6 +370,8 @@ export const MphFarmerMasterView: React.FC<MphFarmerMasterViewProps> = ({
               <tbody className="divide-y divide-slate-100">
                 {filteredFarmers.map((f, idx) => {
                   const summary = summaryMap.get(f.id);
+                  const hasCustomDrying =
+                    typeof f.dryingLaborRate === 'number' && Number.isFinite(f.dryingLaborRate);
                   return (
                     <tr key={f.id} className="hover:bg-slate-50/80">
                       <td className="py-2.5 px-3 font-mono tabular-nums text-slate-400">
@@ -303,6 +382,17 @@ export const MphFarmerMasterView: React.FC<MphFarmerMasterViewProps> = ({
                       <td className="py-2.5 px-3 text-slate-700">{f.village}</td>
                       <td className="py-2.5 px-3 font-mono tabular-nums text-slate-700">
                         {f.mobile || '—'}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono tabular-nums whitespace-nowrap">
+                        <span
+                          className={`inline-block px-2 py-0.5 rounded text-[11px] font-semibold ${
+                            hasCustomDrying
+                              ? 'bg-amber-50 text-amber-900 border border-amber-200'
+                              : 'text-slate-600'
+                          }`}
+                        >
+                          ₹{hasCustomDrying ? f.dryingLaborRate : settings.paddyDryingLaborRate}/{tr('B', 'ਗੱਟਾ')}
+                        </span>
                       </td>
                       <td className="py-2.5 px-3 text-right font-mono tabular-nums whitespace-nowrap">
                         {summary ? (

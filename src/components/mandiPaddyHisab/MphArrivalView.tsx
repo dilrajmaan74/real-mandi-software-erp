@@ -13,6 +13,7 @@ import {
   formatINR,
   formatLooseKgGm,
   formatWeightQKG,
+  getEffectiveArrivalDryingRate,
   safeStr,
   sumPaddyWeights,
 } from '../../lib/mandiPaddyHisabUtils';
@@ -54,6 +55,14 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
   const [looseKg, setLooseKg] = useState<string>('0');
   const [looseGm, setLooseGm] = useState<string>('0');
   const [applyDryingLabor, setApplyDryingLabor] = useState<boolean>(true);
+  const [dryingLaborRateInput, setDryingLaborRateInput] = useState<string>(() => {
+    const firstFarmer = farmers[0];
+    const rate =
+      typeof firstFarmer?.dryingLaborRate === 'number' && Number.isFinite(firstFarmer.dryingLaborRate)
+        ? firstFarmer.dryingLaborRate
+        : settings.paddyDryingLaborRate;
+    return String(rate);
+  });
   const [notes, setNotes] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -62,11 +71,48 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
   const [filterFarmerId, setFilterFarmerId] = useState('all');
   const [filterType, setFilterType] = useState<'all' | MphPaddyType>('all');
 
+  const dryingPresets = useMemo(() => {
+    const base =
+      settings.dryingLaborRates && settings.dryingLaborRates.length > 0
+        ? settings.dryingLaborRates
+        : [8, 10, 12];
+    const selectedF = farmers.find((f) => f.id === farmerId);
+    const extras: number[] = [settings.paddyDryingLaborRate];
+    if (
+      selectedF &&
+      typeof selectedF.dryingLaborRate === 'number' &&
+      Number.isFinite(selectedF.dryingLaborRate)
+    ) {
+      extras.push(selectedF.dryingLaborRate);
+    }
+    return Array.from(new Set([...base, ...extras])).sort((a, b) => a - b);
+  }, [settings, farmers, farmerId]);
+
   useEffect(() => {
     if (!farmerId && farmers.length > 0) {
-      setFarmerId(farmers[0].id);
+      const f = farmers[0];
+      setFarmerId(f.id);
+      if (!editingId) {
+        const rate =
+          typeof f.dryingLaborRate === 'number' && Number.isFinite(f.dryingLaborRate)
+            ? f.dryingLaborRate
+            : settings.paddyDryingLaborRate;
+        setDryingLaborRateInput(String(rate));
+      }
     }
-  }, [farmers, farmerId]);
+  }, [farmers, farmerId, editingId, settings.paddyDryingLaborRate]);
+
+  const handleFarmerSelectionChange = (nextFarmerId: string) => {
+    setFarmerId(nextFarmerId);
+    if (!editingId) {
+      const f = farmers.find((x) => x.id === nextFarmerId);
+      const rate =
+        typeof f?.dryingLaborRate === 'number' && Number.isFinite(f.dryingLaborRate)
+          ? f.dryingLaborRate
+          : settings.paddyDryingLaborRate;
+      setDryingLaborRateInput(String(rate));
+    }
+  };
 
   // Update default rate when switching paddy type (when creating new entry)
   const handlePaddyTypeChange = (nextType: MphPaddyType) => {
@@ -89,6 +135,12 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
     setLooseKg('0');
     setLooseGm('0');
     setApplyDryingLabor(true);
+    const selectedF = farmers.find((f) => f.id === farmerId);
+    const defaultRate =
+      typeof selectedF?.dryingLaborRate === 'number' && Number.isFinite(selectedF.dryingLaborRate)
+        ? selectedF.dryingLaborRate
+        : settings.paddyDryingLaborRate;
+    setDryingLaborRateInput(String(defaultRate));
     setNotes('');
     setErrorMsg(null);
   };
@@ -103,6 +155,8 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
     setLooseKg(String(item.looseKg));
     setLooseGm(String(item.looseGm));
     setApplyDryingLabor(item.applyDryingLabor !== false);
+    const itemFarmer = farmers.find((f) => f.id === item.farmerId);
+    setDryingLaborRateInput(String(getEffectiveArrivalDryingRate(item, itemFarmer, settings)));
     setNotes(item.notes || '');
     setErrorMsg(null);
   };
@@ -111,6 +165,10 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
   const parsedLooseKg = Math.max(0, Math.floor(Number(looseKg) || 0));
   const parsedLooseGm = Math.max(0, Math.floor(Number(looseGm) || 0));
   const parsedRate = Math.max(0, Number(ratePerQuintal) || 0);
+  const parsedDryingRate = Math.max(
+    0,
+    Math.round((Number(dryingLaborRateInput !== '' ? dryingLaborRateInput : settings.paddyDryingLaborRate) || 0) * 100) / 100
+  );
 
   const liveWeight = useMemo(
     () => calculatePaddyWeight(parsedBags, parsedLooseKg, parsedLooseGm),
@@ -149,6 +207,7 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
       weightGmPart: finalWeight.weightGmPart,
       paddyAmount: finalAmount,
       applyDryingLabor,
+      dryingLaborRate: parsedDryingRate,
       notes: notes.trim(),
       createdAt: existingItem ? existingItem.createdAt : now,
       updatedAt: now,
@@ -296,7 +355,7 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
               </label>
               <select
                 value={farmerId}
-                onChange={(e) => setFarmerId(e.target.value)}
+                onChange={(e) => handleFarmerSelectionChange(e.target.value)}
                 className="w-full px-3 py-2 text-xs sm:text-sm border border-slate-300 rounded-lg bg-white focus:outline-none focus:border-emerald-600"
               >
                 {farmers.map((f) => (
@@ -434,22 +493,54 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
               </div>
             </div>
 
-            <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer select-none pt-0.5">
-              <input
-                type="checkbox"
-                checked={applyDryingLabor}
-                onChange={(e) => setApplyDryingLabor(e.target.checked)}
-                className="w-4 h-4 text-emerald-700 rounded cursor-pointer"
-              />
-              <span>
-                {tr('Apply Paddy Drying Labour', 'ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ ਲਗਾਓ')} (₹{settings.paddyDryingLaborRate}/
-                {tr('bag', 'ਗੱਟਾ')} ={' '}
-                <strong className="font-mono tabular-nums">
-                  {formatINR(parsedBags * settings.paddyDryingLaborRate)}
-                </strong>
-                )
-              </span>
-            </label>
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
+              <label className="flex items-center gap-2 text-xs font-semibold text-slate-800 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={applyDryingLabor}
+                  onChange={(e) => setApplyDryingLabor(e.target.checked)}
+                  className="w-4 h-4 text-emerald-700 rounded cursor-pointer"
+                />
+                <span>
+                  {tr('Apply Paddy Drying Labour', 'ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ ਲਗਾਓ')} (₹{parsedDryingRate}/
+                  {tr('bag', 'ਗੱਟਾ')} ={' '}
+                  <strong className="font-mono tabular-nums text-rose-700">
+                    {formatINR(parsedBags * parsedDryingRate)}
+                  </strong>
+                  )
+                </span>
+              </label>
+
+              {applyDryingLabor && (
+                <div className="space-y-1.5 pl-6">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {dryingPresets.map((r) => (
+                      <button
+                        key={r}
+                        type="button"
+                        onClick={() => setDryingLaborRateInput(String(r))}
+                        className={`px-2 py-0.5 text-[11px] font-mono font-bold rounded border cursor-pointer ${
+                          parsedDryingRate === r
+                            ? 'bg-emerald-700 text-white border-emerald-700'
+                            : 'bg-white text-slate-700 border-slate-300'
+                        }`}
+                      >
+                        ₹{r}
+                      </button>
+                    ))}
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={dryingLaborRateInput}
+                      onChange={(e) => setDryingLaborRateInput(e.target.value)}
+                      placeholder={tr('Custom ₹/bag', 'ਰੇਟ ₹')}
+                      className="w-24 px-2 py-0.5 text-xs font-mono font-bold border border-slate-300 rounded bg-white focus:outline-none focus:border-emerald-600"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -544,62 +635,76 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
                   <th className="py-2.5 px-2.5 font-semibold text-right">{tr('Loose KG/GM', 'ਖੁੱਲ੍ਹਾ ਵਜ਼ਨ')}</th>
                   <th className="py-2.5 px-2.5 font-semibold text-right">{tr('Total Weight', 'ਕੁੱਲ ਵਜ਼ਨ')}</th>
                   <th className="py-2.5 px-2.5 font-semibold text-right">{tr('Rate', 'ਰੇਟ')}</th>
+                  <th className="py-2.5 px-2.5 font-semibold text-right">{tr('Drying', 'ਸੁਕਾਈ')}</th>
                   <th className="py-2.5 px-2.5 font-semibold text-right">{tr('Amount', 'ਰਕਮ')}</th>
                   <th className="py-2.5 px-2.5 font-semibold text-right">{tr('Actions', 'ਕਾਰਵਾਈ')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredArrivals.map((a, idx) => (
-                  <tr key={a.id} className="hover:bg-slate-50/80">
-                    <td className="py-2 px-2.5 font-mono tabular-nums text-slate-400">
-                      {idx + 1}
-                    </td>
-                    <td className="py-2 px-2.5 font-mono tabular-nums whitespace-nowrap text-slate-700">
-                      {formatDateDMY(a.date)}
-                    </td>
-                    <td className="py-2 px-2.5 font-semibold text-slate-900">
-                      {a.farmerName}
-                    </td>
-                    <td className="py-2 px-2.5 text-slate-700 whitespace-nowrap">
-                      {a.paddyType}
-                    </td>
-                    <td className="py-2 px-2.5 text-right font-mono tabular-nums font-semibold">
-                      {a.bags}
-                    </td>
-                    <td className="py-2 px-2.5 text-right font-mono tabular-nums text-slate-600 whitespace-nowrap">
-                      {formatLooseKgGm(a.looseKg, a.looseGm)}
-                    </td>
-                    <td className="py-2 px-2.5 text-right font-mono tabular-nums text-slate-800 whitespace-nowrap">
-                      {formatWeightQKG(a.weightQtlPart, a.weightKgPart, a.weightGmPart)}
-                    </td>
-                    <td className="py-2 px-2.5 text-right font-mono tabular-nums text-slate-700">
-                      ₹{a.ratePerQuintal}
-                    </td>
-                    <td className="py-2 px-2.5 text-right font-mono tabular-nums font-bold text-emerald-800 whitespace-nowrap">
-                      {formatINR(a.paddyAmount)}
-                    </td>
-                    <td className="py-2 px-2.5 text-right whitespace-nowrap">
-                      <div className="inline-flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handleEditClick(a)}
-                          className="p-1 text-blue-700 hover:bg-blue-50 rounded cursor-pointer"
-                          title={tr('Edit Entry', 'ਐਂਟਰੀ ਸੋਧੋ')}
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onDeleteArrival(a)}
-                          className="p-1 text-rose-600 hover:bg-rose-50 rounded cursor-pointer"
-                          title={tr('Delete Entry', 'ਐਂਟਰੀ ਹਟਾਓ')}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {filteredArrivals.map((a, idx) => {
+                  const aFarmer = farmers.find((f) => f.id === a.farmerId);
+                  const effDryRate = getEffectiveArrivalDryingRate(a, aFarmer, settings);
+                  return (
+                    <tr key={a.id} className="hover:bg-slate-50/80">
+                      <td className="py-2 px-2.5 font-mono tabular-nums text-slate-400">
+                        {idx + 1}
+                      </td>
+                      <td className="py-2 px-2.5 font-mono tabular-nums whitespace-nowrap text-slate-700">
+                        {formatDateDMY(a.date)}
+                      </td>
+                      <td className="py-2 px-2.5 font-semibold text-slate-900">
+                        {a.farmerName}
+                      </td>
+                      <td className="py-2 px-2.5 text-slate-700 whitespace-nowrap">
+                        {a.paddyType}
+                      </td>
+                      <td className="py-2 px-2.5 text-right font-mono tabular-nums font-semibold">
+                        {a.bags}
+                      </td>
+                      <td className="py-2 px-2.5 text-right font-mono tabular-nums text-slate-600 whitespace-nowrap">
+                        {formatLooseKgGm(a.looseKg, a.looseGm)}
+                      </td>
+                      <td className="py-2 px-2.5 text-right font-mono tabular-nums text-slate-800 whitespace-nowrap">
+                        {formatWeightQKG(a.weightQtlPart, a.weightKgPart, a.weightGmPart)}
+                      </td>
+                      <td className="py-2 px-2.5 text-right font-mono tabular-nums text-slate-700">
+                        ₹{a.ratePerQuintal}
+                      </td>
+                      <td className="py-2 px-2.5 text-right font-mono tabular-nums whitespace-nowrap text-[11px]">
+                        {a.applyDryingLabor === false ? (
+                          <span className="text-slate-400">{tr('Off', 'ਨਹੀਂ')}</span>
+                        ) : (
+                          <span className="text-amber-800 font-semibold">
+                            ₹{effDryRate}/{tr('B', 'ਗੱਟਾ')}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2 px-2.5 text-right font-mono tabular-nums font-bold text-emerald-800 whitespace-nowrap">
+                        {formatINR(a.paddyAmount)}
+                      </td>
+                      <td className="py-2 px-2.5 text-right whitespace-nowrap">
+                        <div className="inline-flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleEditClick(a)}
+                            className="p-1 text-blue-700 hover:bg-blue-50 rounded cursor-pointer"
+                            title={tr('Edit Entry', 'ਐਂਟਰੀ ਸੋਧੋ')}
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDeleteArrival(a)}
+                            className="p-1 text-rose-600 hover:bg-rose-50 rounded cursor-pointer"
+                            title={tr('Delete Entry', 'ਐਂਟਰੀ ਹਟਾਓ')}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
               <tfoot className="bg-slate-100 border-t-2 border-slate-300 font-bold text-slate-900">
                 <tr>
@@ -622,6 +727,7 @@ export const MphArrivalView: React.FC<MphArrivalViewProps> = ({
                       filteredTotals.weights.weightGmPart
                     )}
                   </td>
+                  <td className="py-2.5 px-2.5 text-right">—</td>
                   <td className="py-2.5 px-2.5 text-right">—</td>
                   <td className="py-2.5 px-2.5 text-right font-mono tabular-nums text-emerald-900 whitespace-nowrap">
                     {formatINR(filteredTotals.totalAmount)}

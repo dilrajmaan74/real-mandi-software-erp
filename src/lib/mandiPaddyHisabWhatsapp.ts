@@ -3,8 +3,10 @@ import { MphFarmerAccountSummary, MphSettings } from '../types/mandiPaddyHisab';
 import { MphLang } from './mandiPaddyHisabI18n';
 import {
   formatDateDMY,
+  formatDryingBreakdownText,
   formatINR,
   formatLooseKgGm,
+  formatRupeesInWords,
   formatWeightQKG,
   safeStr,
 } from './mandiPaddyHisabUtils';
@@ -177,7 +179,12 @@ export function buildFarmerPuraHisabWhatsAppText(
       `• (-) ਜੇ-ਫਾਰਮ ਲੇਬਰ (${summary.totalArrivalBags} ਗੱਟੇ × ₹${settings.jFormLaborRate}): -${formatINR(summary.totalJFormLabor)}`
     );
     lines.push(
-      `• (-) ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ (${summary.totalDryingBags} ਗੱਟੇ × ₹${settings.paddyDryingLaborRate}): -${formatINR(summary.totalDryingLabor)}`
+      `• (-) ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ (${formatDryingBreakdownText(
+        summary.dryingRateBreakdown,
+        'pa',
+        summary.totalDryingBags,
+        settings.paddyDryingLaborRate
+      )}): -${formatINR(summary.totalDryingLabor)}`
     );
     if (mode === 'full' && summary.otherEntries.length > 0) {
       summary.otherEntries.forEach((o, i) => {
@@ -198,7 +205,12 @@ export function buildFarmerPuraHisabWhatsAppText(
       `• (-) J-Form Labour (${summary.totalArrivalBags} Bags × ₹${settings.jFormLaborRate}): -${formatINR(summary.totalJFormLabor)}`
     );
     lines.push(
-      `• (-) Paddy Drying Labour (${summary.totalDryingBags} Bags × ₹${settings.paddyDryingLaborRate}): -${formatINR(summary.totalDryingLabor)}`
+      `• (-) Paddy Drying Labour (${formatDryingBreakdownText(
+        summary.dryingRateBreakdown,
+        'en',
+        summary.totalDryingBags,
+        settings.paddyDryingLaborRate
+      )}): -${formatINR(summary.totalDryingLabor)}`
     );
     if (mode === 'full' && summary.otherEntries.length > 0) {
       summary.otherEntries.forEach((o, i) => {
@@ -237,6 +249,7 @@ export function buildFarmerPuraHisabWhatsAppText(
         false
       )} (${paddyStatusPa})`
     );
+    lines.push(`*ਸ਼ਬਦਾਂ ਵਿੱਚ:* ${formatRupeesInWords(summary.finalBalance, 'pa')}`);
   } else {
     lines.push(
       `💰 *Paddy Bakaya (Round Off):* ${summary.finalBalance < 0 ? '-' : ''}${formatINR(
@@ -244,6 +257,7 @@ export function buildFarmerPuraHisabWhatsAppText(
         false
       )} (${paddyStatusEn})`
     );
+    lines.push(`*In Words:* ${formatRupeesInWords(summary.finalBalance, 'en')}`);
   }
 
   // 5. Advances & Interest (if any)
@@ -288,6 +302,7 @@ export function buildFarmerPuraHisabWhatsAppText(
     lines.push(
       `👉 *ਅੰਤਿਮ ਕੁੱਲ ਬਕਾਇਆ: ${formatINR(Math.abs(summary.combinedFinalBalance), false)}*`
     );
+    lines.push(`*ਸ਼ਬਦਾਂ ਵਿੱਚ:* ${formatRupeesInWords(summary.combinedFinalBalance, 'pa')}`);
     lines.push(`*ਸਥਿਤੀ:* ${finalStatus}`);
   } else {
     const finalStatus =
@@ -299,6 +314,7 @@ export function buildFarmerPuraHisabWhatsAppText(
     lines.push(
       `👉 *Grand Final Balance: ${formatINR(Math.abs(summary.combinedFinalBalance), false)}*`
     );
+    lines.push(`*In Words:* ${formatRupeesInWords(summary.combinedFinalBalance, 'en')}`);
     lines.push(`*Status:* ${finalStatus}`);
   }
 

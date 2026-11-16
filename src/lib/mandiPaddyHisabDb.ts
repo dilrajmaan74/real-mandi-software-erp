@@ -44,10 +44,31 @@ function normalizeIso(val: unknown, fallback = ''): string {
   return fallback;
 }
 
+function normalizeOptionalRate(val: unknown): number | null {
+  if (val === null || val === undefined || val === '') return null;
+  const n = Number(val);
+  if (Number.isFinite(n) && n >= 0) return n;
+  return null;
+}
+
+function normalizeRateList(val: unknown, defaultRate: number): number[] {
+  const base = Array.isArray(val) ? val : DEFAULT_MPH_SETTINGS.dryingLaborRates || [8, 10, 12];
+  const nums = base
+    .map((x) => Number(x))
+    .filter((n) => Number.isFinite(n) && n >= 0)
+    .map((n) => Math.round(n * 100) / 100);
+  if (Number.isFinite(defaultRate) && defaultRate >= 0 && !nums.includes(defaultRate)) {
+    nums.push(defaultRate);
+  }
+  const unique = Array.from(new Set(nums)).sort((a, b) => a - b);
+  return unique.length > 0 ? unique.slice(0, 20) : [8, 10, 12];
+}
+
 export function normalizeMphFarmer(raw: any, fallbackId = ''): MphFarmer | null {
   if (!raw || typeof raw !== 'object') return null;
   const id = safeStr(raw.id, fallbackId).trim();
   if (!id) return null;
+  const dryingRate = normalizeOptionalRate(raw.dryingLaborRate);
   return {
     id,
     ownerId: raw.ownerId ? safeStr(raw.ownerId) : undefined,
@@ -55,6 +76,7 @@ export function normalizeMphFarmer(raw: any, fallbackId = ''): MphFarmer | null 
     fatherName: safeStr(raw.fatherName),
     village: safeStr(raw.village),
     mobile: safeStr(raw.mobile),
+    dryingLaborRate: dryingRate,
     createdAt: normalizeIso(raw.createdAt),
     updatedAt: normalizeIso(raw.updatedAt),
   };
@@ -64,6 +86,7 @@ export function normalizeMphArrival(raw: any, fallbackId = ''): MphArrival | nul
   if (!raw || typeof raw !== 'object') return null;
   const id = safeStr(raw.id, fallbackId).trim();
   if (!id) return null;
+  const dryingRate = normalizeOptionalRate(raw.dryingLaborRate);
   return {
     id,
     ownerId: raw.ownerId ? safeStr(raw.ownerId) : undefined,
@@ -81,6 +104,7 @@ export function normalizeMphArrival(raw: any, fallbackId = ''): MphArrival | nul
     weightGmPart: Math.max(0, Math.floor(safeNum(raw.weightGmPart))),
     paddyAmount: safeNum(raw.paddyAmount),
     applyDryingLabor: raw.applyDryingLabor !== false,
+    dryingLaborRate: dryingRate,
     notes: safeStr(raw.notes),
     createdAt: normalizeIso(raw.createdAt),
     updatedAt: normalizeIso(raw.updatedAt),
@@ -154,16 +178,18 @@ export function normalizeMphAdvance(raw: any, fallbackId = ''): MphAdvance | nul
 
 export function normalizeMphSettings(raw: any): MphSettings {
   if (!raw || typeof raw !== 'object') return { ...DEFAULT_MPH_SETTINGS };
+  const defaultDryingRate = Math.max(
+    0,
+    safeNum(raw.paddyDryingLaborRate, DEFAULT_MPH_SETTINGS.paddyDryingLaborRate)
+  );
   return {
     id: safeStr(raw.id, 'default') || 'default',
     ownerId: raw.ownerId ? safeStr(raw.ownerId) : undefined,
     hybridPaddyRate: Math.max(0, safeNum(raw.hybridPaddyRate, DEFAULT_MPH_SETTINGS.hybridPaddyRate)),
     paddyAGurdeRate: Math.max(0, safeNum(raw.paddyAGurdeRate, DEFAULT_MPH_SETTINGS.paddyAGurdeRate)),
     jFormLaborRate: Math.max(0, safeNum(raw.jFormLaborRate, DEFAULT_MPH_SETTINGS.jFormLaborRate)),
-    paddyDryingLaborRate: Math.max(
-      0,
-      safeNum(raw.paddyDryingLaborRate, DEFAULT_MPH_SETTINGS.paddyDryingLaborRate)
-    ),
+    paddyDryingLaborRate: defaultDryingRate,
+    dryingLaborRates: normalizeRateList(raw.dryingLaborRates, defaultDryingRate),
     updatedAt: normalizeIso(raw.updatedAt, DEFAULT_MPH_SETTINGS.updatedAt),
   };
 }
@@ -273,6 +299,7 @@ export async function saveMphFarmerToCloud(userId: string, farmer: MphFarmer): P
       fatherName: farmer.fatherName.trim().slice(0, 160),
       village: farmer.village.trim().slice(0, 160),
       mobile: farmer.mobile.trim().slice(0, 20),
+      dryingLaborRate: normalizeOptionalRate(farmer.dryingLaborRate),
       createdAt: farmer.createdAt,
       updatedAt: farmer.updatedAt,
     };
@@ -334,6 +361,7 @@ export async function saveMphArrivalToCloud(userId: string, arrival: MphArrival)
       weightGmPart: Math.max(0, Math.min(999, Math.floor(Number(arrival.weightGmPart) || 0))),
       paddyAmount: Number(arrival.paddyAmount) || 0,
       applyDryingLabor: Boolean(arrival.applyDryingLabor),
+      dryingLaborRate: normalizeOptionalRate(arrival.dryingLaborRate),
       notes: (arrival.notes || '').trim().slice(0, 400),
       createdAt: arrival.createdAt,
       updatedAt: arrival.updatedAt,
@@ -464,13 +492,15 @@ export async function saveMphSettingsToCloud(userId: string, settings: MphSettin
   const docId = 'default';
   const path = `users/${userId}/mph_settings/${docId}`;
   try {
+    const defaultDryingRate = Math.max(0, Number(settings.paddyDryingLaborRate) || 0);
     const payload: MphSettings = {
       id: docId,
       ownerId: userId,
       hybridPaddyRate: Math.max(0, Number(settings.hybridPaddyRate) || 0),
       paddyAGurdeRate: Math.max(0, Number(settings.paddyAGurdeRate) || 0),
       jFormLaborRate: Math.max(0, Number(settings.jFormLaborRate) || 0),
-      paddyDryingLaborRate: Math.max(0, Number(settings.paddyDryingLaborRate) || 0),
+      paddyDryingLaborRate: defaultDryingRate,
+      dryingLaborRates: normalizeRateList(settings.dryingLaborRates, defaultDryingRate),
       updatedAt: settings.updatedAt || new Date().toISOString(),
     };
     await setDoc(doc(db, 'users', userId, 'mph_settings', docId), cleanForFirestore(payload));
@@ -506,6 +536,7 @@ export async function syncMphLocalDataToCloud(
         fatherName: safeStr(f.fatherName).trim().slice(0, 160),
         village: safeStr(f.village).trim().slice(0, 160),
         mobile: safeStr(f.mobile).trim().slice(0, 20),
+        dryingLaborRate: normalizeOptionalRate(f.dryingLaborRate),
         createdAt: safeStr(f.createdAt),
         updatedAt: safeStr(f.updatedAt),
       }),
@@ -526,6 +557,7 @@ export async function syncMphLocalDataToCloud(
         ownerId: userId,
         farmerId: fId,
         farmerName: safeStr(a.farmerName).trim().slice(0, 160),
+        dryingLaborRate: normalizeOptionalRate(a.dryingLaborRate),
         notes: safeStr(a.notes).trim().slice(0, 400),
       }),
     });
@@ -585,12 +617,15 @@ export async function syncMphLocalDataToCloud(
     });
   }
 
+  const defaultDryingRate = Math.max(0, Number(data.settings.paddyDryingLaborRate) || 0);
   ops.push({
     path: doc(db, 'users', userId, 'mph_settings', 'default'),
     payload: cleanForFirestore({
       ...data.settings,
       id: 'default',
       ownerId: userId,
+      paddyDryingLaborRate: defaultDryingRate,
+      dryingLaborRates: normalizeRateList(data.settings.dryingLaborRates, defaultDryingRate),
     }),
   });
 

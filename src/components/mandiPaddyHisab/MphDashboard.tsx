@@ -97,8 +97,9 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
     [arrivals]
   );
   const totalDryingLabor = useMemo(
-    () => Math.round(totalDryingBags * (Number(settings.paddyDryingLaborRate) || 0) * 100) / 100,
-    [totalDryingBags, settings.paddyDryingLaborRate]
+    () =>
+      Math.round(summaries.reduce((s, item) => s + item.totalDryingLabor, 0) * 100) / 100,
+    [summaries]
   );
 
   const totalAdvancePrincipal = useMemo(

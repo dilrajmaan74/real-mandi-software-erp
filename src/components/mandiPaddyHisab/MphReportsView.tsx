@@ -10,8 +10,10 @@ import {
 import {
   computeFarmerAccountSummary,
   formatDateDMY,
+  formatDryingBreakdownText,
   formatINR,
   formatLooseKgGm,
+  formatRupeesInWords,
   formatWeightQKG,
   safeStr,
   sumPaddyWeights,
@@ -40,7 +42,7 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
   advances,
   settings,
 }) => {
-  const { tr } = useMphLang();
+  const { lang, tr } = useMphLang();
   const reportRef = useRef<HTMLDivElement>(null);
   const [reportType, setReportType] = useState<ReportType>('farmer_ledger');
   const [selectedFarmerId, setSelectedFarmerId] = useState<string>(farmers[0]?.id || 'all');
@@ -395,9 +397,15 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
                       {tr('Adv (P+I):', 'ਪੇਸ਼ਗੀ (ਮੂਲ+ਵਿਆਜ):')} -
                       {formatINR(farmerSummary.totalAdvanceWithInterest)}
                     </div>
-                    <div className="font-bold text-sm font-mono tabular-nums">
+                    <div className="text-[10.5px] text-slate-500">
+                      ({tr('Paddy Bakaya:', 'ਝੋਨਾ ਬਕਾਇਆ:')} {formatRupeesInWords(farmerSummary.finalBalance, lang)})
+                    </div>
+                    <div className="font-bold text-sm font-mono tabular-nums mt-0.5">
                       {tr('Grand Final Balance:', 'ਅੰਤਿਮ ਕੁੱਲ ਬਕਾਇਆ:')}{' '}
                       {formatINR(Math.abs(farmerSummary.combinedFinalBalance), false)}
+                    </div>
+                    <div className="text-[11px] font-semibold text-slate-700">
+                      {tr('In Words:', 'ਸ਼ਬਦਾਂ ਵਿੱਚ:')} {formatRupeesInWords(farmerSummary.combinedFinalBalance, lang)}
                     </div>
                     <div
                       className={`font-bold text-xs ${
@@ -451,8 +459,14 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
                   <div className="border border-slate-200 rounded-lg p-2.5">
                     <span className="text-slate-500 block text-[11px]">
                       {tr('(-) Labour', '(-) ਲੇਬਰ')} ({tr('J-Form', 'ਜੇ-ਫਾਰਮ')}{' '}
-                      {farmerSummary.totalArrivalBags} + {tr('Dry', 'ਸੁਕਾਈ')}{' '}
-                      {farmerSummary.totalDryingBags} {tr('Bags', 'ਗੱਟੇ')})
+                      {farmerSummary.totalArrivalBags} + {tr('Dry:', 'ਸੁਕਾਈ:')}{' '}
+                      {formatDryingBreakdownText(
+                        farmerSummary.dryingRateBreakdown,
+                        lang,
+                        farmerSummary.totalDryingBags,
+                        settings.paddyDryingLaborRate
+                      )}
+                      )
                     </span>
                     <span className="font-mono tabular-nums font-bold text-rose-700">
                       -{formatINR(farmerSummary.totalJFormLabor + farmerSummary.totalDryingLabor)}
@@ -637,24 +651,36 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
                     </table>
                   )}
                   <div className="px-3 py-2.5 bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                    <div className="font-mono tabular-nums">
-                      {tr('Paddy Bakaya', 'ਝੋਨਾ ਬਕਾਇਆ')} ({farmerSummary.finalBalance >= 0 ? '' : '-'}
-                      {formatINR(Math.abs(farmerSummary.finalBalance), false)}) −{' '}
-                      {tr('Principal', 'ਮੂਲ')} ({formatINR(farmerSummary.totalAdvancePrincipal)}) −{' '}
-                      {tr('Interest', 'ਵਿਆਜ')} ({formatINR(farmerSummary.totalAdvanceInterest)})
+                    <div className="space-y-0.5">
+                      <div className="font-mono tabular-nums">
+                        {tr('Paddy Bakaya', 'ਝੋਨਾ ਬਕਾਇਆ')} ({farmerSummary.finalBalance >= 0 ? '' : '-'}
+                        {formatINR(Math.abs(farmerSummary.finalBalance), false)}) −{' '}
+                        {tr('Principal', 'ਮੂਲ')} ({formatINR(farmerSummary.totalAdvancePrincipal)}) −{' '}
+                        {tr('Interest', 'ਵਿਆਜ')} ({formatINR(farmerSummary.totalAdvanceInterest)})
+                      </div>
+                      <div className="text-[11px] text-slate-300">
+                        {tr('Paddy Bakaya in Words:', 'ਝੋਨਾ ਬਕਾਇਆ ਸ਼ਬਦਾਂ ਵਿੱਚ:')}{' '}
+                        {formatRupeesInWords(farmerSummary.finalBalance, lang)}
+                      </div>
                     </div>
-                    <div className="font-bold font-mono tabular-nums text-sm">
-                      {tr('Grand Final Balance:', 'ਅੰਤਿਮ ਕੁੱਲ ਬਕਾਇਆ:')}{' '}
-                      {formatINR(Math.abs(farmerSummary.combinedFinalBalance), false)}{' '}
-                      <span className="text-[11px] font-sans">
-                        (
-                        {farmerSummary.combinedBalanceStatus === 'payable'
-                          ? tr('Farmer Nu Paise Dene Hai / Payable', 'ਕਿਸਾਨ ਨੂੰ ਪੈਸੇ ਦੇਣੇ ਹਨ')
-                          : farmerSummary.combinedBalanceStatus === 'receivable'
-                          ? tr('Farmer Paise Lene Hai / Receivable', 'ਕਿਸਾਨ ਤੋਂ ਪੈਸੇ ਲੈਣੇ ਹਨ')
-                          : tr('Settled', 'ਹਿਸਾਬ ਬਰਾਬਰ')}
-                        )
-                      </span>
+                    <div className="text-left sm:text-right space-y-0.5">
+                      <div className="font-bold font-mono tabular-nums text-sm">
+                        {tr('Grand Final Balance:', 'ਅੰਤਿਮ ਕੁੱਲ ਬਕਾਇਆ:')}{' '}
+                        {formatINR(Math.abs(farmerSummary.combinedFinalBalance), false)}{' '}
+                        <span className="text-[11px] font-sans">
+                          (
+                          {farmerSummary.combinedBalanceStatus === 'payable'
+                            ? tr('Farmer Nu Paise Dene Hai / Payable', 'ਕਿਸਾਨ ਨੂੰ ਪੈਸੇ ਦੇਣੇ ਹਨ')
+                            : farmerSummary.combinedBalanceStatus === 'receivable'
+                            ? tr('Farmer Paise Lene Hai / Receivable', 'ਕਿਸਾਨ ਤੋਂ ਪੈਸੇ ਲੈਣੇ ਹਨ')
+                            : tr('Settled', 'ਹਿਸਾਬ ਬਰਾਬਰ')}
+                          )
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-amber-200 font-semibold">
+                        {tr('Grand Balance in Words:', 'ਅੰਤਿਮ ਬਕਾਇਆ ਸ਼ਬਦਾਂ ਵਿੱਚ:')}{' '}
+                        {formatRupeesInWords(farmerSummary.combinedFinalBalance, lang)}
+                      </div>
                     </div>
                   </div>
                 </div>

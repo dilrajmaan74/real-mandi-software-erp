@@ -35,13 +35,14 @@ service cloud.firestore {
     // Mandi Paddy Hisab (MPH) Validators
     function isValidMphFarmer(data, userId, farmerId) {
       return data.keys().hasAll(['id', 'ownerId', 'name', 'fatherName', 'village', 'mobile', 'createdAt', 'updatedAt'])
-        && data.keys().hasOnly(['id', 'ownerId', 'name', 'fatherName', 'village', 'mobile', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'ownerId', 'name', 'fatherName', 'village', 'mobile', 'dryingLaborRate', 'createdAt', 'updatedAt'])
         && data.id == farmerId
         && data.ownerId == userId
         && data.name is string && data.name.size() >= 1 && data.name.size() <= 160
         && data.fatherName is string && data.fatherName.size() <= 160
         && data.village is string && data.village.size() <= 160
         && data.mobile is string && data.mobile.size() <= 20
+        && (!('dryingLaborRate' in data) || data.dryingLaborRate == null || (data.dryingLaborRate is number && data.dryingLaborRate >= 0))
         && data.createdAt is string && data.createdAt.size() <= 64
         && data.updatedAt is string && data.updatedAt.size() <= 64;
     }
@@ -57,7 +58,7 @@ service cloud.firestore {
           'id', 'ownerId', 'farmerId', 'farmerName', 'date', 'paddyType',
           'ratePerQuintal', 'bags', 'looseKg', 'looseGm', 'totalQuintals',
           'weightQtlPart', 'weightKgPart', 'weightGmPart', 'paddyAmount',
-          'applyDryingLabor', 'notes', 'createdAt', 'updatedAt'
+          'applyDryingLabor', 'dryingLaborRate', 'notes', 'createdAt', 'updatedAt'
         ])
         && data.id == arrivalId
         && data.ownerId == userId
@@ -75,6 +76,7 @@ service cloud.firestore {
         && data.weightGmPart is number && data.weightGmPart >= 0 && data.weightGmPart < 1000
         && data.paddyAmount is number && data.paddyAmount >= 0
         && data.applyDryingLabor is bool
+        && (!('dryingLaborRate' in data) || data.dryingLaborRate == null || (data.dryingLaborRate is number && data.dryingLaborRate >= 0))
         && data.notes is string && data.notes.size() <= 400
         && data.createdAt is string && data.createdAt.size() <= 64
         && data.updatedAt is string && data.updatedAt.size() <= 64;
@@ -133,7 +135,7 @@ service cloud.firestore {
         ])
         && data.keys().hasOnly([
           'id', 'ownerId', 'hybridPaddyRate', 'paddyAGurdeRate',
-          'jFormLaborRate', 'paddyDryingLaborRate', 'updatedAt'
+          'jFormLaborRate', 'paddyDryingLaborRate', 'dryingLaborRates', 'updatedAt'
         ])
         && data.id == settingId
         && data.ownerId == userId
@@ -141,6 +143,7 @@ service cloud.firestore {
         && data.paddyAGurdeRate is number && data.paddyAGurdeRate >= 0
         && data.jFormLaborRate is number && data.jFormLaborRate >= 0
         && data.paddyDryingLaborRate is number && data.paddyDryingLaborRate >= 0
+        && (!('dryingLaborRates' in data) || (data.dryingLaborRates is list && data.dryingLaborRates.size() >= 1 && data.dryingLaborRates.size() <= 20 && data.dryingLaborRates[0] is number && data.dryingLaborRates[0] >= 0))
         && data.updatedAt is string && data.updatedAt.size() <= 64;
     }
 
@@ -220,7 +223,7 @@ service cloud.firestore {
           && incoming().id == existing().id
           && incoming().ownerId == existing().ownerId
           && incoming().createdAt == existing().createdAt
-          && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'fatherName', 'village', 'mobile', 'updatedAt']);
+          && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'fatherName', 'village', 'mobile', 'dryingLaborRate', 'updatedAt']);
         allow delete: if isOwner(userId) && isVerifiedUser() && isValidId(userId) && isValidId(farmerId);
       }
 
@@ -239,7 +242,8 @@ service cloud.firestore {
           && incoming().diff(existing()).affectedKeys().hasOnly([
             'farmerId', 'farmerName', 'date', 'paddyType', 'ratePerQuintal',
             'bags', 'looseKg', 'looseGm', 'totalQuintals', 'weightQtlPart',
-            'weightKgPart', 'weightGmPart', 'paddyAmount', 'applyDryingLabor', 'notes', 'updatedAt'
+            'weightKgPart', 'weightGmPart', 'paddyAmount', 'applyDryingLabor',
+            'dryingLaborRate', 'notes', 'updatedAt'
           ]);
         allow delete: if isOwner(userId) && isVerifiedUser() && isValidId(userId) && isValidId(arrivalId);
       }
@@ -291,7 +295,7 @@ service cloud.firestore {
           && incoming().id == existing().id
           && incoming().ownerId == existing().ownerId
           && incoming().diff(existing()).affectedKeys().hasOnly([
-            'hybridPaddyRate', 'paddyAGurdeRate', 'jFormLaborRate', 'paddyDryingLaborRate', 'updatedAt'
+            'hybridPaddyRate', 'paddyAGurdeRate', 'jFormLaborRate', 'paddyDryingLaborRate', 'dryingLaborRates', 'updatedAt'
           ]);
         allow delete: if isOwner(userId) && isVerifiedUser() && isValidId(userId) && isValidId(settingId);
       }
