@@ -156,8 +156,8 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
           <p className="text-xs text-slate-500 mt-1">
             {tr('Hybrid', 'ਹਾਈਬ੍ਰਿਡ')} ₹{settings.hybridPaddyRate}/{tr('Qtl', 'ਕੁਇੰਟਲ')} ·{' '}
             {tr('Paddy A Grade', 'ਝੋਨਾ A ਗ੍ਰੇਡ')} ₹{settings.paddyAGurdeRate}/{tr('Qtl', 'ਕੁਇੰਟਲ')} ·{' '}
-            {tr('J-Form Labour', 'ਜੇ-ਫਾਰਮ ਲੇਬਰ')} ₹{settings.jFormLaborRate}/{tr('bag', 'ਗੱਟਾ')} ·{' '}
-            {tr('Drying Labour', 'ਸੁਕਾਈ ਲੇਬਰ')} ₹{settings.paddyDryingLaborRate}/{tr('bag', 'ਗੱਟਾ')}
+            {tr('J-Form Labour', 'ਜੇ-ਫਾਰਮ ਲੇਬਰ')} ₹{settings.jFormLaborRate}/{tr('bag', 'ਬੈਗ')} ·{' '}
+            {tr('Drying Labour', 'ਸੁਕਾਈ ਲੇਬਰ')} ₹{settings.paddyDryingLaborRate}/{tr('bag', 'ਬੈਗ')}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -225,7 +225,7 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
             <Scale className="w-4 h-4 text-emerald-600" />
           </div>
           <div className="text-lg font-bold font-mono tabular-nums text-emerald-800 mt-1.5">
-            {totalArrivalWeight.totalBags.toLocaleString('en-IN')} {tr('Bags', 'ਗੱਟੇ')}
+            {totalArrivalWeight.totalBags.toLocaleString('en-IN')} {tr('Bags', 'ਬੈਗ')}
           </div>
           <div className="text-[11px] font-mono tabular-nums text-slate-600 mt-1">
             {formatWeightQKG(
@@ -258,7 +258,7 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
             {formatINR(totalJFormAmount)}
           </div>
           <div className="text-[11px] font-mono tabular-nums text-slate-500 mt-1">
-            {totalJFormBags.toLocaleString('en-IN')} {tr('Bags', 'ਗੱਟੇ')} · {jForms.length}{' '}
+            {totalJFormBags.toLocaleString('en-IN')} {tr('Bags', 'ਬੈਗ')} · {jForms.length}{' '}
             {tr('J-Forms', 'ਜੇ-ਫਾਰਮ')}
           </div>
         </div>
@@ -350,7 +350,7 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
                   <tr>
                     <th className="py-2.5 px-3 font-semibold">#</th>
                     <th className="py-2.5 px-3 font-semibold">{tr('Farmer', 'ਕਿਸਾਨ')}</th>
-                    <th className="py-2.5 px-3 font-semibold text-right">{tr('Bags', 'ਗੱਟੇ')}</th>
+                    <th className="py-2.5 px-3 font-semibold text-right">{tr('Bags', 'ਬੈਗ')}</th>
                     <th className="py-2.5 px-3 font-semibold text-right">{tr('Weight (Qtl/KG/GM)', 'ਵਜ਼ਨ (ਕੁਇੰ/ਕਿੱਲੋ/ਗ੍ਰਾਮ)')}</th>
                     <th className="py-2.5 px-3 font-semibold text-right">{tr('Paddy Amt', 'ਝੋਨਾ ਰਕਮ')}</th>
                     <th className="py-2.5 px-3 font-semibold text-right">{tr('J-Form + Lab', 'ਜੇ-ਫਾਰਮ + ਲੇਬਰ')}</th>
@@ -466,7 +466,7 @@ export const MphDashboard: React.FC<MphDashboardProps> = ({
                       {a.farmerName}
                     </div>
                     <div className="text-[11px] text-slate-500 mt-0.5">
-                      {formatDateDMY(a.date)} · {a.paddyType} · {a.bags} {tr('Bags', 'ਗੱਟੇ')}
+                      {formatDateDMY(a.date)} · {a.paddyType} · {a.bags} {tr('Bags', 'ਬੈਗ')}
                     </div>
                   </div>
                   <div className="text-right shrink-0">

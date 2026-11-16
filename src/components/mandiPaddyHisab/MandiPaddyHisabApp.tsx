@@ -388,7 +388,7 @@ const MandiPaddyHisabInner: React.FC<MandiPaddyHisabAppProps> = ({ user }) => {
       confirmLabel: tr('Delete Entry', 'ਐਂਟਰੀ ਹਟਾਓ'),
       message: tr(
         `Delete paddy arrival for "${arrival.farmerName}" (${arrival.bags} Bags, ${arrival.paddyType})?`,
-        `ਕੀ ਤੁਸੀਂ "${arrival.farmerName}" ਦੀ ਝੋਨਾ ਆਵਕ (${arrival.bags} ਗੱਟੇ, ${arrival.paddyType}) ਹਟਾਉਣਾ ਚਾਹੁੰਦੇ ਹੋ?`
+        `ਕੀ ਤੁਸੀਂ "${arrival.farmerName}" ਦੀ ਝੋਨਾ ਆਵਕ (${arrival.bags} ਬੈਗ, ${arrival.paddyType}) ਹਟਾਉਣਾ ਚਾਹੁੰਦੇ ਹੋ?`
       ),
       onConfirm: () => {
         setConfirmState((s) => ({ ...s, isOpen: false }));
@@ -424,7 +424,7 @@ const MandiPaddyHisabInner: React.FC<MandiPaddyHisabAppProps> = ({ user }) => {
       confirmLabel: tr('Delete J-Form', 'ਜੇ-ਫਾਰਮ ਹਟਾਓ'),
       message: tr(
         `Delete J-Form entry for "${jForm.farmerName}" (${jForm.bags} Bags)?`,
-        `ਕੀ ਤੁਸੀਂ "${jForm.farmerName}" ਦਾ ਜੇ-ਫਾਰਮ (${jForm.bags} ਗੱਟੇ) ਹਟਾਉਣਾ ਚਾਹੁੰਦੇ ਹੋ?`
+        `ਕੀ ਤੁਸੀਂ "${jForm.farmerName}" ਦਾ ਜੇ-ਫਾਰਮ (${jForm.bags} ਬੈਗ) ਹਟਾਉਣਾ ਚਾਹੁੰਦੇ ਹੋ?`
       ),
       onConfirm: () => {
         setConfirmState((s) => ({ ...s, isOpen: false }));

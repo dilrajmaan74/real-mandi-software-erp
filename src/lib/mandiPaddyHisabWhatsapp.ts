@@ -104,12 +104,12 @@ export function buildFarmerPuraHisabWhatsAppText(
             ? ` (+${formatLooseKgGm(a.looseKg, a.looseGm)})`
             : '';
         lines.push(
-          `${i + 1}. ${formatDateDMY(a.date)} | ${trPaddyType(a.paddyType, lang)} | ${a.bags} ਗੱਟੇ${looseText} | ${formatWeightQKG(a.weightQtlPart, a.weightKgPart, a.weightGmPart)} @ ₹${a.ratePerQuintal} = *${formatINR(a.paddyAmount)}*`
+          `${i + 1}. ${formatDateDMY(a.date)} | ${trPaddyType(a.paddyType, lang)} | ${a.bags} ਬੈਗ${looseText} | ${formatWeightQKG(a.weightQtlPart, a.weightKgPart, a.weightGmPart)} @ ₹${a.ratePerQuintal} = *${formatINR(a.paddyAmount)}*`
         );
       });
     }
     lines.push(
-      `• *ਕੁੱਲ ਗੱਟੇ:* ${summary.totalArrivalBags} | *ਕੁੱਲ ਵਜ਼ਨ:* ${formatWeightQKG(
+      `• *ਕੁੱਲ ਬੈਗ:* ${summary.totalArrivalBags} | *ਕੁੱਲ ਵਜ਼ਨ:* ${formatWeightQKG(
         summary.weightQtlPart,
         summary.weightKgPart,
         summary.weightGmPart
@@ -149,12 +149,12 @@ export function buildFarmerPuraHisabWhatsAppText(
         const rel = trRelation(j.holderRelation || 'Self', lang);
         const noPart = j.jFormNo ? ` #${j.jFormNo}` : '';
         lines.push(
-          `${i + 1}. ${formatDateDMY(j.date)}${noPart} | ${holder} (${rel}) | ${j.bags} ਗੱਟੇ @ ₹${j.rate} = *-${formatINR(j.jFormAmount)}*`
+          `${i + 1}. ${formatDateDMY(j.date)}${noPart} | ${holder} (${rel}) | ${j.bags} ਬੈਗ @ ₹${j.rate} = *-${formatINR(j.jFormAmount)}*`
         );
       });
     }
     lines.push(
-      `• *(-) ਕੁੱਲ ਜੇ-ਫਾਰਮ (${summary.totalJFormBags} ਗੱਟੇ):* -${formatINR(summary.totalJFormAmount)}`
+      `• *(-) ਕੁੱਲ ਜੇ-ਫਾਰਮ (${summary.totalJFormBags} ਬੈਗ):* -${formatINR(summary.totalJFormAmount)}`
     );
   } else {
     lines.push(`*2. J-Form Details (${summary.jForms.length} J-Forms):*`);
@@ -181,7 +181,7 @@ export function buildFarmerPuraHisabWhatsAppText(
   if (isPa) {
     lines.push('*3. ਲੇਬਰ ਅਤੇ ਹੋਰ ਖਰਚੇ:*');
     lines.push(
-      `• (-) ਜੇ-ਫਾਰਮ ਲੇਬਰ (${summary.totalArrivalBags} ਗੱਟੇ × ₹${settings.jFormLaborRate}): -${formatINR(summary.totalJFormLabor)}`
+      `• (-) ਜੇ-ਫਾਰਮ ਲੇਬਰ (${summary.totalArrivalBags} ਬੈਗ × ₹${settings.jFormLaborRate}): -${formatINR(summary.totalJFormLabor)}`
     );
     lines.push(
       `• (-) ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ (${formatDryingBreakdownText(
@@ -196,7 +196,7 @@ export function buildFarmerPuraHisabWhatsAppText(
         const rate = getEffectiveArrivalDryingRate(a, f, settings);
         const amt = Math.round(Math.floor(safeNum(a.bags)) * rate * 100) / 100;
         lines.push(
-          `  ${i + 1}. ${formatDateDMY(a.date)} | ${a.bags} ਗੱਟੇ × ₹${rate} = -${formatINR(amt)}`
+          `  ${i + 1}. ${formatDateDMY(a.date)} | ${a.bags} ਬੈਗ × ₹${rate} = -${formatINR(amt)}`
         );
       });
     }

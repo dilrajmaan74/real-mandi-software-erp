@@ -549,7 +549,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                     {tr('Total Paddy Amount', 'ਕੁੱਲ ਝੋਨੇ ਦੀ ਰਕਮ')}
                   </span>
                   <span className="text-[11px] text-slate-500 block font-mono tabular-nums">
-                    {summary.totalArrivalBags} {tr('Bags', 'ਗੱਟੇ')} ·{' '}
+                    {summary.totalArrivalBags} {tr('Bags', 'ਬੈਗ')} ·{' '}
                     {formatWeightQKG(
                       summary.weightQtlPart,
                       summary.weightKgPart,
@@ -568,7 +568,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                     {tr('(-) J-Form Amount', '(-) ਜੇ-ਫਾਰਮ ਰਕਮ')}
                   </span>
                   <span className="text-[11px] text-slate-500 block font-mono tabular-nums">
-                    {summary.totalJFormBags} {tr('Bags across', 'ਗੱਟੇ')} · {summary.jForms.length}{' '}
+                    {summary.totalJFormBags} {tr('Bags across', 'ਬੈਗ')} · {summary.jForms.length}{' '}
                     {tr('J-Forms', 'ਜੇ-ਫਾਰਮ')}
                   </span>
                   {jFormHolderBreakdown.some((h) => h.relation !== 'Self') && (
@@ -577,7 +577,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                       {jFormHolderBreakdown
                         .map(
                           (h) =>
-                            `${h.name} (${trRelation(h.relation)}): ${h.bags}${tr('B', ' ਗੱਟੇ')} · ${formatINR(h.amount)}`
+                            `${h.name} (${trRelation(h.relation)}): ${h.bags} ${tr('Bags', 'ਬੈਗ')} · ${formatINR(h.amount)}`
                         )
                         .join(' | ')}
                     </span>
@@ -594,8 +594,8 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                     {tr('(-) J-Form Labour', '(-) ਜੇ-ਫਾਰਮ ਲੇਬਰ')}
                   </span>
                   <span className="text-[11px] text-slate-500 block font-mono tabular-nums">
-                    {summary.totalArrivalBags} {tr('Total Arrival Bags', 'ਕੁੱਲ ਆਵਕ ਗੱਟੇ')} × ₹
-                    {settings.jFormLaborRate}/{tr('bag', 'ਗੱਟਾ')}
+                    {summary.totalArrivalBags} {tr('Total Arrival Bags', 'ਕੁੱਲ ਆਵਕ ਬੈਗ')} × ₹
+                    {settings.jFormLaborRate}/{tr('bag', 'ਬੈਗ')}
                   </span>
                 </div>
                 <span className="font-mono tabular-nums font-semibold text-rose-700">
@@ -621,7 +621,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                       {driedArrivalRows
                         .map(
                           (d) =>
-                            `${formatDateDMY(d.date)}: ${d.bags}${tr('B', ' ਗੱਟੇ')} × ₹${d.rate}`
+                            `${formatDateDMY(d.date)}: ${d.bags} ${tr('Bags', 'ਬੈਗ')} × ₹${d.rate}`
                         )
                         .join(' · ')}
                     </span>
@@ -721,7 +721,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                 <p className="text-[10.5px] text-emerald-800">
                   {tr(
                     'Date-wise arrival · Paddy type · Bags · Loose KG/GM · Total weight · Rate · Amount',
-                    'ਤਾਰੀਖ-ਵਾਰ ਆਵਕ · ਕਿਸਮ · ਗੱਟੇ · ਖੁੱਲ੍ਹਾ ਕਿਲੋ/ਗ੍ਰਾਮ · ਕੁੱਲ ਵਜ਼ਨ · ਰੇਟ · ਰਕਮ'
+                    'ਤਾਰੀਖ-ਵਾਰ ਆਵਕ · ਕਿਸਮ · ਬੈਗ · ਖੁੱਲ੍ਹਾ ਕਿਲੋ/ਗ੍ਰਾਮ · ਕੁੱਲ ਵਜ਼ਨ · ਰੇਟ · ਰਕਮ'
                   )}
                 </p>
               </div>
@@ -738,7 +738,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                       <th className="py-2 px-2 font-semibold">#</th>
                       <th className="py-2 px-2 font-semibold">{tr('Date', 'ਤਾਰੀਖ')}</th>
                       <th className="py-2 px-2 font-semibold">{tr('Paddy Type', 'ਕਿਸਮ')}</th>
-                      <th className="py-2 px-2 font-semibold text-right">{tr('Bags', 'ਗੱਟੇ')}</th>
+                      <th className="py-2 px-2 font-semibold text-right">{tr('Bags', 'ਬੈਗ')}</th>
                       <th className="py-2 px-2 font-semibold text-right">{tr('Loose', 'ਖੁੱਲ੍ਹਾ')}</th>
                       <th className="py-2 px-2 font-semibold text-right">{tr('Total Weight', 'ਕੁੱਲ ਵਜ਼ਨ')}</th>
                       <th className="py-2 px-2 font-semibold text-right">{tr('Rate', 'ਰੇਟ')}</th>
@@ -814,7 +814,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                 <p className="text-[10.5px] text-blue-800">
                   {tr(
                     'J-Form date · No. · J-Form Name (Self/Son/Wife/Hissedar) · Bags · Rate · Amount',
-                    'ਜੇ-ਫਾਰਮ ਤਾਰੀਖ · ਨੰ. · ਜੇ-ਫਾਰਮ ਨਾਮ (ਖੁਦ/ਪੁੱਤਰ/ਪਤਨੀ/ਹਿੱਸੇਦਾਰ) · ਗੱਟੇ · ਰੇਟ · ਰਕਮ'
+                    'ਜੇ-ਫਾਰਮ ਤਾਰੀਖ · ਨੰ. · ਜੇ-ਫਾਰਮ ਨਾਮ (ਖੁਦ/ਪੁੱਤਰ/ਪਤਨੀ/ਹਿੱਸੇਦਾਰ) · ਬੈਗ · ਰੇਟ · ਰਕਮ'
                   )}
                 </p>
               </div>
@@ -832,7 +832,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                       <th className="py-2 px-2 font-semibold">{tr('J-Form Date', 'ਤਾਰੀਖ')}</th>
                       <th className="py-2 px-2 font-semibold">{tr('No.', 'ਨੰ.')}</th>
                       <th className="py-2 px-2 font-semibold">{tr('J-Form Name', 'ਜੇ-ਫਾਰਮ ਨਾਮ')}</th>
-                      <th className="py-2 px-2 font-semibold text-right">{tr('Bags', 'ਗੱਟੇ')}</th>
+                      <th className="py-2 px-2 font-semibold text-right">{tr('Bags', 'ਬੈਗ')}</th>
                       <th className="py-2 px-2 font-semibold text-right">{tr('Rate', 'ਰੇਟ')}</th>
                       <th className="py-2 px-2 font-semibold text-right">{tr('J-Form Amt', 'ਜੇ-ਫਾਰਮ ਰਕਮ')}</th>
                     </tr>
@@ -897,8 +897,8 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                     <tr className="bg-amber-50/80 border-t border-blue-200 text-[10.5px] text-slate-800">
                       <td colSpan={6} className="py-1.5 px-2">
                         {tr('Final Account J-Form Labour', 'ਅੰਤਿਮ ਹਿਸਾਬ ਜੇ-ਫਾਰਮ ਲੇਬਰ')} (
-                        {summary.totalArrivalBags} {tr('Total Arrival Bags', 'ਕੁੱਲ ਆਵਕ ਗੱਟੇ')} × ₹
-                        {settings.jFormLaborRate}/{tr('bag', 'ਗੱਟਾ')}):
+                        {summary.totalArrivalBags} {tr('Total Arrival Bags', 'ਕੁੱਲ ਆਵਕ ਬੈਗ')} × ₹
+                        {settings.jFormLaborRate}/{tr('bag', 'ਬੈਗ')}):
                       </td>
                       <td className="py-1.5 px-2 text-right font-mono tabular-nums text-rose-800 whitespace-nowrap">
                         -{formatINR(summary.totalJFormLabor)}
@@ -924,7 +924,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                             </span>
                           </span>
                           <span className="font-mono tabular-nums font-semibold text-blue-800">
-                            {h.bags}{tr('B', ' ਗੱਟੇ')} · {formatINR(h.amount)}
+                            {h.bags} {tr('Bags', 'ਬੈਗ')} · {formatINR(h.amount)}
                           </span>
                         </div>
                       ))}
@@ -943,22 +943,22 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
               <h3 className="text-xs font-bold text-amber-950">
                 {tr(
                   'Paddy Drying Labour — Date-wise Dried Bags List',
-                  'ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ — ਤਾਰੀਖ-ਵਾਰ ਸੁਕਾਏ ਗੱਟਿਆਂ ਦੀ ਸੂਚੀ'
+                  'ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ — ਤਾਰੀਖ-ਵਾਰ ਸੁਕਾਏ ਬੈਗਾਂ ਦੀ ਸੂਚੀ'
                 )}{' '}
                 ({driedArrivalRows.length})
               </h3>
               <p className="text-[10.5px] text-amber-800">
                 {tr(
                   'Only arrival entries where Paddy Drying Labour was applied',
-                  'ਸਿਰਫ਼ ਉਹਨਾਂ ਗੱਟਿਆਂ ਦੀ ਤਾਰੀਖ-ਵਾਰ ਸੂਚੀ ਜਿਨ੍ਹਾਂ ਉੱਤੇ ਸੁਕਾਈ ਲੇਬਰ ਲੱਗੀ ਹੈ'
+                  'ਸਿਰਫ਼ ਉਹਨਾਂ ਬੈਗਾਂ ਦੀ ਤਾਰੀਖ-ਵਾਰ ਸੂਚੀ ਜਿਨ੍ਹਾਂ ਉੱਤੇ ਸੁਕਾਈ ਲੇਬਰ ਲੱਗੀ ਹੈ'
                 )}
                 {nonDriedBags > 0
-                  ? ` · ${nonDriedBags} ${tr('bags without drying', 'ਗੱਟੇ ਬਿਨਾਂ ਸੁਕਾਈ ਦੇ')}`
+                  ? ` · ${nonDriedBags} ${tr('bags without drying', 'ਬੈਗ ਬਿਨਾਂ ਸੁਕਾਈ ਦੇ')}`
                   : ''}
               </p>
             </div>
             <span className="text-[11px] font-mono tabular-nums font-bold text-rose-800 whitespace-nowrap">
-              {summary.totalDryingBags} {tr('Bags', 'ਗੱਟੇ')} · -{formatINR(summary.totalDryingLabor)}
+              {summary.totalDryingBags} {tr('Bags', 'ਬੈਗ')} · -{formatINR(summary.totalDryingLabor)}
             </span>
           </div>
 
@@ -966,7 +966,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
             <div className="p-4 text-center text-xs text-slate-500">
               {tr(
                 'No paddy bags have drying labour applied for this farmer.',
-                'ਇਸ ਕਿਸਾਨ ਦੇ ਕਿਸੇ ਵੀ ਗੱਟੇ ਉੱਤੇ ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ ਨਹੀਂ ਲੱਗੀ।'
+                'ਇਸ ਕਿਸਾਨ ਦੇ ਕਿਸੇ ਵੀ ਬੈਗ ਉੱਤੇ ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ ਨਹੀਂ ਲੱਗੀ।'
               )}
             </div>
           ) : (
@@ -978,8 +978,8 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                     <th className="py-2 px-3 font-semibold">{tr('Date', 'ਤਾਰੀਖ')}</th>
                     <th className="py-2 px-3 font-semibold">{tr('Paddy Type', 'ਝੋਨੇ ਦੀ ਕਿਸਮ')}</th>
                     <th className="py-2 px-3 font-semibold">{tr('Notes', 'ਨੋਟ')}</th>
-                    <th className="py-2 px-3 font-semibold text-right">{tr('Dried Bags', 'ਸੁਕਾਏ ਗੱਟੇ')}</th>
-                    <th className="py-2 px-3 font-semibold text-right">{tr('Rate / Bag', 'ਰੇਟ / ਗੱਟਾ')}</th>
+                    <th className="py-2 px-3 font-semibold text-right">{tr('Dried Bags', 'ਸੁਕਾਏ ਬੈਗ')}</th>
+                    <th className="py-2 px-3 font-semibold text-right">{tr('Rate / Bag', 'ਰੇਟ / ਬੈਗ')}</th>
                     <th className="py-2 px-3 font-semibold text-right">{tr('Drying Amount', 'ਸੁਕਾਈ ਰਕਮ')}</th>
                   </tr>
                 </thead>

@@ -203,7 +203,7 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
       return;
     }
     if (parsedBags <= 0) {
-      setErrorMsg(tr('Number of bags must be greater than 0.', 'ਗੱਟਿਆਂ ਦੀ ਗਿਣਤੀ 0 ਤੋਂ ਵੱਧ ਹੋਣੀ ਚਾਹੀਦੀ ਹੈ।'));
+      setErrorMsg(tr('Number of bags must be greater than 0.', 'ਬੈਗਾਂ ਦੀ ਗਿਣਤੀ 0 ਤੋਂ ਵੱਧ ਹੋਣੀ ਚਾਹੀਦੀ ਹੈ।'));
       return;
     }
     if (parsedAmount <= 0) {
@@ -230,7 +230,7 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
         title: tr('Duplicate J-Form Warning', 'ਡੁਪਲੀਕੇਟ ਜੇ-ਫਾਰਮ ਚੇਤਾਵਨੀ'),
         message: tr(
           `Farmer "${selectedFarmer.name}" (J-Form Name: ${resolvedHolder}) already has a matching J-Form entry on ${formatDateDMY(date)} (${parsedBags} Bags, ${formatINR(parsedAmount)}).\n\nDo you still want to save this J-Form?`,
-          `ਕਿਸਾਨ "${selectedFarmer.name}" (ਜੇ-ਫਾਰਮ ਨਾਮ: ${resolvedHolder}) ਦਾ ${formatDateDMY(date)} ਨੂੰ ਇਹੀ ਜੇ-ਫਾਰਮ (${parsedBags} ਗੱਟੇ, ${formatINR(parsedAmount)}) ਪਹਿਲਾਂ ਹੀ ਦਰਜ ਹੈ।\n\nਕੀ ਤੁਸੀਂ ਫਿਰ ਵੀ ਇਹ ਜੇ-ਫਾਰਮ ਸੇਵ ਕਰਨਾ ਚਾਹੁੰਦੇ ਹੋ?`
+          `ਕਿਸਾਨ "${selectedFarmer.name}" (ਜੇ-ਫਾਰਮ ਨਾਮ: ${resolvedHolder}) ਦਾ ${formatDateDMY(date)} ਨੂੰ ਇਹੀ ਜੇ-ਫਾਰਮ (${parsedBags} ਬੈਗ, ${formatINR(parsedAmount)}) ਪਹਿਲਾਂ ਹੀ ਦਰਜ ਹੈ।\n\nਕੀ ਤੁਸੀਂ ਫਿਰ ਵੀ ਇਹ ਜੇ-ਫਾਰਮ ਸੇਵ ਕਰਨਾ ਚਾਹੁੰਦੇ ਹੋ?`
         ),
         confirmLabel: tr('Save Anyway', 'ਫਿਰ ਵੀ ਸੇਵ ਕਰੋ'),
         tone: 'warning',
@@ -437,7 +437,7 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  {tr('Number of Bags *', 'ਗੱਟਿਆਂ ਦੀ ਗਿਣਤੀ *')}
+                  {tr('Number of Bags *', 'ਬੈਗਾਂ ਦੀ ਗਿਣਤੀ *')}
                 </label>
                 <input
                   type="number"
@@ -472,7 +472,7 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
                   type="button"
                   onClick={handleAutoCalculateAmount}
                   className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 hover:text-blue-900 cursor-pointer"
-                  title={tr('Calculate Bags × 0.375 Qtl × Rate', 'ਗੱਟੇ × 0.375 ਕੁਇੰਟਲ × ਰੇਟ ਹਿਸਾਬ ਕਰੋ')}
+                  title={tr('Calculate Bags × 0.375 Qtl × Rate', 'ਬੈਗ × 0.375 ਕੁਇੰਟਲ × ਰੇਟ ਹਿਸਾਬ ਕਰੋ')}
                 >
                   <Calculator className="w-3 h-3" />
                   <span>
@@ -524,7 +524,7 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
             <p className="text-[11px] text-slate-500">
               {tr(
                 `Separate date-wise J-Form ledger · Labour ₹${settings.jFormLaborRate}/bag`,
-                `ਵੱਖਰਾ ਤਾਰੀਖ-ਵਾਰ ਜੇ-ਫਾਰਮ ਖਾਤਾ · ਲੇਬਰ ₹${settings.jFormLaborRate}/ਗੱਟਾ`
+                `ਵੱਖਰਾ ਤਾਰੀਖ-ਵਾਰ ਜੇ-ਫਾਰਮ ਖਾਤਾ · ਲੇਬਰ ₹${settings.jFormLaborRate}/ਬੈਗ`
               )}
             </p>
           </div>
@@ -570,11 +570,11 @@ export const MphJFormView: React.FC<MphJFormViewProps> = ({
                   <th className="py-2.5 px-3 font-semibold">{tr('J-Form Date', 'ਤਾਰੀਖ')}</th>
                   <th className="py-2.5 px-3 font-semibold">{tr('Arrival Farmer / J-Form Name', 'ਆਵਕ ਕਿਸਾਨ / ਜੇ-ਫਾਰਮ ਨਾਮ')}</th>
                   <th className="py-2.5 px-3 font-semibold">{tr('J-Form No.', 'ਨੰਬਰ')}</th>
-                  <th className="py-2.5 px-3 font-semibold text-right">{tr('Bags', 'ਗੱਟੇ')}</th>
+                  <th className="py-2.5 px-3 font-semibold text-right">{tr('Bags', 'ਬੈਗ')}</th>
                   <th className="py-2.5 px-3 font-semibold text-right">{tr('Rate', 'ਰੇਟ')}</th>
                   <th className="py-2.5 px-3 font-semibold text-right">{tr('J-Form Amount', 'ਜੇ-ਫਾਰਮ ਰਕਮ')}</th>
                   <th className="py-2.5 px-3 font-semibold text-right">
-                    {tr('Labour', 'ਲੇਬਰ')} (₹{settings.jFormLaborRate}/{tr('bag', 'ਗੱਟਾ')})
+                    {tr('Labour', 'ਲੇਬਰ')} (₹{settings.jFormLaborRate}/{tr('bag', 'ਬੈਗ')})
                   </th>
                   <th className="py-2.5 px-3 font-semibold text-right">{tr('Actions', 'ਕਾਰਵਾਈ')}</th>
                 </tr>

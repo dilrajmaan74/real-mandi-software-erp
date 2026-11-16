@@ -181,12 +181,12 @@ export const MphSettingsView: React.FC<MphSettingsViewProps> = ({
 
         <div>
           <h4 className="text-xs font-bold text-slate-900 mb-3 pb-1 border-b border-slate-100">
-            {tr('Labour & Expense Rates per Bag', 'ਲੇਬਰ ਅਤੇ ਖਰਚੇ ਦੇ ਰੇਟ (ਪ੍ਰਤੀ ਗੱਟਾ)')}
+            {tr('Labour & Expense Rates per Bag', 'ਲੇਬਰ ਅਤੇ ਖਰਚੇ ਦੇ ਰੇਟ (ਪ੍ਰਤੀ ਬੈਗ)')}
           </h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                {tr('J-Form Labour (₹ / Bag)', 'ਜੇ-ਫਾਰਮ ਲੇਬਰ (₹ / ਗੱਟਾ)')}
+                {tr('J-Form Labour (₹ / Bag)', 'ਜੇ-ਫਾਰਮ ਲੇਬਰ (₹ / ਬੈਗ)')}
               </label>
               <input
                 type="number"
@@ -197,13 +197,13 @@ export const MphSettingsView: React.FC<MphSettingsViewProps> = ({
                 className="w-full px-3 py-2 text-sm font-mono tabular-nums font-bold border border-slate-300 rounded-lg focus:outline-none focus:border-emerald-600"
               />
               <span className="text-[11px] text-slate-500 mt-1 block">
-                {tr('Default: ₹8 per bag', 'ਡਿਫਾਲਟ: ₹8 ਪ੍ਰਤੀ ਗੱਟਾ')}
+                {tr('Default: ₹8 per bag', 'ਡਿਫਾਲਟ: ₹8 ਪ੍ਰਤੀ ਬੈਗ')}
               </span>
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                {tr('Default Paddy Drying Labour (₹ / Bag)', 'ਡਿਫਾਲਟ ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ (₹ / ਗੱਟਾ)')}
+                {tr('Default Paddy Drying Labour (₹ / Bag)', 'ਡਿਫਾਲਟ ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ (₹ / ਬੈਗ)')}
               </label>
               <input
                 type="number"
@@ -214,7 +214,7 @@ export const MphSettingsView: React.FC<MphSettingsViewProps> = ({
                 className="w-full px-3 py-2 text-sm font-mono tabular-nums font-bold border border-slate-300 rounded-lg focus:outline-none focus:border-emerald-600"
               />
               <span className="text-[11px] text-slate-500 mt-1 block">
-                {tr('Default: ₹10 per bag', 'ਡਿਫਾਲਟ: ₹10 ਪ੍ਰਤੀ ਗੱਟਾ')}
+                {tr('Default: ₹10 per bag', 'ਡਿਫਾਲਟ: ₹10 ਪ੍ਰਤੀ ਬੈਗ')}
               </span>
             </div>
           </div>
@@ -224,8 +224,8 @@ export const MphSettingsView: React.FC<MphSettingsViewProps> = ({
             <div>
               <label className="block text-xs font-bold text-slate-800">
                 {tr(
-                  'Paddy Drying Labour Multi-Rate Presets (₹ / Gatta)',
-                  'ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ ਮਲਟੀ-ਰੇਟ ਸੂਚੀ (₹ / ਗੱਟਾ)'
+                  'Paddy Drying Labour Multi-Rate Presets (₹ / Bag)',
+                  'ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ ਮਲਟੀ-ਰੇਟ ਸੂਚੀ (₹ / ਬੈਗ)'
                 )}
               </label>
               <p className="text-[11px] text-slate-500">
@@ -254,7 +254,7 @@ export const MphSettingsView: React.FC<MphSettingsViewProps> = ({
                       className="cursor-pointer"
                       title={tr('Set as Default Rate', 'ਡਿਫਾਲਟ ਰੇਟ ਬਣਾਓ')}
                     >
-                      ₹{r}/{tr('Bag', 'ਗੱਟਾ')}
+                      ₹{r}/{tr('Bag', 'ਬੈਗ')}
                       {isDefault ? ` (${tr('Default', 'ਡਿਫਾਲਟ')})` : ''}
                     </button>
                     {dryingRatesList.length > 1 && !isDefault && (

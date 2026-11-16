@@ -264,7 +264,7 @@ export const MphFarmerMasterView: React.FC<MphFarmerMasterViewProps> = ({
 
           <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
             <label className="block text-xs font-semibold text-slate-700">
-              {tr('Paddy Drying Labour Rate (₹ / Bag)', 'ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ ਰੇਟ (₹ / ਗੱਟਾ)')}
+              {tr('Paddy Drying Labour Rate (₹ / Bag)', 'ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ ਰੇਟ (₹ / ਬੈਗ)')}
             </label>
             <div className="flex flex-wrap items-center gap-1.5">
               <button
@@ -391,7 +391,7 @@ export const MphFarmerMasterView: React.FC<MphFarmerMasterViewProps> = ({
                               : 'text-slate-600'
                           }`}
                         >
-                          ₹{hasCustomDrying ? f.dryingLaborRate : settings.paddyDryingLaborRate}/{tr('B', 'ਗੱਟਾ')}
+                          ₹{hasCustomDrying ? f.dryingLaborRate : settings.paddyDryingLaborRate}/{tr('Bag', 'ਬੈਗ')}
                         </span>
                       </td>
                       <td className="py-2.5 px-3 text-right font-mono tabular-nums whitespace-nowrap">

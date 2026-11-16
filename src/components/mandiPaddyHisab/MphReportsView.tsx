@@ -383,8 +383,8 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
               {tr('Generated', 'ਤਿਆਰ ਕੀਤਾ')} {formatDateDMY(new Date().toISOString().split('T')[0])} ·{' '}
               {tr('Hybrid', 'ਹਾਈਬ੍ਰਿਡ')} ₹{settings.hybridPaddyRate}/{tr('Qtl', 'ਕੁਇੰਟਲ')} ·{' '}
               {tr('Grade A', 'ਏ ਗ੍ਰੇਡ')} ₹{settings.paddyAGurdeRate}/{tr('Qtl', 'ਕੁਇੰਟਲ')} ·{' '}
-              {tr('J-Form Lab', 'ਜੇ-ਫਾਰਮ ਲੇਬਰ')} ₹{settings.jFormLaborRate}/{tr('bag', 'ਗੱਟਾ')} ·{' '}
-              {tr('Drying Lab', 'ਸੁਕਾਈ ਲੇਬਰ')} ₹{settings.paddyDryingLaborRate}/{tr('bag', 'ਗੱਟਾ')}
+              {tr('J-Form Lab', 'ਜੇ-ਫਾਰਮ ਲੇਬਰ')} ₹{settings.jFormLaborRate}/{tr('bag', 'ਬੈਗ')} ·{' '}
+              {tr('Drying Lab', 'ਸੁਕਾਈ ਲੇਬਰ')} ₹{settings.paddyDryingLaborRate}/{tr('bag', 'ਬੈਗ')}
             </p>
           </div>
         </div>
@@ -449,10 +449,10 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-xs">
                   <div className="border border-slate-200 rounded-lg p-2.5">
                     <span className="text-slate-500 block text-[11px]">
-                      {tr('Bags & Weight', 'ਗੱਟੇ ਅਤੇ ਵਜ਼ਨ')}
+                      {tr('Bags & Weight', 'ਬੈਗ ਅਤੇ ਵਜ਼ਨ')}
                     </span>
                     <span className="font-mono tabular-nums font-bold text-slate-900">
-                      {farmerSummary.totalArrivalBags} {tr('Bags', 'ਗੱਟੇ')} ·{' '}
+                      {farmerSummary.totalArrivalBags} {tr('Bags', 'ਬੈਗ')} ·{' '}
                       {formatWeightQKG(
                         farmerSummary.weightQtlPart,
                         farmerSummary.weightKgPart,
@@ -521,7 +521,7 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
                           <th className="py-1.5 px-2">#</th>
                           <th className="py-1.5 px-2">{tr('Date', 'ਤਾਰੀਖ')}</th>
                           <th className="py-1.5 px-2">{tr('Type', 'ਕਿਸਮ')}</th>
-                          <th className="py-1.5 px-2 text-right">{tr('Bags', 'ਗੱਟੇ')}</th>
+                          <th className="py-1.5 px-2 text-right">{tr('Bags', 'ਬੈਗ')}</th>
                           <th className="py-1.5 px-2 text-right">{tr('Weight', 'ਵਜ਼ਨ')}</th>
                           <th className="py-1.5 px-2 text-right">{tr('Rate', 'ਰੇਟ')}</th>
                           <th className="py-1.5 px-2 text-right">{tr('Amount', 'ਰਕਮ')}</th>
@@ -559,7 +559,7 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
                           <th className="py-1.5 px-2">#</th>
                           <th className="py-1.5 px-2">{tr('Date', 'ਤਾਰੀਖ')}</th>
                           <th className="py-1.5 px-2">{tr('J-Form Name', 'ਜੇ-ਫਾਰਮ ਨਾਮ')}</th>
-                          <th className="py-1.5 px-2 text-right">{tr('Bags', 'ਗੱਟੇ')}</th>
+                          <th className="py-1.5 px-2 text-right">{tr('Bags', 'ਬੈਗ')}</th>
                           <th className="py-1.5 px-2 text-right">{tr('Rate', 'ਰੇਟ')}</th>
                           <th className="py-1.5 px-2 text-right">{tr('J-Form Amt', 'ਜੇ-ਫਾਰਮ ਰਕਮ')}</th>
                         </tr>
@@ -603,8 +603,8 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
                         <tr className="bg-amber-50/80 border-t border-blue-200 text-[10.5px] text-slate-800">
                           <td colSpan={5} className="py-1.5 px-2">
                             {tr('Final Account J-Form Labour', 'ਅੰਤਿਮ ਹਿਸਾਬ ਜੇ-ਫਾਰਮ ਲੇਬਰ')} (
-                            {farmerSummary.totalArrivalBags} {tr('Total Arrival Bags', 'ਕੁੱਲ ਆਵਕ ਗੱਟੇ')} × ₹
-                            {settings.jFormLaborRate}/{tr('bag', 'ਗੱਟਾ')}):
+                            {farmerSummary.totalArrivalBags} {tr('Total Arrival Bags', 'ਕੁੱਲ ਆਵਕ ਬੈਗ')} × ₹
+                            {settings.jFormLaborRate}/{tr('bag', 'ਬੈਗ')}):
                           </td>
                           <td className="py-1.5 px-2 text-right font-mono tabular-nums text-rose-800">
                             -{formatINR(farmerSummary.totalJFormLabor)}
@@ -621,12 +621,12 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
                     <span>
                       {tr(
                         'Paddy Drying Labour — Date-wise Dried Bags List',
-                        'ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ — ਤਾਰੀਖ-ਵਾਰ ਸੁਕਾਏ ਗੱਟਿਆਂ ਦੀ ਸੂਚੀ'
+                        'ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ — ਤਾਰੀਖ-ਵਾਰ ਸੁਕਾਏ ਬੈਗਾਂ ਦੀ ਸੂਚੀ'
                       )}{' '}
                       ({driedRowsForReport.length})
                     </span>
                     <span className="font-mono tabular-nums text-rose-800">
-                      {farmerSummary.totalDryingBags} {tr('Bags', 'ਗੱਟੇ')} · -
+                      {farmerSummary.totalDryingBags} {tr('Bags', 'ਬੈਗ')} · -
                       {formatINR(farmerSummary.totalDryingLabor)}
                     </span>
                   </div>
@@ -637,8 +637,8 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
                           <th className="py-1.5 px-2">#</th>
                           <th className="py-1.5 px-2">{tr('Date', 'ਤਾਰੀਖ')}</th>
                           <th className="py-1.5 px-2">{tr('Paddy Type', 'ਕਿਸਮ')}</th>
-                          <th className="py-1.5 px-2 text-right">{tr('Dried Bags', 'ਸੁਕਾਏ ਗੱਟੇ')}</th>
-                          <th className="py-1.5 px-2 text-right">{tr('Rate / Bag', 'ਰੇਟ / ਗੱਟਾ')}</th>
+                          <th className="py-1.5 px-2 text-right">{tr('Dried Bags', 'ਸੁਕਾਏ ਬੈਗ')}</th>
+                          <th className="py-1.5 px-2 text-right">{tr('Rate / Bag', 'ਰੇਟ / ਬੈਗ')}</th>
                           <th className="py-1.5 px-2 text-right">{tr('Drying Amount', 'ਸੁਕਾਈ ਰਕਮ')}</th>
                         </tr>
                       </thead>
@@ -778,7 +778,7 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
                   <th className="py-2 px-2.5 font-semibold">{tr('Date', 'ਤਾਰੀਖ')}</th>
                   <th className="py-2 px-2.5 font-semibold">{tr('Farmer', 'ਕਿਸਾਨ')}</th>
                   <th className="py-2 px-2.5 font-semibold">{tr('Paddy Type', 'ਝੋਨੇ ਦੀ ਕਿਸਮ')}</th>
-                  <th className="py-2 px-2.5 font-semibold text-right">{tr('Bags', 'ਗੱਟੇ')}</th>
+                  <th className="py-2 px-2.5 font-semibold text-right">{tr('Bags', 'ਬੈਗ')}</th>
                   <th className="py-2 px-2.5 font-semibold text-right">{tr('Loose KG/GM', 'ਖੁੱਲ੍ਹਾ ਕਿਲੋ/ਗ੍ਰਾਮ')}</th>
                   <th className="py-2 px-2.5 font-semibold text-right">{tr('Total Weight', 'ਕੁੱਲ ਵਜ਼ਨ')}</th>
                   <th className="py-2 px-2.5 font-semibold text-right">{tr('Rate', 'ਰੇਟ')}</th>
@@ -853,7 +853,7 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
                     {tr('Arrival Farmer / J-Form Name', 'ਆਵਕ ਕਿਸਾਨ / ਜੇ-ਫਾਰਮ ਨਾਮ')}
                   </th>
                   <th className="py-2 px-2.5 font-semibold">{tr('J-Form No.', 'ਜੇ-ਫਾਰਮ ਨੰ.')}</th>
-                  <th className="py-2 px-2.5 font-semibold text-right">{tr('Bags', 'ਗੱਟੇ')}</th>
+                  <th className="py-2 px-2.5 font-semibold text-right">{tr('Bags', 'ਬੈਗ')}</th>
                   <th className="py-2 px-2.5 font-semibold text-right">{tr('Rate', 'ਰੇਟ')}</th>
                   <th className="py-2 px-2.5 font-semibold text-right">{tr('J-Form Amount', 'ਜੇ-ਫਾਰਮ ਰਕਮ')}</th>
                   <th className="py-2 px-2.5 font-semibold text-right">{tr('Labour Deduction', 'ਲੇਬਰ ਕਟੌਤੀ')}</th>
@@ -914,7 +914,7 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
                 <tr>
                   <th className="py-2 px-2.5 font-semibold">#</th>
                   <th className="py-2 px-2.5 font-semibold">{tr('Farmer & Village', 'ਕਿਸਾਨ ਅਤੇ ਪਿੰਡ')}</th>
-                  <th className="py-2 px-2.5 font-semibold text-right">{tr('Bags', 'ਗੱਟੇ')}</th>
+                  <th className="py-2 px-2.5 font-semibold text-right">{tr('Bags', 'ਬੈਗ')}</th>
                   <th className="py-2 px-2.5 font-semibold text-right">{tr('Weight (Qtl/KG/GM)', 'ਵਜ਼ਨ (ਕੁਇੰ./ਕਿਲੋ/ਗ੍ਰਾਮ)')}</th>
                   <th className="py-2 px-2.5 font-semibold text-right">{tr('Paddy Amount', 'ਝੋਨੇ ਦੀ ਰਕਮ')}</th>
                   <th className="py-2 px-2.5 font-semibold text-right">{tr('J-Form Amount', 'ਜੇ-ਫਾਰਮ ਰਕਮ')}</th>

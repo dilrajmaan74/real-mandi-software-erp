@@ -418,8 +418,8 @@ export function formatDryingBreakdownText(
   totalDryingBags = 0,
   fallbackRate = DEFAULT_MPH_SETTINGS.paddyDryingLaborRate
 ): string {
-  const bagUnit = lang === 'pa' ? 'ਗੱਟੇ' : 'Bags';
-  const perBag = lang === 'pa' ? 'ਗੱਟਾ' : 'bag';
+  const bagUnit = lang === 'pa' ? 'ਬੈਗ' : 'Bags';
+  const perBag = lang === 'pa' ? 'ਬੈਗ' : 'bag';
   if (!Array.isArray(breakdown) || breakdown.length === 0) {
     return `${totalDryingBags} ${bagUnit} × ₹${fallbackRate}/${perBag}`;
   }
