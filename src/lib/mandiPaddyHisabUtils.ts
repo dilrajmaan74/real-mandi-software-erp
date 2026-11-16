@@ -1189,6 +1189,8 @@ export function computeFarmerAccountSummary(
         .reduce((sum, e) => sum + safeNum(e.amount), 0) * 100
     ) / 100;
 
+  const paddyVsJFormDiff = Math.round((totalPaddyAmount - totalJFormAmount) * 100) / 100;
+
   const totalDeductions =
     Math.round((totalJFormAmount + totalJFormLabor + totalDryingLabor + totalOtherDeductions) * 100) / 100;
 
@@ -1248,6 +1250,7 @@ export function computeFarmerAccountSummary(
     totalPaddyAmount,
     totalJFormBags,
     totalJFormAmount,
+    paddyVsJFormDiff,
     totalJFormLabor,
     totalDryingBags,
     totalDryingLabor,

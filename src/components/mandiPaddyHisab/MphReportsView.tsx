@@ -446,7 +446,7 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
                 </div>
 
                 {/* Accounting Totals Summary */}
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-xs">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-xs">
                   <div className="border border-slate-200 rounded-lg p-2.5">
                     <span className="text-slate-500 block text-[11px]">
                       {tr('Bags & Weight', 'ਬੈਗ ਅਤੇ ਵਜ਼ਨ')}
@@ -475,6 +475,19 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
                     </span>
                     <span className="font-mono tabular-nums font-bold text-rose-700">
                       -{formatINR(farmerSummary.totalJFormAmount)}
+                    </span>
+                  </div>
+                  <div className="border border-blue-200 bg-blue-50/50 rounded-lg p-2.5">
+                    <span className="text-blue-900 font-semibold block text-[11px]">
+                      {tr('Paddy − J-Form Diff', 'ਝੋਨਾ − ਜੇ-ਫਾਰਮ ਫਰਕ')}
+                    </span>
+                    <span
+                      className={`font-mono tabular-nums font-bold ${
+                        farmerSummary.paddyVsJFormDiff >= 0 ? 'text-blue-900' : 'text-rose-700'
+                      }`}
+                    >
+                      {farmerSummary.paddyVsJFormDiff < 0 ? '-' : ''}
+                      {formatINR(Math.abs(farmerSummary.paddyVsJFormDiff))}
                     </span>
                   </div>
                   <div className="border border-slate-200 rounded-lg p-2.5">

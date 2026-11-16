@@ -21,6 +21,7 @@ import {
   getEffectiveArrivalDryingRate,
   safeNum,
   safeStr,
+  sumPaddyWeights,
 } from '../../lib/mandiPaddyHisabUtils';
 import { exportElementToPdf } from '../../lib/mandiPaddyHisabPdf';
 import {
@@ -33,6 +34,8 @@ import {
   Percent,
   Plus,
   Printer,
+  RotateCcw,
+  Scale,
   Trash2,
   Wheat,
   X,
@@ -175,6 +178,21 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
     return farmers.find((f) => f.id === selectedFarmerId) || farmers[0];
   }, [farmers, selectedFarmerId]);
 
+  // Info-Only Side Tool State: Hybrid Rate vs Grade A / MSP Rate Loss Checker (ZERO impact on Hisab)
+  const [showLossChecker, setShowLossChecker] = useState<boolean>(true);
+  const [lossScope, setLossScope] = useState<'hybrid' | 'all' | 'custom'>('hybrid');
+  const [customLossQtl, setCustomLossQtl] = useState<string>('');
+  const [customBaseRate, setCustomBaseRate] = useState<string>('');
+  const [customCompareRate, setCustomCompareRate] = useState<string>('');
+
+  useEffect(() => {
+    // Reset manual test inputs cleanly when switching farmers
+    setCustomLossQtl('');
+    setCustomBaseRate('');
+    setCustomCompareRate('');
+    setLossScope('hybrid');
+  }, [activeFarmer?.id]);
+
   const summary = useMemo(() => {
     if (!activeFarmer) return null;
     return computeFarmerAccountSummary(
@@ -237,6 +255,94 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
     if (!summary) return 0;
     return Math.max(0, summary.totalArrivalBags - summary.totalDryingBags);
   }, [summary]);
+
+  // Purely informational Rate Difference / Farmer Loss calculation (ZERO impact on Final Account / Bakaya)
+  const rateLossComparison = useMemo(() => {
+    if (!summary) return null;
+    const hybridArrivals = summary.arrivals.filter((a) => a.paddyType === 'Hybrid Paddy');
+    const hybridWeights = sumPaddyWeights(hybridArrivals);
+    const hybridActualAmt =
+      Math.round(hybridArrivals.reduce((s, a) => s + safeNum(a.paddyAmount), 0) * 100) / 100;
+
+    const effectiveScope: 'hybrid' | 'all' | 'custom' =
+      lossScope === 'hybrid' && hybridArrivals.length === 0 && summary.arrivals.length > 0
+        ? 'all'
+        : lossScope;
+
+    const scopedArrivals =
+      effectiveScope === 'hybrid'
+        ? hybridArrivals
+        : effectiveScope === 'all'
+        ? summary.arrivals
+        : [];
+    const scopedWeights =
+      effectiveScope === 'hybrid'
+        ? hybridWeights
+        : effectiveScope === 'all'
+        ? {
+            totalBags: summary.totalArrivalBags,
+            totalQuintals: summary.totalQuintals,
+            weightQtlPart: summary.weightQtlPart,
+            weightKgPart: summary.weightKgPart,
+            weightGmPart: summary.weightGmPart,
+          }
+        : null;
+
+    const scopedActualAmt =
+      effectiveScope === 'hybrid'
+        ? hybridActualAmt
+        : effectiveScope === 'all'
+        ? summary.totalPaddyAmount
+        : 0;
+
+    const defaultQtl = scopedWeights ? scopedWeights.totalQuintals : 100;
+    const qtl =
+      effectiveScope === 'custom' || customLossQtl.trim() !== ''
+        ? Math.max(0, safeNum(customLossQtl, 0))
+        : defaultQtl;
+
+    const defaultBaseRate =
+      scopedWeights && scopedWeights.totalQuintals > 0
+        ? Math.round((scopedActualAmt / scopedWeights.totalQuintals) * 100) / 100
+        : safeNum(settings.hybridPaddyRate, 2350);
+
+    const baseRate =
+      customBaseRate.trim() !== '' ? Math.max(0, safeNum(customBaseRate, 0)) : defaultBaseRate;
+    const compareRate =
+      customCompareRate.trim() !== ''
+        ? Math.max(0, safeNum(customCompareRate, 0))
+        : safeNum(settings.paddyAGurdeRate, 2461);
+
+    const useExactActualAmt =
+      effectiveScope !== 'custom' &&
+      customLossQtl.trim() === '' &&
+      customBaseRate.trim() === '' &&
+      scopedArrivals.length > 0;
+
+    const baseAmount = useExactActualAmt
+      ? scopedActualAmt
+      : Math.round(qtl * baseRate * 100) / 100;
+    const compareAmount = Math.round(qtl * compareRate * 100) / 100;
+    const differenceLoss = Math.round((compareAmount - baseAmount) * 100) / 100;
+
+    return {
+      hybridCount: hybridArrivals.length,
+      allCount: summary.arrivals.length,
+      effectiveScope,
+      scopedWeights,
+      qtl,
+      baseRate,
+      compareRate,
+      baseAmount,
+      compareAmount,
+      differenceLoss,
+      hasCustomOverride:
+        lossScope === 'custom' ||
+        customLossQtl.trim() !== '' ||
+        customBaseRate.trim() !== '' ||
+        customCompareRate.trim() !== '',
+    };
+  }, [summary, lossScope, customLossQtl, customBaseRate, customCompareRate, settings]);
 
   const resetOtherForm = () => {
     setEditingOtherId(null);
@@ -491,6 +597,22 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
           </button>
           <button
             type="button"
+            onClick={() => setShowLossChecker((prev) => !prev)}
+            className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold border rounded-lg cursor-pointer whitespace-nowrap ${
+              showLossChecker
+                ? 'bg-violet-50 text-violet-900 border-violet-300'
+                : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+            }`}
+            title={tr(
+              'Side Rate Difference / Farmer Loss Checker (No Impact on Hisab)',
+              'ਇੱਕ ਸਾਈਡ ਰੇਟ ਫਰਕ / ਕਿਸਾਨ ਘਾਟਾ ਚੈੱਕ (ਹਿਸਾਬ ਉੱਤੇ ਕੋਈ ਅਸਰ ਨਹੀਂ)'
+            )}
+          >
+            <Scale className="w-3.5 h-3.5" />
+            <span>{tr('Rate Loss Check', 'ਰੇਟ ਘਾਟਾ ਚੈੱਕ')}</span>
+          </button>
+          <button
+            type="button"
             onClick={() => setWhatsappOpen(true)}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 cursor-pointer whitespace-nowrap"
             title={tr('Send Pura Hisab on WhatsApp', 'ਪੂਰਾ ਹਿਸਾਬ WhatsApp ਤੇ ਭੇਜੋ')}
@@ -521,6 +643,239 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Info-Only Side Tool: Hybrid vs Grade A Rate Difference / Farmer Loss (ZERO impact on official Hisab / Print / PDF) */}
+      {showLossChecker && rateLossComparison && (
+        <div className="print:hidden bg-violet-50/70 border border-violet-200 rounded-xl p-4 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center gap-1.5 text-xs font-bold text-violet-950">
+                <Scale className="w-4 h-4 text-violet-700" />
+                <span>
+                  {tr(
+                    'Rate Difference / Farmer Loss Checker (Hybrid vs Grade A)',
+                    'ਰੇਟ ਫਰਕ / ਕਿਸਾਨ ਘਾਟਾ ਚੈੱਕ (ਹਾਈਬ੍ਰਿਡ ਬਨਾਮ ਏ ਗ੍ਰੇਡ)'
+                  )}
+                </span>
+              </div>
+              <span className="px-2 py-0.5 text-[10.5px] font-bold bg-white text-violet-900 border border-violet-300 rounded">
+                {tr(
+                  'Info Only — Zero Impact on Hisab',
+                  'ਸਿਰਫ਼ ਦੇਖਣ ਲਈ — ਹਿਸਾਬ ਉੱਤੇ ਕੋਈ ਅਸਰ ਨਹੀਂ'
+                )}
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              {rateLossComparison.hybridCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLossScope('hybrid');
+                    setCustomLossQtl('');
+                    setCustomBaseRate('');
+                  }}
+                  className={`px-2.5 py-1 text-[11px] font-semibold rounded-md border cursor-pointer ${
+                    rateLossComparison.effectiveScope === 'hybrid'
+                      ? 'bg-violet-700 text-white border-violet-700'
+                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  {tr('Hybrid Paddy', 'ਹਾਈਬ੍ਰਿਡ ਝੋਨਾ')} ({rateLossComparison.hybridCount})
+                </button>
+              )}
+              {rateLossComparison.allCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLossScope('all');
+                    setCustomLossQtl('');
+                    setCustomBaseRate('');
+                  }}
+                  className={`px-2.5 py-1 text-[11px] font-semibold rounded-md border cursor-pointer ${
+                    rateLossComparison.effectiveScope === 'all'
+                      ? 'bg-violet-700 text-white border-violet-700'
+                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  {tr('All Paddy', 'ਕੁੱਲ ਝੋਨਾ')} ({rateLossComparison.allCount})
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setLossScope('custom');
+                  if (!customLossQtl) {
+                    setCustomLossQtl(String(rateLossComparison.qtl || 100));
+                  }
+                  if (!customBaseRate) {
+                    setCustomBaseRate(String(settings.hybridPaddyRate || 2350));
+                  }
+                  if (!customCompareRate) {
+                    setCustomCompareRate(String(settings.paddyAGurdeRate || 2461));
+                  }
+                }}
+                className={`px-2.5 py-1 text-[11px] font-semibold rounded-md border cursor-pointer ${
+                  rateLossComparison.effectiveScope === 'custom'
+                    ? 'bg-violet-700 text-white border-violet-700'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                {tr('Custom Test', 'ਆਪਣਾ ਵਜ਼ਨ ਭਰੋ')}
+              </button>
+              {rateLossComparison.hasCustomOverride && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLossScope('hybrid');
+                    setCustomLossQtl('');
+                    setCustomBaseRate('');
+                    setCustomCompareRate('');
+                  }}
+                  className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-violet-900 bg-white border border-violet-300 rounded-md hover:bg-violet-100 cursor-pointer"
+                  title={tr('Reset to Farmer Data & Settings Rates', 'ਕਿਸਾਨ ਦੇ ਅਸਲ ਡਾਟੇ ਤੇ ਵਾਪਸ ਕਰੋ')}
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>{tr('Reset', 'ਰੀਸੈੱਟ')}</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-stretch">
+            {/* Quick Editable Inputs */}
+            <div className="lg:col-span-5 grid grid-cols-3 gap-2 bg-white border border-violet-200 rounded-lg p-2.5">
+              <div>
+                <label className="block text-[10.5px] font-semibold text-slate-600 mb-1">
+                  {tr('Weight (Qtl)', 'ਵਜ਼ਨ (ਕੁਇੰਟਲ)')}
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.001"
+                  value={
+                    customLossQtl !== ''
+                      ? customLossQtl
+                      : rateLossComparison.effectiveScope === 'custom'
+                      ? ''
+                      : String(rateLossComparison.qtl)
+                  }
+                  onChange={(e) => {
+                    setCustomLossQtl(e.target.value);
+                    if (lossScope !== 'custom') setLossScope('custom');
+                  }}
+                  placeholder="100"
+                  className="w-full px-2 py-1.5 text-xs font-mono tabular-nums font-bold border border-slate-300 rounded bg-white focus:outline-none focus:border-violet-600"
+                />
+                {rateLossComparison.scopedWeights && customLossQtl === '' && (
+                  <span className="block text-[10px] text-slate-500 mt-0.5 truncate">
+                    {formatWeightQKG(
+                      rateLossComparison.scopedWeights.weightQtlPart,
+                      rateLossComparison.scopedWeights.weightKgPart,
+                      rateLossComparison.scopedWeights.weightGmPart,
+                      lang
+                    )}
+                  </span>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-[10.5px] font-semibold text-slate-600 mb-1">
+                  {tr('Hybrid Rate (₹)', 'ਹਾਈਬ੍ਰਿਡ ਰੇਟ (₹)')}
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={
+                    customBaseRate !== ''
+                      ? customBaseRate
+                      : String(rateLossComparison.baseRate)
+                  }
+                  onChange={(e) => setCustomBaseRate(e.target.value)}
+                  placeholder="2350"
+                  className="w-full px-2 py-1.5 text-xs font-mono tabular-nums font-bold border border-slate-300 rounded bg-white focus:outline-none focus:border-violet-600"
+                />
+                <span className="block text-[10px] text-slate-500 mt-0.5">
+                  {tr('Per Qtl', 'ਪ੍ਰਤੀ ਕੁਇੰਟਲ')}
+                </span>
+              </div>
+
+              <div>
+                <label className="block text-[10.5px] font-semibold text-slate-600 mb-1">
+                  {tr('Compare Rate (₹)', 'ਤੁਲਨਾ ਰੇਟ (₹)')}
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={
+                    customCompareRate !== ''
+                      ? customCompareRate
+                      : String(rateLossComparison.compareRate)
+                  }
+                  onChange={(e) => setCustomCompareRate(e.target.value)}
+                  placeholder="2461"
+                  className="w-full px-2 py-1.5 text-xs font-mono tabular-nums font-bold border border-slate-300 rounded bg-white focus:outline-none focus:border-violet-600"
+                />
+                <span className="block text-[10px] text-slate-500 mt-0.5">
+                  {tr('Grade A / MSP', 'ਏ ਗ੍ਰੇਡ / MSP')}
+                </span>
+              </div>
+            </div>
+
+            {/* Side-by-Side Comparison Output */}
+            <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="bg-white border border-slate-200 rounded-lg p-2.5 flex flex-col justify-between">
+                <span className="text-[10.5px] font-semibold text-slate-600">
+                  {rateLossComparison.qtl} {tr('Qtl', 'ਕੁਇੰ')} @ ₹{rateLossComparison.baseRate}
+                </span>
+                <span className="font-mono tabular-nums font-bold text-sm text-slate-900 mt-1">
+                  {formatINR(rateLossComparison.baseAmount)}
+                </span>
+                <span className="text-[10px] text-slate-500">
+                  {tr('Hybrid / Actual Value', 'ਹਾਈਬ੍ਰਿਡ / ਅਸਲ ਰਕਮ')}
+                </span>
+              </div>
+
+              <div className="bg-white border border-slate-200 rounded-lg p-2.5 flex flex-col justify-between">
+                <span className="text-[10.5px] font-semibold text-slate-600">
+                  {rateLossComparison.qtl} {tr('Qtl', 'ਕੁਇੰ')} @ ₹{rateLossComparison.compareRate}
+                </span>
+                <span className="font-mono tabular-nums font-bold text-sm text-emerald-800 mt-1">
+                  {formatINR(rateLossComparison.compareAmount)}
+                </span>
+                <span className="text-[10px] text-slate-500">
+                  {tr('Same Qtl @ Grade A', 'ਉਹੀ ਵਜ਼ਨ ਏ ਗ੍ਰੇਡ ਰੇਟ ਨਾਲ')}
+                </span>
+              </div>
+
+              <div
+                className={`rounded-lg border p-2.5 flex flex-col justify-between ${
+                  rateLossComparison.differenceLoss > 0
+                    ? 'bg-rose-50 border-rose-300 text-rose-950'
+                    : 'bg-emerald-50 border-emerald-300 text-emerald-950'
+                }`}
+              >
+                <span className="text-[10.5px] font-bold uppercase tracking-wide opacity-80">
+                  {rateLossComparison.differenceLoss >= 0
+                    ? tr('Rate Difference (Farmer Loss)', 'ਰੇਟ ਫਰਕ (ਕਿਸਾਨ ਦਾ ਘਾਟਾ)')
+                    : tr('Rate Gain', 'ਰੇਟ ਵਾਧਾ')}
+                </span>
+                <span className="font-mono tabular-nums font-bold text-base mt-1">
+                  {formatINR(Math.abs(rateLossComparison.differenceLoss))}
+                </span>
+                <span className="text-[10px] font-medium opacity-80 font-mono">
+                  {rateLossComparison.compareRate >= rateLossComparison.baseRate ? '+' : ''}₹
+                  {Math.round((rateLossComparison.compareRate - rateLossComparison.baseRate) * 100) /
+                    100}
+                  /{tr('Qtl diff', 'ਕੁਇੰ ਫਰਕ')}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Printable Ledger & Final Account Container (keyed by farmer ID for clean DOM switching) */}
       <div
@@ -604,6 +959,32 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                 </div>
                 <span className="font-mono tabular-nums font-semibold text-rose-700 shrink-0">
                   -{formatINR(summary.totalJFormAmount)}
+                </span>
+              </div>
+
+              <div className="px-4 py-2.5 bg-blue-50/60 flex items-center justify-between gap-3">
+                <div>
+                  <span className="font-bold text-blue-950">
+                    {tr(
+                      '(=) Difference Balance (Total Paddy − J-Form)',
+                      '(=) ਫਰਕ ਬਕਾਇਆ (ਕੁੱਲ ਝੋਨੇ ਦੀ ਰਕਮ − ਜੇ-ਫਾਰਮ ਰਕਮ)'
+                    )}
+                  </span>
+                  <span className="text-[11px] text-blue-800 block font-mono tabular-nums">
+                    {formatINR(summary.totalPaddyAmount)} − {formatINR(summary.totalJFormAmount)} ·{' '}
+                    {tr(
+                      'Before Labour, Drying, Other & Advance',
+                      'ਲੇਬਰ, ਸੁਕਾਈ, ਹੋਰ ਅਤੇ ਪੇਸ਼ਗੀ ਤੋਂ ਪਹਿਲਾਂ'
+                    )}
+                  </span>
+                </div>
+                <span
+                  className={`font-mono tabular-nums font-bold text-sm shrink-0 ${
+                    summary.paddyVsJFormDiff >= 0 ? 'text-blue-900' : 'text-rose-700'
+                  }`}
+                >
+                  {summary.paddyVsJFormDiff < 0 ? '-' : ''}
+                  {formatINR(Math.abs(summary.paddyVsJFormDiff))}
                 </span>
               </div>
 

@@ -158,6 +158,9 @@ export function buildFarmerPuraHisabWhatsAppText(
     lines.push(
       `• *(-) ਕੁੱਲ ਜੇ-ਫਾਰਮ (${summary.totalJFormBags} ਬੈਗ):* -${formatINR(summary.totalJFormAmount)}`
     );
+    lines.push(
+      `• *(=) ਫਰਕ ਬਕਾਇਆ (ਝੋਨੇ ਦੀ ਰਕਮ − ਜੇ-ਫਾਰਮ):* *${summary.paddyVsJFormDiff < 0 ? '-' : ''}${formatINR(Math.abs(summary.paddyVsJFormDiff))}*`
+    );
   } else {
     lines.push(`*2. J-Form Details (${summary.jForms.length} J-Forms):*`);
     if (mode === 'full' && summary.jForms.length > 0) {
@@ -172,6 +175,9 @@ export function buildFarmerPuraHisabWhatsAppText(
     }
     lines.push(
       `• *(-) Total J-Form (${summary.totalJFormBags} Bags):* -${formatINR(summary.totalJFormAmount)}`
+    );
+    lines.push(
+      `• *(=) Difference Balance (Paddy − J-Form):* *${summary.paddyVsJFormDiff < 0 ? '-' : ''}${formatINR(Math.abs(summary.paddyVsJFormDiff))}*`
     );
   }
 

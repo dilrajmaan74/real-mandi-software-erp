@@ -139,6 +139,7 @@ export interface MphFarmerAccountSummary {
   totalPaddyAmount: number;
   totalJFormBags: number;
   totalJFormAmount: number;
+  paddyVsJFormDiff: number;
   totalJFormLabor: number;
   totalDryingBags: number;
   totalDryingLabor: number;
