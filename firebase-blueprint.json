@@ -221,7 +221,7 @@
     },
     "MphOtherEntry": {
       "title": "Mandi Paddy Hisab Other Expense or Payment",
-      "description": "Additional farmer expenses or payments (+/-) for final account settlement",
+      "description": "Additional farmer expenses or payments (+/-) either before Paddy Hisab or after Paddy Hisab (post-season settlement)",
       "type": "object",
       "properties": {
         "id": { "type": "string", "maxLength": 128 },
@@ -230,6 +230,7 @@
         "farmerName": { "type": "string", "maxLength": 160 },
         "date": { "type": "string", "maxLength": 32 },
         "entryType": { "type": "string", "enum": ["add", "deduct"] },
+        "impactStage": { "type": "string", "enum": ["before_paddy", "after_paddy"] },
         "description": { "type": "string", "maxLength": 300 },
         "amount": { "type": "number" },
         "createdAt": { "type": "string", "maxLength": 64 },

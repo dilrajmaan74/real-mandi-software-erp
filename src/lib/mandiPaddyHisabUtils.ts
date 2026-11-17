@@ -1278,16 +1278,33 @@ export function computeFarmerAccountSummary(
     void defaultDryingLaborRate;
   }
 
+  const beforePaddyOtherEntries = otherEntries.filter((e) => e.impactStage !== 'after_paddy');
+  const afterPaddyOtherEntries = otherEntries.filter((e) => e.impactStage === 'after_paddy');
+
   const totalOtherAdditions =
     Math.round(
-      otherEntries
+      beforePaddyOtherEntries
         .filter((e) => e.entryType === 'add')
         .reduce((sum, e) => sum + safeNum(e.amount), 0) * 100
     ) / 100;
 
   const totalOtherDeductions =
     Math.round(
-      otherEntries
+      beforePaddyOtherEntries
+        .filter((e) => e.entryType === 'deduct')
+        .reduce((sum, e) => sum + safeNum(e.amount), 0) * 100
+    ) / 100;
+
+  const totalAfterPaddyAdditions =
+    Math.round(
+      afterPaddyOtherEntries
+        .filter((e) => e.entryType === 'add')
+        .reduce((sum, e) => sum + safeNum(e.amount), 0) * 100
+    ) / 100;
+
+  const totalAfterPaddyDeductions =
+    Math.round(
+      afterPaddyOtherEntries
         .filter((e) => e.entryType === 'deduct')
         .reduce((sum, e) => sum + safeNum(e.amount), 0) * 100
     ) / 100;
@@ -1297,8 +1314,8 @@ export function computeFarmerAccountSummary(
   const totalDeductions =
     Math.round((totalJFormAmount + totalJFormLabor + totalDryingLabor + totalOtherDeductions) * 100) / 100;
 
-  // Final Balance = Total Paddy Amount - J-Form Amount - J-Form Labour - Drying Labour + Other Additions - Other Deductions
-  // Rounded off to nearest whole rupee (Paddy Bakaya before Advances & Interest)
+  // Final Balance = Total Paddy Amount - J-Form Amount - J-Form Labour - Drying Labour + Before-Paddy Additions - Before-Paddy Deductions
+  // Rounded off to nearest whole rupee (Only Paddy Bakaya — unaffected by post-season after_paddy entries)
   const rawFinalBalance =
     totalPaddyAmount -
     totalJFormAmount -
@@ -1324,8 +1341,12 @@ export function computeFarmerAccountSummary(
   const totalAdvanceWithInterest =
     Math.round((totalAdvancePrincipal + totalAdvanceInterest) * 100) / 100;
 
-  // Combined Final Balance = Paddy Bakaya - (Principal + Interest), rounded to whole rupees
-  const rawCombined = rawFinalBalance - totalAdvanceWithInterest;
+  // Combined Final Balance = Paddy Bakaya - (Principal + Interest) + After-Paddy Additions - After-Paddy Deductions, rounded to whole rupees
+  const rawCombined =
+    rawFinalBalance -
+    totalAdvanceWithInterest +
+    totalAfterPaddyAdditions -
+    totalAfterPaddyDeductions;
   const roundedCombined = Math.round(rawCombined);
   const combinedFinalBalance = roundedCombined === 0 ? 0 : roundedCombined;
 
@@ -1360,6 +1381,8 @@ export function computeFarmerAccountSummary(
     dryingRateBreakdown,
     totalOtherAdditions,
     totalOtherDeductions,
+    totalAfterPaddyAdditions,
+    totalAfterPaddyDeductions,
     totalDeductions,
     finalBalance,
     balanceStatus,

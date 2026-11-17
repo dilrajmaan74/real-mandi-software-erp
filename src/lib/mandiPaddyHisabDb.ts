@@ -145,6 +145,7 @@ export function normalizeMphOtherEntry(raw: any, fallbackId = ''): MphOtherEntry
     farmerName: safeStr(raw.farmerName),
     date: safeDateStr(raw.date),
     entryType: raw.entryType === 'add' ? 'add' : 'deduct',
+    impactStage: raw.impactStage === 'after_paddy' ? 'after_paddy' : 'before_paddy',
     description: safeStr(raw.description),
     amount: safeNum(raw.amount),
     createdAt: normalizeIso(raw.createdAt),
@@ -429,6 +430,7 @@ export async function saveMphOtherEntryToCloud(userId: string, entry: MphOtherEn
       farmerName: entry.farmerName.trim().slice(0, 160),
       date: entry.date.slice(0, 32),
       entryType: entry.entryType,
+      impactStage: entry.impactStage === 'after_paddy' ? 'after_paddy' : 'before_paddy',
       description: entry.description.trim().slice(0, 300),
       amount: Number(entry.amount) || 0,
       createdAt: entry.createdAt,
@@ -595,6 +597,7 @@ export async function syncMphLocalDataToCloud(
         ownerId: userId,
         farmerId: fId,
         farmerName: safeStr(o.farmerName).trim().slice(0, 160),
+        impactStage: o.impactStage === 'after_paddy' ? 'after_paddy' : 'before_paddy',
         description: safeStr(o.description).trim().slice(0, 300),
       }),
     });

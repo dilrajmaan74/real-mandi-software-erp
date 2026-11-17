@@ -61,6 +61,8 @@ export interface MphJForm {
   updatedAt: string;
 }
 
+export type MphOtherImpactStage = 'before_paddy' | 'after_paddy';
+
 export interface MphOtherEntry {
   id: string;
   ownerId?: string;
@@ -68,6 +70,7 @@ export interface MphOtherEntry {
   farmerName: string;
   date: string; // YYYY-MM-DD
   entryType: 'add' | 'deduct';
+  impactStage?: MphOtherImpactStage; // 'before_paddy' (affects Paddy Hisab) | 'after_paddy' (post-Paddy settlement, only affects Grand Final Balance)
   description: string;
   amount: number;
   createdAt: string;
@@ -144,14 +147,16 @@ export interface MphFarmerAccountSummary {
   totalDryingBags: number;
   totalDryingLabor: number;
   dryingRateBreakdown: MphDryingRateBreakdownItem[];
-  totalOtherAdditions: number;
-  totalOtherDeductions: number;
+  totalOtherAdditions: number; // Before-Paddy (+) additions (included in Paddy Bakaya)
+  totalOtherDeductions: number; // Before-Paddy (-) deductions (included in Paddy Bakaya)
+  totalAfterPaddyAdditions: number; // After-Paddy (+) receipts (no impact on Paddy Bakaya)
+  totalAfterPaddyDeductions: number; // After-Paddy (-) payouts (no impact on Paddy Bakaya)
   totalDeductions: number;
-  finalBalance: number; // Paddy Bakaya (before advances & interest, rounded)
+  finalBalance: number; // Paddy Bakaya (before advances, interest, and after-paddy payments, rounded)
   balanceStatus: 'payable' | 'receivable' | 'settled';
   totalAdvancePrincipal: number;
   totalAdvanceInterest: number;
   totalAdvanceWithInterest: number;
-  combinedFinalBalance: number; // Paddy Bakaya - (Principal + Interest), rounded
+  combinedFinalBalance: number; // Paddy Bakaya - (Principal + Interest) + After-Paddy Additions - After-Paddy Deductions, rounded
   combinedBalanceStatus: 'payable' | 'receivable' | 'settled';
 }

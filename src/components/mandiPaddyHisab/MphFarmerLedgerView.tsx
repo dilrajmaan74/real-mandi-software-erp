@@ -6,6 +6,7 @@ import {
   MphInterestBasis,
   MphJForm,
   MphOtherEntry,
+  MphOtherImpactStage,
   MphSettings,
 } from '../../types/mandiPaddyHisab';
 import {
@@ -126,6 +127,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
   const [editingOtherId, setEditingOtherId] = useState<string | null>(null);
   const [otherDate, setOtherDate] = useState<string>(today);
   const [otherType, setOtherType] = useState<'add' | 'deduct'>('deduct');
+  const [otherStage, setOtherStage] = useState<MphOtherImpactStage>('before_paddy');
   const [otherDesc, setOtherDesc] = useState<string>('');
   const [otherAmount, setOtherAmount] = useState<string>('');
   const [otherError, setOtherError] = useState<string | null>(null);
@@ -214,6 +216,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
   // Final Settlement Payment / Receipt Quick Entry + Send WhatsApp state
   const [settleDate, setSettleDate] = useState<string>(today);
   const [settleType, setSettleType] = useState<'add' | 'deduct'>('deduct');
+  const [settleStage, setSettleStage] = useState<MphOtherImpactStage>('after_paddy');
   const [settleMode, setSettleMode] = useState<SettleMode>('Cash');
   const [settleAmount, setSettleAmount] = useState<string>('');
   const [settleNote, setSettleNote] = useState<string>('');
@@ -233,6 +236,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
 
   useEffect(() => {
     setSettleSavedMsg(null);
+    setSettleStage('after_paddy');
   }, [activeFarmer?.id]);
 
   useEffect(() => {
@@ -309,6 +313,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
       farmerName: activeFarmer.name,
       date: settleDate,
       entryType: settleType,
+      impactStage: settleStage,
       description: cleanNote,
       amount: Math.round(amt * 100) / 100,
       createdAt: now,
@@ -476,6 +481,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
     setEditingOtherId(null);
     setOtherDate(new Date().toISOString().split('T')[0]);
     setOtherType('deduct');
+    setOtherStage('before_paddy');
     setOtherDesc('');
     setOtherAmount('');
     setOtherError(null);
@@ -485,6 +491,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
     setEditingOtherId(item.id);
     setOtherDate(item.date);
     setOtherType(item.entryType);
+    setOtherStage(item.impactStage === 'after_paddy' ? 'after_paddy' : 'before_paddy');
     setOtherDesc(item.description);
     setOtherAmount(String(item.amount));
     setOtherError(null);
@@ -520,6 +527,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
       farmerName: activeFarmer.name,
       date: otherDate,
       entryType: otherType,
+      impactStage: otherStage,
       description: otherDesc.trim(),
       amount: Math.round(amt * 100) / 100,
       createdAt: existing ? existing.createdAt : now,
@@ -1180,7 +1188,10 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
               <div className="px-4 py-2.5 flex items-center justify-between">
                 <div>
                   <span className="font-medium text-slate-800">
-                    {tr('(+/-) Other Expenses or Payments', '(+/-) ਹੋਰ ਖਰਚੇ / ਅਦਾਇਗੀਆਂ')}
+                    {tr(
+                      '(+/-) Other Expenses or Payments (Before Paddy Hisab)',
+                      '(+/-) ਹੋਰ ਖਰਚੇ / ਅਦਾਇਗੀਆਂ (ਝੋਨੇ ਦੇ ਹਿਸਾਬ ਵਿੱਚ)'
+                    )}
                   </span>
                   <span className="text-[11px] text-slate-500 block font-mono tabular-nums">
                     {tr('Added:', 'ਜਮ੍ਹਾਂ:')} +{formatINR(summary.totalOtherAdditions)} ·{' '}
@@ -1207,7 +1218,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
           >
             <div>
               <div className="text-xs font-bold uppercase tracking-wide opacity-80">
-                {tr('Paddy Bakaya (Round Off)', 'ਝੋਨਾ ਬਕਾਇਆ (ਰਾਊਂਡ ਆਫ)')}
+                {tr('Paddy Bakaya — Only Paddy Account (Round Off)', 'ਝੋਨਾ ਬਕਾਇਆ — ਸਿਰਫ਼ ਝੋਨੇ ਦਾ ਹਿਸਾਬ (ਰਾਊਂਡ ਆਫ)')}
               </div>
               <div className="text-3xl font-bold font-mono tabular-nums mt-2">
                 {formatINR(Math.abs(summary.finalBalance), false)}
@@ -1577,22 +1588,40 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
 
         {/* (+/-) Other Expenses & Payments Ledger */}
         <div className="border border-slate-200 rounded-xl overflow-hidden">
-          <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+          <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
             <h3 className="text-xs font-bold text-slate-900">
               {tr('Other Expenses & Payments (+/-)', 'ਹੋਰ ਖਰਚੇ ਅਤੇ ਅਦਾਇਗੀਆਂ (+/-)')} ({summary.otherEntries.length})
             </h3>
-            <span className="text-[11px] font-mono tabular-nums text-slate-600">
-              {tr('Added:', 'ਜਮ੍ਹਾਂ:')} +{formatINR(summary.totalOtherAdditions)} ·{' '}
-              {tr('Deducted:', 'ਕਟੌਤੀ:')} -{formatINR(summary.totalOtherDeductions)}
-            </span>
+            <div className="flex flex-wrap items-center gap-3 text-[11px] font-mono tabular-nums text-slate-600">
+              <span>
+                {tr('Before Paddy Hisab:', 'ਝੋਨਾ ਹਿਸਾਬ ਵਿੱਚ:')}{' '}
+                <strong className="text-slate-900">
+                  {summary.totalOtherAdditions - summary.totalOtherDeductions >= 0 ? '+' : '-'}
+                  {formatINR(Math.abs(summary.totalOtherAdditions - summary.totalOtherDeductions))}
+                </strong>
+              </span>
+              {(summary.totalAfterPaddyAdditions > 0 || summary.totalAfterPaddyDeductions > 0) && (
+                <span>
+                  {tr('After Paddy Hisab:', 'ਝੋਨੇ ਹਿਸਾਬ ਤੋਂ ਬਾਅਦ:')}{' '}
+                  <strong className="text-emerald-800">
+                    {summary.totalAfterPaddyAdditions - summary.totalAfterPaddyDeductions >= 0
+                      ? '+'
+                      : '-'}
+                    {formatINR(
+                      Math.abs(summary.totalAfterPaddyAdditions - summary.totalAfterPaddyDeductions)
+                    )}
+                  </strong>
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Inline Add/Edit Other Entry Form (hidden in print) */}
           <form
             onSubmit={handleOtherSubmit}
-            className="print:hidden p-3 bg-slate-50/70 border-b border-slate-200 flex flex-col lg:flex-row lg:items-end gap-2.5"
+            className="print:hidden p-3 bg-slate-50/70 border-b border-slate-200 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2.5 items-end"
           >
-            <div className="w-full lg:w-36">
+            <div className="lg:col-span-2">
               <label className="block text-[11px] font-semibold text-slate-600 mb-1">
                 {tr('Date', 'ਤਾਰੀਖ')}
               </label>
@@ -1603,7 +1632,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                 className="w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded-lg bg-white"
               />
             </div>
-            <div className="w-full lg:w-52">
+            <div className="lg:col-span-3">
               <label className="block text-[11px] font-semibold text-slate-600 mb-1">
                 {tr('Entry Type (+/-)', 'ਐਂਟਰੀ ਕਿਸਮ (+/-)')}
               </label>
@@ -1620,7 +1649,30 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                 </option>
               </select>
             </div>
-            <div className="flex-1">
+            <div className="lg:col-span-3">
+              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                {tr('Hisab Impact Stage', 'ਕਿੱਥੇ ਅਸਰ ਪਵੇ?')}
+              </label>
+              <select
+                value={otherStage}
+                onChange={(e) => setOtherStage(e.target.value as MphOtherImpactStage)}
+                className="w-full px-2.5 py-1.5 text-xs font-semibold border border-slate-300 rounded-lg bg-white"
+              >
+                <option value="before_paddy">
+                  {tr(
+                    'Before Paddy Hisab (In Paddy Bakaya)',
+                    'ਝੋਨੇ ਦੇ ਹਿਸਾਬ ਤੋਂ ਪਹਿਲਾਂ (ਝੋਨਾ ਬਕਾਇਆ ਵਿੱਚ)'
+                  )}
+                </option>
+                <option value="after_paddy">
+                  {tr(
+                    'After Paddy Hisab (No Paddy Bakaya Impact)',
+                    'ਝੋਨੇ ਦੇ ਹਿਸਾਬ ਤੋਂ ਬਾਅਦ (ਝੋਨਾ ਬਕਾਇਆ ਤੇ ਅਸਰ ਨਹੀਂ)'
+                  )}
+                </option>
+              </select>
+            </div>
+            <div className="lg:col-span-2">
               <label className="block text-[11px] font-semibold text-slate-600 mb-1">
                 {tr('Description', 'ਵੇਰਵਾ')}
               </label>
@@ -1629,33 +1681,33 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                 value={otherDesc}
                 onChange={(e) => setOtherDesc(e.target.value)}
                 placeholder={tr(
-                  'e.g. Cash Advance / Diesel / Payment Received...',
-                  'ਜਿਵੇਂ ਨਕਦ / ਡੀਜ਼ਲ / ਅਦਾਇਗੀ ਪ੍ਰਾਪਤ...'
+                  'e.g. Cash / Diesel / Received...',
+                  'ਜਿਵੇਂ ਨਕਦ / ਡੀਜ਼ਲ / ਜਮ੍ਹਾਂ...'
                 )}
                 className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg bg-white"
               />
             </div>
-            <div className="w-full lg:w-36">
-              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                {tr('Amount (₹)', 'ਰਕਮ (₹)')}
-              </label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={otherAmount}
-                onChange={(e) => setOtherAmount(e.target.value)}
-                placeholder="0.00"
-                className="w-full px-2.5 py-1.5 text-xs font-mono tabular-nums font-bold border border-slate-300 rounded-lg bg-white"
-              />
-            </div>
-            <div className="flex items-center gap-1.5">
+            <div className="lg:col-span-2 flex items-end gap-1.5">
+              <div className="flex-1 min-w-0">
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  {tr('Amount (₹)', 'ਰਕਮ (₹)')}
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={otherAmount}
+                  onChange={(e) => setOtherAmount(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full px-2 py-1.5 text-xs font-mono tabular-nums font-bold border border-slate-300 rounded-lg bg-white"
+                />
+              </div>
               <button
                 type="submit"
-                className="inline-flex items-center gap-1 px-3.5 py-1.5 text-xs font-bold bg-slate-900 text-white rounded-lg hover:bg-slate-800 cursor-pointer whitespace-nowrap"
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-slate-900 text-white rounded-lg hover:bg-slate-800 cursor-pointer whitespace-nowrap"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>{editingOtherId ? tr('Update', 'ਅੱਪਡੇਟ') : tr('Add Entry', 'ਜੋੜੋ')}</span>
+                <span>{editingOtherId ? tr('Update', 'ਅੱਪਡੇਟ') : tr('Add', 'ਜੋੜੋ')}</span>
               </button>
               {editingOtherId && (
                 <button
@@ -1690,13 +1742,16 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                     <th className="py-2 px-3 font-semibold">#</th>
                     <th className="py-2 px-3 font-semibold">{tr('Date', 'ਤਾਰੀਖ')}</th>
                     <th className="py-2 px-3 font-semibold">{tr('Type', 'ਕਿਸਮ')}</th>
+                    <th className="py-2 px-3 font-semibold">{tr('Hisab Stage', 'ਹਿਸਾਬ ਪੜਾਅ')}</th>
                     <th className="py-2 px-3 font-semibold">{tr('Description', 'ਵੇਰਵਾ')}</th>
                     <th className="py-2 px-3 font-semibold text-right">{tr('Amount', 'ਰਕਮ')}</th>
                     <th className="py-2 px-3 font-semibold text-right print:hidden">{tr('Actions', 'ਕਾਰਵਾਈ')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {summary.otherEntries.map((o, idx) => (
+                  {summary.otherEntries.map((o, idx) => {
+                    const isAfter = o.impactStage === 'after_paddy';
+                    return (
                     <tr key={o.id} className="hover:bg-slate-50/70">
                       <td className="py-2 px-3 font-mono tabular-nums text-slate-400">
                         {idx + 1}
@@ -1704,15 +1759,28 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                       <td className="py-2 px-3 font-mono tabular-nums whitespace-nowrap">
                         {formatDateDMY(o.date)}
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="py-2 px-3 whitespace-nowrap">
                         <span
                           className={`font-semibold ${
                             o.entryType === 'add' ? 'text-emerald-700' : 'text-rose-700'
                           }`}
                         >
                           {o.entryType === 'add'
-                            ? tr('(+) Credit', '(+) ਜਮ੍ਹਾਂ')
+                            ? tr('(+) Credit / Received', '(+) ਜਮ੍ਹਾਂ / ਆਏ')
                             : tr('(-) Expense / Paid', '(-) ਖਰਚ / ਦਿੱਤੇ')}
+                        </span>
+                      </td>
+                      <td className="py-2 px-3 whitespace-nowrap">
+                        <span
+                          className={`inline-block px-2 py-0.5 text-[10.5px] font-semibold rounded border ${
+                            isAfter
+                              ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
+                              : 'bg-slate-100 text-slate-700 border-slate-200'
+                          }`}
+                        >
+                          {isAfter
+                            ? tr('After Paddy Hisab', 'ਝੋਨੇ ਹਿਸਾਬ ਤੋਂ ਬਾਅਦ')
+                            : tr('Before Paddy Hisab', 'ਝੋਨਾ ਹਿਸਾਬ ਵਿੱਚ')}
                         </span>
                       </td>
                       <td className="py-2 px-3 text-slate-800">
@@ -1747,7 +1815,8 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -2151,6 +2220,39 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                   -{formatINR(summary.totalAdvanceWithInterest)}
                 </span>
               </div>
+
+              {(summary.totalAfterPaddyAdditions > 0 || summary.totalAfterPaddyDeductions > 0) && (
+                <div className="px-4 py-2.5 bg-indigo-50/50 flex items-center justify-between">
+                  <div>
+                    <span className="font-semibold text-indigo-950">
+                      {tr(
+                        '4. (+/-) Post-Hisab Payments / Settlements (After Paddy Hisab)',
+                        '4. (+/-) ਝੋਨੇ ਹਿਸਾਬ ਤੋਂ ਬਾਅਦ ਜਮ੍ਹਾਂ / ਅਦਾਇਗੀਆਂ'
+                      )}
+                    </span>
+                    <span className="text-[11px] text-indigo-800 block font-mono tabular-nums">
+                      {tr('Received:', 'ਕਿਸਾਨ ਤੋਂ ਜਮ੍ਹਾਂ:')} +{formatINR(summary.totalAfterPaddyAdditions)} ·{' '}
+                      {tr('Paid:', 'ਕਿਸਾਨ ਨੂੰ ਦਿੱਤੇ:')} -{formatINR(summary.totalAfterPaddyDeductions)}
+                    </span>
+                  </div>
+                  <span
+                    className={`font-mono tabular-nums font-bold ${
+                      summary.totalAfterPaddyAdditions - summary.totalAfterPaddyDeductions >= 0
+                        ? 'text-emerald-700'
+                        : 'text-rose-700'
+                    }`}
+                  >
+                    {summary.totalAfterPaddyAdditions - summary.totalAfterPaddyDeductions >= 0
+                      ? '+'
+                      : '-'}
+                    {formatINR(
+                      Math.abs(
+                        summary.totalAfterPaddyAdditions - summary.totalAfterPaddyDeductions
+                      )
+                    )}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -2191,7 +2293,13 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
               </div>
             </div>
 
-            <div className="mt-4 pt-3 border-t border-black/10 grid grid-cols-2 gap-2 text-xs">
+            <div
+              className={`mt-4 pt-3 border-t border-black/10 grid gap-2 text-xs ${
+                summary.totalAfterPaddyAdditions > 0 || summary.totalAfterPaddyDeductions > 0
+                  ? 'grid-cols-3'
+                  : 'grid-cols-2'
+              }`}
+            >
               <div>
                 <span className="opacity-70 block text-[11px]">
                   {tr('Paddy Bakaya', 'ਝੋਨਾ ਬਕਾਇਆ')}
@@ -2201,7 +2309,13 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                   {formatINR(Math.abs(summary.finalBalance), false)}
                 </span>
               </div>
-              <div className="text-right">
+              <div
+                className={
+                  summary.totalAfterPaddyAdditions > 0 || summary.totalAfterPaddyDeductions > 0
+                    ? 'text-center'
+                    : 'text-right'
+                }
+              >
                 <span className="opacity-70 block text-[11px]">
                   {tr('Principal + Interest', 'ਮੂਲ + ਵਿਆਜ')}
                 </span>
@@ -2209,6 +2323,24 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                   -{formatINR(summary.totalAdvanceWithInterest)}
                 </span>
               </div>
+              {(summary.totalAfterPaddyAdditions > 0 || summary.totalAfterPaddyDeductions > 0) && (
+                <div className="text-right">
+                  <span className="opacity-70 block text-[11px]">
+                    {tr('After-Paddy', 'ਹਿਸਾਬ ਤੋਂ ਬਾਅਦ')}
+                  </span>
+                  <span className="font-mono tabular-nums font-bold">
+                    {summary.totalAfterPaddyAdditions - summary.totalAfterPaddyDeductions >= 0
+                      ? '+'
+                      : '-'}
+                    {formatINR(
+                      Math.abs(
+                        summary.totalAfterPaddyAdditions - summary.totalAfterPaddyDeductions
+                      ),
+                      false
+                    )}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -2380,7 +2512,30 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-end">
-            <div className="lg:col-span-7">
+            <div className="lg:col-span-4">
+              <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                {tr('Apply Payment To', 'ਇਹ ਅਦਾਇਗੀ ਕਿੱਥੇ ਜੁੜੇ?')}
+              </label>
+              <select
+                value={settleStage}
+                onChange={(e) => setSettleStage(e.target.value as MphOtherImpactStage)}
+                className="w-full px-2.5 py-1.5 text-xs font-semibold border border-emerald-300 rounded-lg bg-white text-slate-800"
+              >
+                <option value="after_paddy">
+                  {tr(
+                    'After Paddy Hisab (Paddy Bakaya stays unchanged)',
+                    'ਝੋਨੇ ਹਿਸਾਬ ਤੋਂ ਬਾਅਦ (ਝੋਨਾ ਬਕਾਇਆ ਤੇ ਅਸਰ ਨਹੀਂ)'
+                  )}
+                </option>
+                <option value="before_paddy">
+                  {tr(
+                    'Before Paddy Hisab (Changes Paddy Bakaya too)',
+                    'ਝੋਨੇ ਦੇ ਹਿਸਾਬ ਵਿੱਚ (ਝੋਨਾ ਬਕਾਇਆ ਵੀ ਬਦਲੇ)'
+                  )}
+                </option>
+              </select>
+            </div>
+            <div className="lg:col-span-4">
               <label className="block text-[11px] font-semibold text-slate-700 mb-1">
                 {tr('Entry Note / Description', 'ਐਂਟਰੀ ਵੇਰਵਾ / ਨੋਟ')}
               </label>
@@ -2400,7 +2555,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
               />
             </div>
 
-            <div className="lg:col-span-5 rounded-lg border border-slate-200 bg-white px-3 py-2 flex items-center justify-between text-xs">
+            <div className="lg:col-span-4 rounded-lg border border-slate-200 bg-white px-3 py-2 flex items-center justify-between text-xs">
               <div>
                 <span className="text-[10.5px] text-slate-500 block">
                   {tr('Balance After This Entry', 'ਇਸ ਐਂਟਰੀ ਤੋਂ ਬਾਅਦ ਬਾਕੀ ਬਕਾਇਆ')}

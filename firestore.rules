@@ -114,7 +114,7 @@ service cloud.firestore {
         ])
         && data.keys().hasOnly([
           'id', 'ownerId', 'farmerId', 'farmerName', 'date', 'entryType',
-          'description', 'amount', 'createdAt', 'updatedAt'
+          'impactStage', 'description', 'amount', 'createdAt', 'updatedAt'
         ])
         && data.id == entryId
         && data.ownerId == userId
@@ -122,6 +122,7 @@ service cloud.firestore {
         && data.farmerName is string && data.farmerName.size() >= 1 && data.farmerName.size() <= 160
         && data.date is string && data.date.size() >= 8 && data.date.size() <= 32
         && data.entryType in ['add', 'deduct']
+        && (!('impactStage' in data) || data.impactStage in ['before_paddy', 'after_paddy'])
         && data.description is string && data.description.size() >= 1 && data.description.size() <= 300
         && data.amount is number && data.amount >= 0
         && data.createdAt is string && data.createdAt.size() <= 64
@@ -280,7 +281,7 @@ service cloud.firestore {
           && incoming().createdAt == existing().createdAt
           && existsAfter(/databases/$(database)/documents/users/$(userId)/mph_farmers/$(incoming().farmerId))
           && incoming().diff(existing()).affectedKeys().hasOnly([
-            'farmerId', 'farmerName', 'date', 'entryType', 'description', 'amount', 'updatedAt'
+            'farmerId', 'farmerName', 'date', 'entryType', 'impactStage', 'description', 'amount', 'updatedAt'
           ]);
         allow delete: if isOwner(userId) && isVerifiedUser() && isValidId(userId) && isValidId(entryId);
       }

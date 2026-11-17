@@ -417,6 +417,25 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
                       {formatINR(Math.abs(farmerSummary.finalBalance), false)} ·{' '}
                       {tr('Adv (P+I):', 'ਪੇਸ਼ਗੀ (ਮੂਲ+ਵਿਆਜ):')} -
                       {formatINR(farmerSummary.totalAdvanceWithInterest)}
+                      {(farmerSummary.totalAfterPaddyAdditions > 0 ||
+                        farmerSummary.totalAfterPaddyDeductions > 0) && (
+                        <>
+                          {' '}
+                          · {tr('After-Paddy:', 'ਹਿਸਾਬ ਤੋਂ ਬਾਅਦ:')}{' '}
+                          {farmerSummary.totalAfterPaddyAdditions -
+                            farmerSummary.totalAfterPaddyDeductions >=
+                          0
+                            ? '+'
+                            : '-'}
+                          {formatINR(
+                            Math.abs(
+                              farmerSummary.totalAfterPaddyAdditions -
+                                farmerSummary.totalAfterPaddyDeductions
+                            ),
+                            false
+                          )}
+                        </>
+                      )}
                     </div>
                     <div className="text-[10.5px] text-slate-500">
                       ({tr('Paddy Bakaya:', 'ਝੋਨਾ ਬਕਾਇਆ:')} {formatRupeesInWords(farmerSummary.finalBalance, lang)})
@@ -504,7 +523,7 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
                   </div>
                   <div className="border border-slate-200 rounded-lg p-2.5">
                     <span className="text-slate-500 block text-[11px]">
-                      {tr('(+/-) Other Net', '(+/-) ਹੋਰ ਖਾਤਾ')}
+                      {tr('(+/-) Other (Paddy Hisab)', '(+/-) ਹੋਰ (ਝੋਨਾ ਹਿਸਾਬ)')}
                     </span>
                     <span className="font-mono tabular-nums font-bold text-slate-800">
                       {farmerSummary.totalOtherAdditions - farmerSummary.totalOtherDeductions >= 0
@@ -516,6 +535,24 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
                         )
                       )}
                     </span>
+                    {(farmerSummary.totalAfterPaddyAdditions > 0 ||
+                      farmerSummary.totalAfterPaddyDeductions > 0) && (
+                      <span className="text-[10px] text-indigo-800 font-mono tabular-nums block mt-0.5">
+                        {tr('After-Paddy:', 'ਬਾਅਦ:')} {' '}
+                        {farmerSummary.totalAfterPaddyAdditions -
+                          farmerSummary.totalAfterPaddyDeductions >=
+                        0
+                          ? '+'
+                          : '-'}
+                        {formatINR(
+                          Math.abs(
+                            farmerSummary.totalAfterPaddyAdditions -
+                              farmerSummary.totalAfterPaddyDeductions
+                          ),
+                          false
+                        )}
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -763,6 +800,25 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
                         {formatINR(Math.abs(farmerSummary.finalBalance), false)}) −{' '}
                         {tr('Principal', 'ਮੂਲ')} ({formatINR(farmerSummary.totalAdvancePrincipal)}) −{' '}
                         {tr('Interest', 'ਵਿਆਜ')} ({formatINR(farmerSummary.totalAdvanceInterest)})
+                        {(farmerSummary.totalAfterPaddyAdditions > 0 ||
+                          farmerSummary.totalAfterPaddyDeductions > 0) && (
+                          <>
+                            {' '}
+                            {farmerSummary.totalAfterPaddyAdditions -
+                              farmerSummary.totalAfterPaddyDeductions >=
+                            0
+                              ? '+'
+                              : '−'}{' '}
+                            {tr('After-Paddy', 'ਹਿਸਾਬ ਤੋਂ ਬਾਅਦ')} (
+                            {formatINR(
+                              Math.abs(
+                                farmerSummary.totalAfterPaddyAdditions -
+                                  farmerSummary.totalAfterPaddyDeductions
+                              )
+                            )}
+                            )
+                          </>
+                        )}
                       </div>
                       <div className="text-[11px] text-slate-300">
                         {tr('Paddy Bakaya in Words:', 'ਝੋਨਾ ਬਕਾਇਆ ਸ਼ਬਦਾਂ ਵਿੱਚ:')}{' '}
