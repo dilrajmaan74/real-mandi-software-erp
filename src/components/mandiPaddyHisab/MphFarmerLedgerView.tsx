@@ -46,6 +46,7 @@ import {
   X,
 } from 'lucide-react';
 import { useMphLang } from '../../lib/mandiPaddyHisabI18n';
+import { MphWhatsappMessageMode } from '../../lib/mandiPaddyHisabWhatsapp';
 import { MphWhatsAppModal } from './MphWhatsAppModal';
 
 interface MphFarmerLedgerViewProps {
@@ -94,6 +95,17 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
   const printRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [whatsappOpen, setWhatsappOpen] = useState(false);
+  const [whatsappMode, setWhatsappMode] = useState<MphWhatsappMessageMode>('full');
+  const [whatsappReceiptEntry, setWhatsappReceiptEntry] = useState<MphOtherEntry | null>(null);
+
+  const openWhatsappModal = (
+    mode: MphWhatsappMessageMode = 'full',
+    receiptEntry: MphOtherEntry | null = null
+  ) => {
+    setWhatsappMode(mode);
+    setWhatsappReceiptEntry(receiptEntry);
+    setWhatsappOpen(true);
+  };
 
   const trPaddyType = (type: string) =>
     type === 'Hybrid Paddy'
@@ -301,7 +313,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
     return Math.round(summary.combinedFinalBalance + delta);
   }, [summary, settleType, parsedSettleAmt]);
 
-  const handleSaveSettlement = (openWhatsappAfter: boolean) => {
+  const handleSaveSettlement = (afterAction: 'none' | 'full' | 'receipt') => {
     if (!activeFarmer) return;
     setSettleError(null);
     setSettleSavedMsg(null);
@@ -329,7 +341,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
     }
 
     const now = new Date().toISOString();
-    onSaveOtherEntry({
+    const newEntry: MphOtherEntry = {
       id: `MPHO_STL_${Date.now()}_${Math.floor(100 + Math.random() * 900)}`,
       farmerId: activeFarmer.id,
       farmerName: activeFarmer.name,
@@ -340,14 +352,20 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
       amount: Math.round(amt * 100) / 100,
       createdAt: now,
       updatedAt: now,
-    });
+    };
+    onSaveOtherEntry(newEntry);
 
     setSettleNoteTouched(false);
     setSettleSavedMsg(
-      openWhatsappAfter
+      afterAction === 'receipt'
         ? tr(
-            'Settlement entry saved! Opening WhatsApp statement...',
-            'ਅੰਤਿਮ ਹਿਸਾਬ ਐਂਟਰੀ ਦਰਜ ਹੋ ਗਈ! ਵਟਸਐਪ ਸਟੇਟਮੈਂਟ ਖੁੱਲ੍ਹ ਰਿਹਾ ਹੈ...'
+            'Entry saved! Opening Receipt + Closing Balance WhatsApp...',
+            'ਐਂਟਰੀ ਦਰਜ ਹੋ ਗਈ! ਸਿਰਫ਼ ਰਸੀਦ + ਬਕਾਇਆ WhatsApp ਖੁੱਲ੍ਹ ਰਿਹਾ ਹੈ...'
+          )
+        : afterAction === 'full'
+        ? tr(
+            'Settlement entry saved! Opening Pura Hisab WhatsApp...',
+            'ਅੰਤਿਮ ਹਿਸਾਬ ਐਂਟਰੀ ਦਰਜ ਹੋ ਗਈ! ਪੂਰਾ ਹਿਸਾਬ WhatsApp ਖੁੱਲ੍ਹ ਰਿਹਾ ਹੈ...'
           )
         : tr(
             'Settlement entry saved successfully in account.',
@@ -355,8 +373,10 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
           )
     );
 
-    if (openWhatsappAfter) {
-      setWhatsappOpen(true);
+    if (afterAction === 'receipt') {
+      openWhatsappModal('receipt', newEntry);
+    } else if (afterAction === 'full') {
+      openWhatsappModal('full', newEntry);
     }
   };
 
@@ -771,7 +791,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
           </button>
           <button
             type="button"
-            onClick={() => setWhatsappOpen(true)}
+            onClick={() => openWhatsappModal('full', null)}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 cursor-pointer whitespace-nowrap"
             title={tr('Send Pura Hisab on WhatsApp', 'ਪੂਰਾ ਹਿਸਾਬ WhatsApp ਤੇ ਭੇਜੋ')}
           >
@@ -1820,6 +1840,17 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                         <div className="inline-flex items-center gap-1">
                           <button
                             type="button"
+                            onClick={() => openWhatsappModal('receipt', o)}
+                            className="p-1 text-emerald-700 hover:bg-emerald-50 rounded cursor-pointer"
+                            title={tr(
+                              'Send This Entry Receipt + Closing Balance on WhatsApp',
+                              'ਸਿਰਫ਼ ਇਸ ਐਂਟਰੀ ਦੀ ਰਸੀਦ + ਬਕਾਇਆ WhatsApp ਭੇਜੋ'
+                            )}
+                          >
+                            <MessageCircle className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => handleEditOther(o)}
                             className="p-1 text-blue-700 hover:bg-blue-50 rounded cursor-pointer"
                             title={tr('Edit', 'ਸੋਧੋ')}
@@ -2418,7 +2449,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
               </span>
               <button
                 type="button"
-                onClick={() => setWhatsappOpen(true)}
+                onClick={() => openWhatsappModal('full', null)}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-emerald-700 text-white rounded-lg hover:bg-emerald-800 cursor-pointer whitespace-nowrap shrink-0"
               >
                 <MessageCircle className="w-3.5 h-3.5" />
@@ -2635,7 +2666,7 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
           <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
             <button
               type="button"
-              onClick={() => handleSaveSettlement(false)}
+              onClick={() => handleSaveSettlement('none')}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold bg-white border border-slate-300 text-slate-800 rounded-lg hover:bg-slate-100 cursor-pointer"
             >
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
@@ -2643,14 +2674,27 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => handleSaveSettlement(true)}
+              onClick={() => handleSaveSettlement('receipt')}
               className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 shadow-sm cursor-pointer"
+            >
+              <MessageCircle className="w-3.5 h-3.5" />
+              <span>
+                {tr(
+                  'Save & Send Receipt + Closing Balance (WhatsApp)',
+                  'ਸੇਵ ਕਰੋ ਅਤੇ ਸਿਰਫ਼ ਰਸੀਦ + ਬਕਾਇਆ WhatsApp ਭੇਜੋ'
+                )}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSaveSettlement('full')}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-slate-900 text-white rounded-lg hover:bg-slate-800 shadow-sm cursor-pointer"
             >
               <Send className="w-3.5 h-3.5" />
               <span>
                 {tr(
-                  'Save Entry & Send Pura Hisab on WhatsApp',
-                  'ਐਂਟਰੀ ਸੇਵ ਕਰੋ ਅਤੇ ਵਟਸਐਪ ਉੱਤੇ ਪੂਰਾ ਹਿਸਾਬ ਭੇਜੋ'
+                  'Save & Send Pura Hisab (WhatsApp)',
+                  'ਸੇਵ ਕਰੋ ਅਤੇ ਪੂਰਾ ਹਿਸਾਬ WhatsApp ਭੇਜੋ'
                 )}
               </span>
             </button>
@@ -2663,6 +2707,8 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
         summary={summary}
         settings={settings}
         statementElement={printRef.current}
+        initialMode={whatsappMode}
+        receiptEntry={whatsappReceiptEntry}
         onClose={() => setWhatsappOpen(false)}
       />
     </div>

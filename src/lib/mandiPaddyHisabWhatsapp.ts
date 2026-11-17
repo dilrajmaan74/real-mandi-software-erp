@@ -2,6 +2,7 @@ import { toJpeg } from 'html-to-image';
 import {
   DEFAULT_MPH_SETTINGS,
   MphFarmerAccountSummary,
+  MphOtherEntry,
   MphSettings,
 } from '../types/mandiPaddyHisab';
 import { MphLang } from './mandiPaddyHisabI18n';
@@ -20,7 +21,7 @@ import {
   safeStr,
 } from './mandiPaddyHisabUtils';
 
-export type MphWhatsappMessageMode = 'full' | 'summary';
+export type MphWhatsappMessageMode = 'full' | 'summary' | 'receipt';
 
 function trPaddyType(type: string, lang: MphLang): string {
   if (lang === 'pa') {
@@ -76,6 +77,9 @@ export function buildFarmerPuraHisabWhatsAppText(
   mode: MphWhatsappMessageMode = 'full'
 ): string {
   if (!summary || !summary.farmer) return '';
+  if (mode === 'receipt') {
+    return buildFarmerPaymentReceiptWhatsAppText(summary, settings, lang);
+  }
   const safeSettings = {
     ...DEFAULT_MPH_SETTINGS,
     ...(settings || {}),
@@ -512,6 +516,177 @@ export function buildFarmerPuraHisabWhatsAppText(
     } else {
       lines.push(
         `🙏 *Note:* As per the complete statement above, a balance of *${absFinal}* is receivable from your side. Kindly review all details and arrange payment at your convenience. Contact us anytime for any query. Thank you! 🤝🌾`
+      );
+    }
+  }
+
+  return lines.join('\n');
+}
+
+export function buildFarmerPaymentReceiptWhatsAppText(
+  summary: MphFarmerAccountSummary,
+  _settings: MphSettings,
+  lang: MphLang,
+  entry?: MphOtherEntry | null
+): string {
+  if (!summary || !summary.farmer) return '';
+  const isPa = lang === 'pa';
+  const f = summary.farmer;
+  const entries = Array.isArray(summary.otherEntries) ? summary.otherEntries : [];
+  const afterEntries = entries.filter((o) => o.impactStage === 'after_paddy');
+  const fallbackEntry =
+    afterEntries.length > 0
+      ? afterEntries[afterEntries.length - 1]
+      : entries.length > 0
+      ? entries[entries.length - 1]
+      : null;
+  const targetEntry = entry || fallbackEntry;
+
+  const lines: string[] = [];
+  const todayStr = formatDateDMY(new Date().toISOString().split('T')[0]);
+
+  if (isPa) {
+    const farmerPa = displayMphText(f.name, 'pa');
+    lines.push(`🙏 *ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ ${farmerPa} ਜੀ!*`);
+    lines.push('🧾 *ਅਦਾਇਗੀ / ਵਸੂਲੀ ਰਸੀਦ (ਸਿਰਫ਼ ਐਂਟਰੀ ਅਤੇ ਬਕਾਇਆ)*');
+    lines.push(`*ਤਾਰੀਖ:* ${targetEntry ? formatDateDMY(targetEntry.date) : todayStr}`);
+    lines.push('─────────────────────');
+    lines.push(`*ਕਿਸਾਨ:* ${farmerPa}`);
+    if (f.fatherName) lines.push(`*ਪਿਤਾ ਦਾ ਨਾਮ:* ${displayMphText(f.fatherName, 'pa')}`);
+    lines.push(`*ਪਿੰਡ:* ${displayMphText(f.village, 'pa')}`);
+    if (f.mobile) lines.push(`*ਮੋਬਾਈਲ:* ${safeStr(f.mobile)}`);
+  } else {
+    lines.push(`🙏 *Sat Sri Akal ${f.name} Ji!*`);
+    lines.push('🧾 *Payment / Receipt Slip (Single Entry & Closing Balance)*');
+    lines.push(`*Date:* ${targetEntry ? formatDateDMY(targetEntry.date) : todayStr}`);
+    lines.push('─────────────────────');
+    lines.push(`*Farmer:* ${f.name}`);
+    if (f.fatherName) lines.push(`*Father Name:* ${f.fatherName}`);
+    lines.push(`*Village:* ${f.village}`);
+    if (f.mobile) lines.push(`*Mobile:* ${f.mobile}`);
+  }
+
+  let closingBalance = summary.combinedFinalBalance;
+  let prevBalance: number | null = null;
+  let delta = 0;
+
+  if (targetEntry) {
+    const amt = Math.max(0, safeNum(targetEntry.amount));
+    delta = targetEntry.entryType === 'add' ? amt : -amt;
+    const isInSummary = entries.some((o) => o.id === targetEntry.id);
+    const isLatestEntry = entries.length > 0 && entries[entries.length - 1].id === targetEntry.id;
+
+    if (!isInSummary) {
+      prevBalance = summary.combinedFinalBalance;
+      closingBalance = Math.round(prevBalance + delta);
+    } else if (isLatestEntry) {
+      closingBalance = summary.combinedFinalBalance;
+      prevBalance = Math.round(closingBalance - delta);
+    }
+
+    const hasPaise = amt % 1 !== 0;
+    const formattedAmt = formatINR(amt, hasPaise);
+    const signAmt = `${targetEntry.entryType === 'add' ? '+' : '-'}${formattedAmt}`;
+    const wordsRounded = Math.round(amt);
+
+    lines.push('─────────────────────');
+    if (isPa) {
+      const kindLabel =
+        targetEntry.entryType === 'add'
+          ? '(+) ਕਿਸਾਨ ਵੱਲੋਂ ਜਮ੍ਹਾਂ / ਵਸੂਲੀ'
+          : '(-) ਕਿਸਾਨ ਨੂੰ ਅਦਾਇਗੀ / ਖਰਚ';
+      lines.push('💵 *ਮੌਜੂਦਾ ਐਂਟਰੀ ਦਾ ਵੇਰਵਾ:*');
+      lines.push(`• *ਤਾਰੀਖ:* ${formatDateDMY(targetEntry.date)}`);
+      lines.push(`• *ਕਿਸਮ:* ${kindLabel}`);
+      lines.push(`• *ਵੇਰਵਾ:* ${displayMphText(targetEntry.description, 'pa')}`);
+      lines.push(`• *ਰਕਮ:* *${signAmt}*`);
+      lines.push(`• *ਸ਼ਬਦਾਂ ਵਿੱਚ:* ${formatRupeesInWords(wordsRounded, 'pa')}`);
+    } else {
+      const kindLabel =
+        targetEntry.entryType === 'add'
+          ? '(+) Received from Farmer'
+          : '(-) Paid to Farmer';
+      lines.push('💵 *Payment / Receipt Entry Details:*');
+      lines.push(`• *Date:* ${formatDateDMY(targetEntry.date)}`);
+      lines.push(`• *Type:* ${kindLabel}`);
+      lines.push(`• *Description:* ${targetEntry.description}`);
+      lines.push(`• *Amount:* *${signAmt}*`);
+      lines.push(`• *In Words:* ${formatRupeesInWords(wordsRounded, 'en')}`);
+    }
+  } else {
+    lines.push('─────────────────────');
+    lines.push(
+      isPa
+        ? 'ℹ️ *ਨੋਟ:* ਅਜੇ ਕੋਈ ਵੱਖਰੀ ਅਦਾਇਗੀ ਐਂਟਰੀ ਦਰਜ ਨਹੀਂ ਹੈ — ਹੇਠਾਂ ਮੌਜੂਦਾ ਬਕਾਇਆ ਦਰਜ ਹੈ।'
+        : 'ℹ️ *Note:* No separate payment entry selected — current closing balance shown below.'
+    );
+  }
+
+  lines.push('─────────────────────');
+  const closingAbsStr = formatINR(Math.abs(closingBalance), false);
+  const closingStatus: 'payable' | 'receivable' | 'settled' =
+    closingBalance > 0 ? 'payable' : closingBalance < 0 ? 'receivable' : 'settled';
+
+  if (isPa) {
+    if (prevBalance !== null && targetEntry) {
+      const prevAbsStr = formatINR(Math.abs(prevBalance), false);
+      const amtHasPaise = Math.abs(delta) % 1 !== 0;
+      const deltaStr = `${delta >= 0 ? '+' : '-'}${formatINR(Math.abs(delta), amtHasPaise)}`;
+      lines.push(`• *ਪਿਛਲਾ ਬਕਾਇਆ:* ${prevBalance < 0 ? '-' : ''}${prevAbsStr}`);
+      lines.push(`• *ਅੱਜ ਦੀ ਐਂਟਰੀ:* ${deltaStr}`);
+    }
+    const statusLabel =
+      closingStatus === 'payable'
+        ? 'ਕਿਸਾਨ ਨੂੰ ਪੈਸੇ ਦੇਣੇ ਹਨ (Payable)'
+        : closingStatus === 'receivable'
+        ? 'ਕਿਸਾਨ ਤੋਂ ਪੈਸੇ ਲੈਣੇ ਹਨ (Receivable)'
+        : 'ਹਿਸਾਬ ਬਰਾਬਰ — ਕੋਈ ਬਕਾਇਆ ਨਹੀਂ (Settled)';
+    lines.push(`👉 *ਕੁੱਲ ਬਕਾਇਆ (Closing Balance): ${closingBalance < 0 ? '-' : ''}${closingAbsStr}*`);
+    lines.push(`*ਸ਼ਬਦਾਂ ਵਿੱਚ:* ${formatRupeesInWords(closingBalance, 'pa')}`);
+    lines.push(`*ਸਥਿਤੀ:* ${statusLabel}`);
+    lines.push('─────────────────────');
+    if (closingStatus === 'settled') {
+      lines.push(
+        '🙏 *ਸੰਦੇਸ਼:* ਤੁਹਾਡੀ ਇਸ ਅਦਾਇਗੀ ਨਾਲ ਪੂਰਾ ਹਿਸਾਬ ਬਰਾਬਰ (₹0 ਬਕਾਇਆ) ਹੋ ਗਿਆ ਹੈ। ਤੁਹਾਡੇ ਸਾਥ ਅਤੇ ਭਰੋਸੇ ਲਈ ਬਹੁਤ-ਬਹੁਤ ਧੰਨਵਾਦ! 🤝🌾'
+      );
+    } else if (closingStatus === 'payable') {
+      lines.push(
+        `🙏 *ਸੰਦੇਸ਼:* ਇਸ ਐਂਟਰੀ ਤੋਂ ਬਾਅਦ ਤੁਹਾਡਾ *${closingAbsStr}* ਬਕਾਇਆ ਬਾਕੀ ਹੈ (ਜੋ ਤੁਹਾਨੂੰ ਅਦਾ ਕੀਤਾ ਜਾਣਾ ਹੈ)। ਕਿਰਪਾ ਕਰਕੇ ਵੇਰਵਾ ਚੈੱਕ ਕਰ ਲਓ ਜੀ। ਧੰਨਵਾਦ! 🤝🌾`
+      );
+    } else {
+      lines.push(
+        `🙏 *ਸੰਦੇਸ਼:* ਤੁਹਾਡੀ ਇਹ ਰਸੀਦ ਦਰਜ ਕਰ ਲਈ ਗਈ ਹੈ। ਇਸ ਐਂਟਰੀ ਤੋਂ ਬਾਅਦ *${closingAbsStr}* ਬਕਾਇਆ (Closing Balance) ਤੁਹਾਡੇ ਵੱਲ ਬਾਕੀ ਹੈ। ਕਿਰਪਾ ਕਰਕੇ ਨੋਟ ਕਰ ਲਓ ਜੀ। ਧੰਨਵਾਦ! 🤝🌾`
+      );
+    }
+  } else {
+    if (prevBalance !== null && targetEntry) {
+      const prevAbsStr = formatINR(Math.abs(prevBalance), false);
+      const amtHasPaise = Math.abs(delta) % 1 !== 0;
+      const deltaStr = `${delta >= 0 ? '+' : '-'}${formatINR(Math.abs(delta), amtHasPaise)}`;
+      lines.push(`• *Previous Balance:* ${prevBalance < 0 ? '-' : ''}${prevAbsStr}`);
+      lines.push(`• *This Entry:* ${deltaStr}`);
+    }
+    const statusLabel =
+      closingStatus === 'payable'
+        ? 'Payable to Farmer'
+        : closingStatus === 'receivable'
+        ? 'Receivable from Farmer'
+        : 'Settled (No Balance Due)';
+    lines.push(`👉 *Closing Balance: ${closingBalance < 0 ? '-' : ''}${closingAbsStr}*`);
+    lines.push(`*In Words:* ${formatRupeesInWords(closingBalance, 'en')}`);
+    lines.push(`*Status:* ${statusLabel}`);
+    lines.push('─────────────────────');
+    if (closingStatus === 'settled') {
+      lines.push(
+        '🙏 *Note:* With this entry, your account is now completely settled (₹0 balance due). Thank you very much for your trust and cooperation! 🤝🌾'
+      );
+    } else if (closingStatus === 'payable') {
+      lines.push(
+        `🙏 *Note:* After this entry, your remaining closing balance of *${closingAbsStr}* is payable to you. Kindly keep this slip for your record. Thank you! 🤝🌾`
+      );
+    } else {
+      lines.push(
+        `🙏 *Note:* Your payment entry has been recorded. After this entry, your closing balance due is *${closingAbsStr}*. Kindly keep this slip for your record. Thank you! 🤝🌾`
       );
     }
   }

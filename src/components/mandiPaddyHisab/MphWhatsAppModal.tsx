@@ -1,14 +1,19 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { MphFarmerAccountSummary, MphSettings } from '../../types/mandiPaddyHisab';
+import {
+  MphFarmerAccountSummary,
+  MphOtherEntry,
+  MphSettings,
+} from '../../types/mandiPaddyHisab';
 import { MphLang, useMphLang } from '../../lib/mandiPaddyHisabI18n';
 import {
+  buildFarmerPaymentReceiptWhatsAppText,
   buildFarmerPuraHisabWhatsAppText,
   buildWhatsAppUrl,
   exportOrShareStatementJpg,
   MphWhatsappMessageMode,
   normalizeWhatsAppPhone,
 } from '../../lib/mandiPaddyHisabWhatsapp';
-import { displayMphText, formatINR } from '../../lib/mandiPaddyHisabUtils';
+import { displayMphText, formatDateDMY, formatINR } from '../../lib/mandiPaddyHisabUtils';
 import {
   Check,
   Copy,
@@ -25,6 +30,8 @@ interface MphWhatsAppModalProps {
   summary: MphFarmerAccountSummary | null;
   settings: MphSettings;
   statementElement?: HTMLElement | null;
+  initialMode?: MphWhatsappMessageMode;
+  receiptEntry?: MphOtherEntry | null;
   onClose: () => void;
 }
 
@@ -33,11 +40,14 @@ export const MphWhatsAppModal: React.FC<MphWhatsAppModalProps> = ({
   summary,
   settings,
   statementElement,
+  initialMode = 'full',
+  receiptEntry = null,
   onClose,
 }) => {
   const { lang, tr } = useMphLang();
   const [msgLang, setMsgLang] = useState<MphLang>(lang);
-  const [mode, setMode] = useState<MphWhatsappMessageMode>('full');
+  const [mode, setMode] = useState<MphWhatsappMessageMode>(initialMode);
+  const [selectedReceiptEntryId, setSelectedReceiptEntryId] = useState<string>('');
   const [phone, setPhone] = useState<string>('');
   const [messageText, setMessageText] = useState<string>('');
   const [isEdited, setIsEdited] = useState(false);
@@ -48,17 +58,47 @@ export const MphWhatsAppModal: React.FC<MphWhatsAppModalProps> = ({
   useEffect(() => {
     if (open && summary) {
       setMsgLang(lang);
+      setMode(initialMode);
+      const entries = summary.otherEntries || [];
+      const afterEntries = entries.filter((o) => o.impactStage === 'after_paddy');
+      const fallback =
+        afterEntries.length > 0
+          ? afterEntries[afterEntries.length - 1]
+          : entries.length > 0
+          ? entries[entries.length - 1]
+          : null;
+      setSelectedReceiptEntryId(receiptEntry?.id || fallback?.id || '');
       setPhone(summary.farmer.mobile || '');
       setIsEdited(false);
       setCopied(false);
       setJpgStatus(null);
     }
-  }, [open, summary, lang]);
+  }, [open, summary, lang, initialMode, receiptEntry]);
+
+  const activeReceiptEntry = useMemo(() => {
+    if (!summary) return receiptEntry || null;
+    if (receiptEntry && (!selectedReceiptEntryId || receiptEntry.id === selectedReceiptEntryId)) {
+      return receiptEntry;
+    }
+    return (
+      summary.otherEntries.find((o) => o.id === selectedReceiptEntryId) ||
+      receiptEntry ||
+      null
+    );
+  }, [summary, receiptEntry, selectedReceiptEntryId]);
 
   const generatedText = useMemo(() => {
     if (!open || !summary) return '';
+    if (mode === 'receipt') {
+      return buildFarmerPaymentReceiptWhatsAppText(
+        summary,
+        settings,
+        msgLang,
+        activeReceiptEntry
+      );
+    }
     return buildFarmerPuraHisabWhatsAppText(summary, settings, msgLang, mode);
-  }, [open, summary, settings, msgLang, mode]);
+  }, [open, summary, settings, msgLang, mode, activeReceiptEntry]);
 
   useEffect(() => {
     if (!isEdited) {
@@ -121,7 +161,12 @@ export const MphWhatsAppModal: React.FC<MphWhatsAppModalProps> = ({
             <MessageCircle className="w-4 h-4" />
             <div>
               <h3 className="text-sm font-bold leading-tight">
-                {tr('Send Pura Hisab on WhatsApp', 'ਪੂਰਾ ਹਿਸਾਬ WhatsApp ਤੇ ਭੇਜੋ')}
+                {mode === 'receipt'
+                  ? tr(
+                      'Send Payment Receipt & Closing Balance on WhatsApp',
+                      'ਅਦਾਇਗੀ ਰਸੀਦ + ਬਕਾਇਆ WhatsApp ਤੇ ਭੇਜੋ'
+                    )
+                  : tr('Send Pura Hisab on WhatsApp', 'ਪੂਰਾ ਹਿਸਾਬ WhatsApp ਤੇ ਭੇਜੋ')}
               </h3>
               <p className="text-[11px] text-emerald-100">
                 {displayMphText(summary.farmer.name, lang)} ·{' '}
@@ -144,7 +189,7 @@ export const MphWhatsAppModal: React.FC<MphWhatsAppModalProps> = ({
         {/* Controls */}
         <div className="p-4 space-y-3 overflow-y-auto flex-1">
           <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-            <div className="sm:col-span-5">
+            <div className="sm:col-span-4">
               <label className="block text-[11px] font-semibold text-slate-700 mb-1">
                 {tr('WhatsApp Mobile Number', 'ਵਟਸਐਪ ਮੋਬਾਈਲ ਨੰਬਰ')}
               </label>
@@ -162,18 +207,18 @@ export const MphWhatsAppModal: React.FC<MphWhatsAppModalProps> = ({
               </p>
             </div>
 
-            <div className="sm:col-span-4">
+            <div className="sm:col-span-5">
               <label className="block text-[11px] font-semibold text-slate-700 mb-1">
                 {tr('Message Format', 'ਹਿਸਾਬ ਵੇਰਵਾ ਕਿਸਮ')}
               </label>
-              <div className="grid grid-cols-2 gap-1 p-0.5 bg-slate-100 rounded-lg">
+              <div className="grid grid-cols-3 gap-1 p-0.5 bg-slate-100 rounded-lg">
                 <button
                   type="button"
                   onClick={() => {
                     setMode('full');
                     setIsEdited(false);
                   }}
-                  className={`py-1.5 text-[11px] font-semibold rounded-md cursor-pointer ${
+                  className={`py-1.5 px-1 text-[10.5px] font-semibold rounded-md cursor-pointer ${
                     mode === 'full' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'
                   }`}
                 >
@@ -185,11 +230,25 @@ export const MphWhatsAppModal: React.FC<MphWhatsAppModalProps> = ({
                     setMode('summary');
                     setIsEdited(false);
                   }}
-                  className={`py-1.5 text-[11px] font-semibold rounded-md cursor-pointer ${
+                  className={`py-1.5 px-1 text-[10.5px] font-semibold rounded-md cursor-pointer ${
                     mode === 'summary' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'
                   }`}
                 >
-                  {tr('Short Summary', 'ਸੰਖੇਪ')}
+                  {tr('Short', 'ਸੰਖੇਪ')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('receipt');
+                    setIsEdited(false);
+                  }}
+                  className={`py-1.5 px-1 text-[10.5px] font-semibold rounded-md cursor-pointer ${
+                    mode === 'receipt'
+                      ? 'bg-emerald-700 text-white shadow-xs'
+                      : 'text-emerald-800 hover:bg-emerald-50'
+                  }`}
+                >
+                  {tr('Receipt Slip', 'ਸਿਰਫ਼ ਰਸੀਦ')}
                 </button>
               </div>
             </div>
@@ -226,6 +285,34 @@ export const MphWhatsAppModal: React.FC<MphWhatsAppModalProps> = ({
               </div>
             </div>
           </div>
+
+          {mode === 'receipt' && summary.otherEntries.length > 0 && (
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                {tr('Select Entry for Receipt Slip', 'ਰਸੀਦ ਲਈ ਅਦਾਇਗੀ ਐਂਟਰੀ ਚੁਣੋ')}
+              </label>
+              <select
+                value={activeReceiptEntry?.id || ''}
+                onChange={(e) => {
+                  setSelectedReceiptEntryId(e.target.value);
+                  setIsEdited(false);
+                }}
+                className="w-full px-2.5 py-1.5 text-xs border border-emerald-300 rounded-lg bg-emerald-50/40 text-slate-800 font-medium"
+              >
+                {[...summary.otherEntries].reverse().map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {formatDateDMY(o.date)} · {o.entryType === 'add' ? '+' : '-'}
+                    {formatINR(o.amount)} · {displayMphText(o.description, msgLang)}
+                    {o.impactStage === 'after_paddy'
+                      ? msgLang === 'pa'
+                        ? ' [ਹਿਸਾਬ ਤੋਂ ਬਾਅਦ]'
+                        : ' [After Paddy]'
+                      : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Editable Message Preview */}
           <div>
