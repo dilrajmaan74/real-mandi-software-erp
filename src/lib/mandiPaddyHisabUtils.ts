@@ -464,9 +464,17 @@ const PA_WORD_MAP: Record<string, string> = {
   adaygi: 'ਅਦਾਇਗੀ',
   remaining: 'ਬਾਕੀ',
   mode: 'ਮਾਧਿਅਮ',
+  discount: 'ਡਿਸਕਾਊਂਟ',
+  rebate: 'ਛੋਟ',
+  deduction: 'ਕਟੌਤੀ',
+  choot: 'ਛੋਟ',
+  chhoot: 'ਛੋਟ',
 };
 
 const PA_PHRASE_MAP: Array<[RegExp, string]> = [
+  [/\bfinal\s+settlement\s+discount\s*\/\s*rebate\b/gi, 'ਪੂਰਾ ਹਿਸਾਬ ਡਿਸਕਾਊਂਟ / ਛੋਟ'],
+  [/\bhisab\s+discount\s*\/\s*rebate\b/gi, 'ਹਿਸਾਬ ਡਿਸਕਾਊਂਟ / ਛੋਟ'],
+  [/\bhisab\s+discount\s+deduction\b/gi, 'ਹਿਸਾਬ ਡਿਸਕਾਊਂਟ ਕਟੌਤੀ'],
   [/\bfinal\s+settlement\s+paid\b/gi, 'ਅੰਤਿਮ ਹਿਸਾਬ ਅਦਾਇਗੀ'],
   [/\bfinal\s+settlement\s+received\b/gi, 'ਅੰਤਿਮ ਹਿਸਾਬ ਵਸੂਲੀ'],
   [/\bpart\s+settlement\s+paid\b/gi, 'ਅੰਸ਼ਕ ਹਿਸਾਬ ਅਦਾਇਗੀ'],

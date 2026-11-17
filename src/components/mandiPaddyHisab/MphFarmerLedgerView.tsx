@@ -68,7 +68,7 @@ interface MphFarmerLedgerViewProps {
 }
 
 const ADV_QUICK_RATES = ['0', '1', '1.5', '2'];
-const SETTLE_MODES = ['Cash', 'Bank / RTGS', 'UPI', 'Cheque'] as const;
+const SETTLE_MODES = ['Cash', 'Bank / RTGS', 'UPI', 'Cheque', 'Discount'] as const;
 type SettleMode = (typeof SETTLE_MODES)[number];
 
 export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
@@ -241,6 +241,31 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
 
   useEffect(() => {
     if (settleNoteTouched) return;
+    const enteredAmt = Math.max(0, Number(settleAmount) || 0);
+    const absBal = Math.abs(summary?.combinedFinalBalance || 0);
+    const isFull = absBal > 0 && Math.abs(enteredAmt - absBal) < 1;
+
+    if (settleMode === 'Discount') {
+      if (lang === 'pa') {
+        setSettleNote(
+          isFull
+            ? 'ਪੂਰਾ ਹਿਸਾਬ ਡਿਸਕਾਊਂਟ / ਛੋਟ'
+            : settleType === 'add'
+            ? 'ਹਿਸਾਬ ਡਿਸਕਾਊਂਟ / ਛੋਟ'
+            : 'ਹਿਸਾਬ ਡਿਸਕਾਊਂਟ ਕਟੌਤੀ'
+        );
+      } else {
+        setSettleNote(
+          isFull
+            ? 'Final Settlement Discount / Rebate'
+            : settleType === 'add'
+            ? 'Hisab Discount / Rebate'
+            : 'Hisab Discount Deduction'
+        );
+      }
+      return;
+    }
+
     const modeLabel =
       lang === 'pa'
         ? settleMode === 'Cash'
@@ -251,9 +276,6 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
           ? 'ਯੂ.ਪੀ.ਆਈ.'
           : 'ਚੈੱਕ'
         : settleMode;
-    const enteredAmt = Math.max(0, Number(settleAmount) || 0);
-    const absBal = Math.abs(summary?.combinedFinalBalance || 0);
-    const isFull = absBal > 0 && Math.abs(enteredAmt - absBal) < 1;
     const prefix = isFull
       ? lang === 'pa'
         ? 'ਅੰਤਿਮ ਹਿਸਾਬ'
@@ -2456,6 +2478,8 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                     type="button"
                     onClick={() => setSettleMode(m)}
                     className={`px-2 py-1.5 text-[11px] font-semibold rounded-lg border cursor-pointer transition-colors ${
+                      m === 'Discount' ? 'col-span-2' : ''
+                    } ${
                       settleMode === m
                         ? 'bg-slate-900 text-white border-slate-900'
                         : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
@@ -2468,7 +2492,11 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                         ? 'ਬੈਂਕ/RTGS'
                         : m === 'UPI'
                         ? 'UPI'
-                        : 'ਚੈੱਕ'
+                        : m === 'Cheque'
+                        ? 'ਚੈੱਕ'
+                        : 'ਡਿਸਕਾਊਂਟ / ਛੋਟ (Discount)'
+                      : m === 'Discount'
+                      ? 'Discount / Rebate'
                       : m}
                   </button>
                 ))}
