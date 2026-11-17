@@ -11,7 +11,6 @@ import {
   computeFarmerAccountSummary,
   formatAdvanceMonthsDays,
   formatDateDMY,
-  formatDryingBreakdownText,
   formatINR,
   formatLooseKgGm,
   formatRupeesInWords,
@@ -492,20 +491,15 @@ export const MphReportsView: React.FC<MphReportsViewProps> = ({
                       {formatINR(Math.abs(farmerSummary.paddyVsJFormDiff))}
                     </span>
                   </div>
-                  <div className="border border-slate-200 rounded-lg p-2.5">
-                    <span className="text-slate-500 block text-[11px]">
-                      {tr('(-) Labour', '(-) ਲੇਬਰ')} ({tr('J-Form', 'ਜੇ-ਫਾਰਮ')}{' '}
-                      {farmerSummary.totalArrivalBags} + {tr('Dry:', 'ਸੁਕਾਈ:')}{' '}
-                      {formatDryingBreakdownText(
-                        farmerSummary.dryingRateBreakdown,
-                        lang,
-                        farmerSummary.totalDryingBags,
-                        settings.paddyDryingLaborRate
-                      )}
-                      )
+                  <div className="border border-rose-200 bg-rose-50/40 rounded-lg p-2.5">
+                    <span className="text-rose-950 font-semibold block text-[11px]">
+                      {tr('(-) Total Labour (J-Form + Drying)', '(-) ਕੁੱਲ ਲੇਬਰ (ਜੇ-ਫਾਰਮ + ਸੁਕਾਈ)')}
                     </span>
-                    <span className="font-mono tabular-nums font-bold text-rose-700">
-                      -{formatINR(farmerSummary.totalJFormLabor + farmerSummary.totalDryingLabor)}
+                    <span className="font-mono tabular-nums font-bold text-rose-800 block">
+                      -{formatINR(Math.round((farmerSummary.totalJFormLabor + farmerSummary.totalDryingLabor) * 100) / 100)}
+                    </span>
+                    <span className="text-[10px] text-rose-800/80 font-mono tabular-nums block mt-0.5">
+                      {formatINR(farmerSummary.totalJFormLabor)} + {formatINR(farmerSummary.totalDryingLabor)}
                     </span>
                   </div>
                   <div className="border border-slate-200 rounded-lg p-2.5">

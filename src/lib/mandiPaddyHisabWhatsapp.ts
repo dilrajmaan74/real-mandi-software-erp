@@ -1,5 +1,9 @@
 import { toJpeg } from 'html-to-image';
-import { MphFarmerAccountSummary, MphSettings } from '../types/mandiPaddyHisab';
+import {
+  DEFAULT_MPH_SETTINGS,
+  MphFarmerAccountSummary,
+  MphSettings,
+} from '../types/mandiPaddyHisab';
 import { MphLang } from './mandiPaddyHisabI18n';
 import {
   displayMphText,
@@ -72,21 +76,28 @@ export function buildFarmerPuraHisabWhatsAppText(
   mode: MphWhatsappMessageMode = 'full'
 ): string {
   if (!summary || !summary.farmer) return '';
+  const safeSettings = {
+    ...DEFAULT_MPH_SETTINGS,
+    ...(settings || {}),
+  };
   const isPa = lang === 'pa';
   const todayStr = formatDateDMY(new Date().toISOString().split('T')[0]);
   const f = summary.farmer;
   const lines: string[] = [];
 
-  // Header
+  // Greeting & Header
   if (isPa) {
+    const farmerPa = displayMphText(f.name, 'pa');
+    lines.push(`🙏 *ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ ${farmerPa} ਜੀ!*`);
     lines.push('🌾 *ਮੰਡੀ ਝੋਨਾ ਹਿਸਾਬ — ਪੂਰਾ ਖਾਤਾ ਸਟੇਟਮੈਂਟ*');
     lines.push(`*ਤਾਰੀਖ:* ${todayStr}`);
     lines.push('─────────────────────');
-    lines.push(`*ਕਿਸਾਨ:* ${displayMphText(f.name, 'pa')}`);
+    lines.push(`*ਕਿਸਾਨ:* ${farmerPa}`);
     if (f.fatherName) lines.push(`*ਪਿਤਾ ਦਾ ਨਾਮ:* ${displayMphText(f.fatherName, 'pa')}`);
     lines.push(`*ਪਿੰਡ:* ${displayMphText(f.village, 'pa')}`);
     if (f.mobile) lines.push(`*ਮੋਬਾਈਲ:* ${safeStr(f.mobile)}`);
   } else {
+    lines.push(`🙏 *Sat Sri Akal ${f.name} Ji!*`);
     lines.push('🌾 *Mandi Paddy Hisab — Complete Account Statement*');
     lines.push(`*Date:* ${todayStr}`);
     lines.push('─────────────────────');
@@ -119,7 +130,7 @@ export function buildFarmerPuraHisabWhatsAppText(
         'pa'
       )}`
     );
-    lines.push(`• *ਕੁੱਲ ਝੋਨੇ ਦੀ ਰਕਮ:* *${formatINR(summary.totalPaddyAmount)}*`);
+    lines.push(`• *(+) ਕੁੱਲ ਝੋਨੇ ਦੀ ਰਕਮ:* *${formatINR(summary.totalPaddyAmount)}*`);
   } else {
     lines.push(`*1. Paddy Arrival Details (${summary.arrivals.length} Entries):*`);
     if (mode === 'full' && summary.arrivals.length > 0) {
@@ -140,7 +151,7 @@ export function buildFarmerPuraHisabWhatsAppText(
         summary.weightGmPart
       )}`
     );
-    lines.push(`• *Total Paddy Amount:* *${formatINR(summary.totalPaddyAmount)}*`);
+    lines.push(`• *(+) Total Paddy Amount:* *${formatINR(summary.totalPaddyAmount)}*`);
   }
 
   // 2. J-Forms
@@ -183,79 +194,105 @@ export function buildFarmerPuraHisabWhatsAppText(
     );
   }
 
-  // 3. Labour & Other Entries
+  // 3. Labour & Other Entries (including Final Settlement Cash/Bank entries)
   const driedEntries = summary.arrivals.filter(
     (a) => a && a.applyDryingLabor !== false && Math.floor(safeNum(a.bags)) > 0
   );
+  const totalLabourCombined =
+    Math.round((summary.totalJFormLabor + summary.totalDryingLabor) * 100) / 100;
+  const otherNet =
+    Math.round((summary.totalOtherAdditions - summary.totalOtherDeductions) * 100) / 100;
+
   lines.push('─────────────────────');
   if (isPa) {
-    lines.push('*3. ਲੇਬਰ ਅਤੇ ਹੋਰ ਖਰਚੇ:*');
+    lines.push('*3. ਲੇਬਰ, ਹੋਰ ਖਰਚੇ ਅਤੇ ਲੈਣ-ਦੇਣ ਅਦਾਇਗੀਆਂ:*');
     lines.push(
-      `• (-) ਜੇ-ਫਾਰਮ ਲੇਬਰ (${summary.totalArrivalBags} ਬੈਗ × ₹${settings.jFormLaborRate}): -${formatINR(summary.totalJFormLabor)}`
+      `• (-) ਜੇ-ਫਾਰਮ ਲੇਬਰ (${summary.totalArrivalBags} ਬੈਗ × ₹${safeSettings.jFormLaborRate}): -${formatINR(summary.totalJFormLabor)}`
     );
     lines.push(
       `• (-) ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ (${formatDryingBreakdownText(
         summary.dryingRateBreakdown,
         'pa',
         summary.totalDryingBags,
-        settings.paddyDryingLaborRate
+        safeSettings.paddyDryingLaborRate
       )}): -${formatINR(summary.totalDryingLabor)}`
+    );
+    lines.push(
+      `• *(-) ਕੁੱਲ ਲੇਬਰ (ਜੇ-ਫਾਰਮ + ਸੁਕਾਈ):* *-${formatINR(totalLabourCombined)}*`
     );
     if (mode === 'full' && driedEntries.length > 0) {
       driedEntries.forEach((a, i) => {
-        const rate = getEffectiveArrivalDryingRate(a, f, settings);
+        const rate = getEffectiveArrivalDryingRate(a, f, safeSettings);
         const amt = Math.round(Math.floor(safeNum(a.bags)) * rate * 100) / 100;
         lines.push(
           `  ${i + 1}. ${formatDateDMY(a.date)} | ${a.bags} ਬੈਗ × ₹${rate} = -${formatINR(amt)}`
         );
       });
     }
-    if (mode === 'full' && summary.otherEntries.length > 0) {
-      summary.otherEntries.forEach((o, i) => {
-        lines.push(
-          `  ${i + 1}. ${formatDateDMY(o.date)} | ${displayMphText(o.description, 'pa')}: ${o.entryType === 'add' ? '+' : '-'}${formatINR(o.amount)}`
-        );
-      });
-    }
-    const otherNet = summary.totalOtherAdditions - summary.totalOtherDeductions;
-    if (summary.otherEntries.length > 0 || otherNet !== 0) {
+    if (summary.otherEntries.length > 0) {
+      lines.push(`• *ਹੋਰ ਖਰਚੇ / ਅਦਾਇਗੀਆਂ (${summary.otherEntries.length} ਐਂਟਰੀਆਂ):*`);
+      if (mode === 'full') {
+        summary.otherEntries.forEach((o, i) => {
+          const typeLabel =
+            o.entryType === 'add' ? '(+) ਕਿਸਾਨ ਵੱਲੋਂ ਜਮ੍ਹਾਂ' : '(-) ਕਿਸਾਨ ਨੂੰ ਦਿੱਤੇ / ਖਰਚ';
+          lines.push(
+            `  ${i + 1}. ${formatDateDMY(o.date)} | ${displayMphText(o.description, 'pa')} [${typeLabel}]: *${o.entryType === 'add' ? '+' : '-'}${formatINR(o.amount)}*`
+          );
+        });
+      }
+      if (summary.totalOtherAdditions > 0) {
+        lines.push(`  (+) ਕੁੱਲ ਜਮ੍ਹਾਂ / ਪ੍ਰਾਪਤ: +${formatINR(summary.totalOtherAdditions)}`);
+      }
+      if (summary.totalOtherDeductions > 0) {
+        lines.push(`  (-) ਕੁੱਲ ਦਿੱਤੇ / ਖਰਚ: -${formatINR(summary.totalOtherDeductions)}`);
+      }
       lines.push(
-        `• (+/-) ਹੋਰ ਖਾਤਾ ਕੁੱਲ: ${otherNet >= 0 ? '+' : '-'}${formatINR(Math.abs(otherNet))}`
+        `• *(+/-) ਹੋਰ ਖਾਤਾ ਸ਼ੁੱਧ:* ${otherNet >= 0 ? '+' : '-'}${formatINR(Math.abs(otherNet))}`
       );
     }
   } else {
-    lines.push('*3. Labour & Other Adjustments:*');
+    lines.push('*3. Labour, Other Expenses & Settlement Payments:*');
     lines.push(
-      `• (-) J-Form Labour (${summary.totalArrivalBags} Bags × ₹${settings.jFormLaborRate}): -${formatINR(summary.totalJFormLabor)}`
+      `• (-) J-Form Labour (${summary.totalArrivalBags} Bags × ₹${safeSettings.jFormLaborRate}): -${formatINR(summary.totalJFormLabor)}`
     );
     lines.push(
       `• (-) Paddy Drying Labour (${formatDryingBreakdownText(
         summary.dryingRateBreakdown,
         'en',
         summary.totalDryingBags,
-        settings.paddyDryingLaborRate
+        safeSettings.paddyDryingLaborRate
       )}): -${formatINR(summary.totalDryingLabor)}`
+    );
+    lines.push(
+      `• *(-) Total Labour (J-Form + Drying):* *-${formatINR(totalLabourCombined)}*`
     );
     if (mode === 'full' && driedEntries.length > 0) {
       driedEntries.forEach((a, i) => {
-        const rate = getEffectiveArrivalDryingRate(a, f, settings);
+        const rate = getEffectiveArrivalDryingRate(a, f, safeSettings);
         const amt = Math.round(Math.floor(safeNum(a.bags)) * rate * 100) / 100;
         lines.push(
           `  ${i + 1}. ${formatDateDMY(a.date)} | ${a.bags} Bags × ₹${rate} = -${formatINR(amt)}`
         );
       });
     }
-    if (mode === 'full' && summary.otherEntries.length > 0) {
-      summary.otherEntries.forEach((o, i) => {
-        lines.push(
-          `  ${i + 1}. ${formatDateDMY(o.date)} | ${o.description}: ${o.entryType === 'add' ? '+' : '-'}${formatINR(o.amount)}`
-        );
-      });
-    }
-    const otherNet = summary.totalOtherAdditions - summary.totalOtherDeductions;
-    if (summary.otherEntries.length > 0 || otherNet !== 0) {
+    if (summary.otherEntries.length > 0) {
+      lines.push(`• *Other Expenses / Payments (${summary.otherEntries.length} Entries):*`);
+      if (mode === 'full') {
+        summary.otherEntries.forEach((o, i) => {
+          const typeLabel = o.entryType === 'add' ? '(+) Received / Credit' : '(-) Paid / Expense';
+          lines.push(
+            `  ${i + 1}. ${formatDateDMY(o.date)} | ${o.description} [${typeLabel}]: *${o.entryType === 'add' ? '+' : '-'}${formatINR(o.amount)}*`
+          );
+        });
+      }
+      if (summary.totalOtherAdditions > 0) {
+        lines.push(`  (+) Total Received / Credit: +${formatINR(summary.totalOtherAdditions)}`);
+      }
+      if (summary.totalOtherDeductions > 0) {
+        lines.push(`  (-) Total Paid / Expenses: -${formatINR(summary.totalOtherDeductions)}`);
+      }
       lines.push(
-        `• (+/-) Other Net: ${otherNet >= 0 ? '+' : '-'}${formatINR(Math.abs(otherNet))}`
+        `• *(+/-) Other Net:* ${otherNet >= 0 ? '+' : '-'}${formatINR(Math.abs(otherNet))}`
       );
     }
   }
@@ -325,32 +362,84 @@ export function buildFarmerPuraHisabWhatsAppText(
     }
   }
 
-  // 6. Grand Final Balance
+  // 6. Quick Hisab Summary + Grand Final Balance + Respectful Closing Line
   lines.push('─────────────────────');
+  const absFinal = formatINR(Math.abs(summary.combinedFinalBalance), false);
+
   if (isPa) {
+    lines.push('📋 *ਪੂਰੇ ਹਿਸਾਬ ਦਾ ਸਾਰ (ਆਸਾਨ ਚੈੱਕ):*');
+    lines.push(`• (+) ਕੁੱਲ ਝੋਨੇ ਦੀ ਰਕਮ: ${formatINR(summary.totalPaddyAmount)}`);
+    lines.push(`• (-) ਕੁੱਲ ਜੇ-ਫਾਰਮ ਰਕਮ: -${formatINR(summary.totalJFormAmount)}`);
+    lines.push(`• (-) ਕੁੱਲ ਲੇਬਰ (ਜੇ-ਫਾਰਮ + ਸੁਕਾਈ): -${formatINR(totalLabourCombined)}`);
+    if (summary.otherEntries.length > 0 || otherNet !== 0) {
+      lines.push(
+        `• (+/-) ਹੋਰ ਖਰਚੇ / ਅਦਾਇਗੀਆਂ: ${otherNet >= 0 ? '+' : '-'}${formatINR(Math.abs(otherNet))}`
+      );
+    }
+    if (summary.advances.length > 0) {
+      lines.push(`• (-) ਕੁੱਲ ਪੇਸ਼ਗੀ + ਵਿਆਜ: -${formatINR(summary.totalAdvanceWithInterest)}`);
+    }
+    lines.push('─────────────────────');
     const finalStatus =
       summary.combinedBalanceStatus === 'payable'
         ? 'ਕਿਸਾਨ ਨੂੰ ਪੈਸੇ ਦੇਣੇ ਹਨ (Payable)'
         : summary.combinedBalanceStatus === 'receivable'
         ? 'ਕਿਸਾਨ ਤੋਂ ਪੈਸੇ ਲੈਣੇ ਹਨ (Receivable)'
-        : 'ਹਿਸਾਬ ਬਰਾਬਰ — ਕੋਈ ਬਕਾਇਆ ਨਹੀਂ';
-    lines.push(
-      `👉 *ਅੰਤਿਮ ਕੁੱਲ ਬਕਾਇਆ: ${formatINR(Math.abs(summary.combinedFinalBalance), false)}*`
-    );
+        : 'ਹਿਸਾਬ ਬਰਾਬਰ — ਕੋਈ ਬਕਾਇਆ ਨਹੀਂ (Settled)';
+    lines.push(`👉 *ਅੰਤਿਮ ਕੁੱਲ ਬਕਾਇਆ: ${summary.combinedFinalBalance < 0 ? '-' : ''}${absFinal}*`);
     lines.push(`*ਸ਼ਬਦਾਂ ਵਿੱਚ:* ${formatRupeesInWords(summary.combinedFinalBalance, 'pa')}`);
     lines.push(`*ਸਥਿਤੀ:* ${finalStatus}`);
+    lines.push('─────────────────────');
+    if (summary.combinedBalanceStatus === 'settled') {
+      lines.push(
+        '🙏 *ਸੰਦੇਸ਼:* ਸਾਰਾ ਹਿਸਾਬ ਪੂਰੀ ਤਰ੍ਹਾਂ ਬਰਾਬਰ (₹0 ਬਕਾਇਆ) ਕਰ ਦਿੱਤਾ ਗਿਆ ਹੈ। ਕਿਰਪਾ ਕਰਕੇ ਉੱਪਰ ਦਿੱਤਾ ਪੂਰਾ ਵੇਰਵਾ ਚੈੱਕ ਕਰ ਲਓ ਜੀ। ਤੁਹਾਡੇ ਸਾਥ ਅਤੇ ਭਰੋਸੇ ਲਈ ਬਹੁਤ-ਬਹੁਤ ਧੰਨਵਾਦ! 🤝🌾'
+      );
+    } else if (summary.combinedBalanceStatus === 'payable') {
+      lines.push(
+        `🙏 *ਸੰਦੇਸ਼:* ਉੱਪਰ ਦਿੱਤੇ ਪੂਰੇ ਹਿਸਾਬ ਮੁਤਾਬਕ ਤੁਹਾਡਾ *${absFinal}* ਬਕਾਇਆ ਬਣਦਾ ਹੈ, ਜੋ ਤੁਹਾਨੂੰ ਅਦਾ ਕੀਤਾ ਜਾਣਾ ਹੈ। ਕਿਰਪਾ ਕਰਕੇ ਸਾਰਾ ਹਿਸਾਬ ਚੈੱਕ ਕਰ ਲਓ ਜੀ — ਕਿਸੇ ਵੀ ਜਾਣਕਾਰੀ ਲਈ ਕਦੇ ਵੀ ਸੰਪਰਕ ਕਰੋ। ਧੰਨਵਾਦ! 🤝🌾`
+      );
+    } else {
+      lines.push(
+        `🙏 *ਸੰਦੇਸ਼:* ਉੱਪਰ ਦਿੱਤੇ ਪੂਰੇ ਹਿਸਾਬ ਮੁਤਾਬਕ *${absFinal}* ਬਕਾਇਆ ਰਕਮ ਤੁਹਾਡੇ ਵੱਲ ਨਿਕਲਦੀ ਹੈ। ਕਿਰਪਾ ਕਰਕੇ ਸਾਰਾ ਵੇਰਵਾ ਧਿਆਨ ਨਾਲ ਚੈੱਕ ਕਰਕੇ ਬਕਾਇਆ ਜਮ੍ਹਾਂ ਕਰਵਾਉਣ ਦੀ ਖੇਚਲ ਕਰਨੀ ਜੀ। ਕਿਸੇ ਵੀ ਸਵਾਲ ਲਈ ਸੰਪਰਕ ਕਰੋ। ਧੰਨਵਾਦ! 🤝🌾`
+      );
+    }
   } else {
+    lines.push('📋 *Hisab Summary (Quick Check):*');
+    lines.push(`• (+) Total Paddy Amount: ${formatINR(summary.totalPaddyAmount)}`);
+    lines.push(`• (-) Total J-Form Amount: -${formatINR(summary.totalJFormAmount)}`);
+    lines.push(`• (-) Total Labour (J-Form + Drying): -${formatINR(totalLabourCombined)}`);
+    if (summary.otherEntries.length > 0 || otherNet !== 0) {
+      lines.push(
+        `• (+/-) Other Expenses / Payments: ${otherNet >= 0 ? '+' : '-'}${formatINR(Math.abs(otherNet))}`
+      );
+    }
+    if (summary.advances.length > 0) {
+      lines.push(`• (-) Total Advance + Interest: -${formatINR(summary.totalAdvanceWithInterest)}`);
+    }
+    lines.push('─────────────────────');
     const finalStatus =
       summary.combinedBalanceStatus === 'payable'
         ? 'Farmer Nu Paise Dene Hai (Payable)'
         : summary.combinedBalanceStatus === 'receivable'
         ? 'Farmer Paise Lene Hai (Receivable)'
         : 'Settled (No Balance Due)';
-    lines.push(
-      `👉 *Grand Final Balance: ${formatINR(Math.abs(summary.combinedFinalBalance), false)}*`
-    );
+    lines.push(`👉 *Grand Final Balance: ${summary.combinedFinalBalance < 0 ? '-' : ''}${absFinal}*`);
     lines.push(`*In Words:* ${formatRupeesInWords(summary.combinedFinalBalance, 'en')}`);
     lines.push(`*Status:* ${finalStatus}`);
+    lines.push('─────────────────────');
+    if (summary.combinedBalanceStatus === 'settled') {
+      lines.push(
+        '🙏 *Note:* Complete account has been settled in full (₹0 balance due). Kindly review the full statement above. Thank you very much for your trust and cooperation! 🤝🌾'
+      );
+    } else if (summary.combinedBalanceStatus === 'payable') {
+      lines.push(
+        `🙏 *Note:* As per the complete statement above, a balance of *${absFinal}* is payable to you. Kindly verify all details above and feel free to reach out for any clarification. Thank you! 🤝🌾`
+      );
+    } else {
+      lines.push(
+        `🙏 *Note:* As per the complete statement above, a balance of *${absFinal}* is receivable from your side. Kindly review all details and arrange payment at your convenience. Contact us anytime for any query. Thank you! 🤝🌾`
+      );
+    }
   }
 
   return lines.join('\n');

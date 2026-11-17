@@ -28,6 +28,7 @@ import {
 import { exportElementToPdf } from '../../lib/mandiPaddyHisabPdf';
 import {
   Calculator,
+  CheckCircle2,
   Download,
   Edit3,
   FileSpreadsheet,
@@ -38,6 +39,7 @@ import {
   Printer,
   RotateCcw,
   Scale,
+  Send,
   Trash2,
   Wheat,
   X,
@@ -65,6 +67,8 @@ interface MphFarmerLedgerViewProps {
 }
 
 const ADV_QUICK_RATES = ['0', '1', '1.5', '2'];
+const SETTLE_MODES = ['Cash', 'Bank / RTGS', 'UPI', 'Cheque'] as const;
+type SettleMode = (typeof SETTLE_MODES)[number];
 
 export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
   farmers,
@@ -206,6 +210,128 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
       advances
     );
   }, [activeFarmer, arrivals, jForms, otherEntries, settings, advances]);
+
+  // Final Settlement Payment / Receipt Quick Entry + Send WhatsApp state
+  const [settleDate, setSettleDate] = useState<string>(today);
+  const [settleType, setSettleType] = useState<'add' | 'deduct'>('deduct');
+  const [settleMode, setSettleMode] = useState<SettleMode>('Cash');
+  const [settleAmount, setSettleAmount] = useState<string>('');
+  const [settleNote, setSettleNote] = useState<string>('');
+  const [settleNoteTouched, setSettleNoteTouched] = useState<boolean>(false);
+  const [settleError, setSettleError] = useState<string | null>(null);
+  const [settleSavedMsg, setSettleSavedMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!summary) return;
+    setSettleType(summary.combinedBalanceStatus === 'receivable' ? 'add' : 'deduct');
+    setSettleAmount(
+      summary.combinedFinalBalance !== 0 ? String(Math.abs(summary.combinedFinalBalance)) : ''
+    );
+    setSettleNoteTouched(false);
+    setSettleError(null);
+  }, [activeFarmer?.id, summary?.combinedFinalBalance, summary?.combinedBalanceStatus]);
+
+  useEffect(() => {
+    setSettleSavedMsg(null);
+  }, [activeFarmer?.id]);
+
+  useEffect(() => {
+    if (settleNoteTouched) return;
+    const modeLabel =
+      lang === 'pa'
+        ? settleMode === 'Cash'
+          ? 'ਨਕਦ'
+          : settleMode === 'Bank / RTGS'
+          ? 'ਬੈਂਕ / ਆਰ.ਟੀ.ਜੀ.ਐਸ.'
+          : settleMode === 'UPI'
+          ? 'ਯੂ.ਪੀ.ਆਈ.'
+          : 'ਚੈੱਕ'
+        : settleMode;
+    const enteredAmt = Math.max(0, Number(settleAmount) || 0);
+    const absBal = Math.abs(summary?.combinedFinalBalance || 0);
+    const isFull = absBal > 0 && Math.abs(enteredAmt - absBal) < 1;
+    const prefix = isFull
+      ? lang === 'pa'
+        ? 'ਅੰਤਿਮ ਹਿਸਾਬ'
+        : 'Final Settlement'
+      : lang === 'pa'
+      ? 'ਅੰਸ਼ਕ ਹਿਸਾਬ'
+      : 'Part Settlement';
+    const action =
+      settleType === 'deduct'
+        ? lang === 'pa'
+          ? 'ਅਦਾਇਗੀ'
+          : 'Paid'
+        : lang === 'pa'
+        ? 'ਵਸੂਲੀ'
+        : 'Received';
+    setSettleNote(`${prefix} ${action} (${modeLabel})`);
+  }, [settleNoteTouched, settleType, settleMode, settleAmount, summary?.combinedFinalBalance, lang]);
+
+  const parsedSettleAmt = Math.max(0, Number(settleAmount) || 0);
+  const projectedBalanceAfterSettle = useMemo(() => {
+    if (!summary) return 0;
+    const delta = settleType === 'add' ? parsedSettleAmt : -parsedSettleAmt;
+    return Math.round(summary.combinedFinalBalance + delta);
+  }, [summary, settleType, parsedSettleAmt]);
+
+  const handleSaveSettlement = (openWhatsappAfter: boolean) => {
+    if (!activeFarmer) return;
+    setSettleError(null);
+    setSettleSavedMsg(null);
+
+    const amt = Number(settleAmount);
+    if (!settleDate) {
+      setSettleError(tr('Please select settlement date.', 'ਕਿਰਪਾ ਕਰਕੇ ਤਾਰੀਖ ਚੁਣੋ।'));
+      return;
+    }
+    if (isNaN(amt) || amt <= 0) {
+      setSettleError(
+        tr(
+          'Please enter settlement amount greater than 0.',
+          'ਕਿਰਪਾ ਕਰਕੇ 0 ਤੋਂ ਵੱਧ ਰਕਮ ਦਰਜ ਕਰੋ।'
+        )
+      );
+      return;
+    }
+    const cleanNote = settleNote.trim();
+    if (!cleanNote) {
+      setSettleError(
+        tr('Please enter payment note / description.', 'ਕਿਰਪਾ ਕਰਕੇ ਅਦਾਇਗੀ ਦਾ ਵੇਰਵਾ ਲਿਖੋ।')
+      );
+      return;
+    }
+
+    const now = new Date().toISOString();
+    onSaveOtherEntry({
+      id: `MPHO_STL_${Date.now()}_${Math.floor(100 + Math.random() * 900)}`,
+      farmerId: activeFarmer.id,
+      farmerName: activeFarmer.name,
+      date: settleDate,
+      entryType: settleType,
+      description: cleanNote,
+      amount: Math.round(amt * 100) / 100,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    setSettleNoteTouched(false);
+    setSettleSavedMsg(
+      openWhatsappAfter
+        ? tr(
+            'Settlement entry saved! Opening WhatsApp statement...',
+            'ਅੰਤਿਮ ਹਿਸਾਬ ਐਂਟਰੀ ਦਰਜ ਹੋ ਗਈ! ਵਟਸਐਪ ਸਟੇਟਮੈਂਟ ਖੁੱਲ੍ਹ ਰਿਹਾ ਹੈ...'
+          )
+        : tr(
+            'Settlement entry saved successfully in account.',
+            'ਅੰਤਿਮ ਹਿਸਾਬ ਐਂਟਰੀ ਖਾਤੇ ਵਿੱਚ ਸਫਲਤਾਪੂਰਵਕ ਦਰਜ ਹੋ ਗਈ।'
+          )
+    );
+
+    if (openWhatsappAfter) {
+      setWhatsappOpen(true);
+    }
+  };
 
   const jFormHolderBreakdown = useMemo(() => {
     if (!summary) return [] as Array<{ key: string; name: string; relation: string; bags: number; amount: number; count: number }>;
@@ -1031,6 +1157,23 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                 </div>
                 <span className="font-mono tabular-nums font-semibold text-rose-700 shrink-0">
                   -{formatINR(summary.totalDryingLabor)}
+                </span>
+              </div>
+
+              <div className="px-4 py-2.5 bg-rose-50/60 flex items-center justify-between gap-3">
+                <div>
+                  <span className="font-bold text-rose-950">
+                    {tr(
+                      '(-) Total Labour (J-Form + Paddy Drying)',
+                      '(-) ਕੁੱਲ ਲੇਬਰ (ਜੇ-ਫਾਰਮ + ਝੋਨਾ ਸੁਕਾਈ ਲੇਬਰ)'
+                    )}
+                  </span>
+                  <span className="text-[11px] text-rose-800 block font-mono tabular-nums">
+                    {formatINR(summary.totalJFormLabor)} + {formatINR(summary.totalDryingLabor)}
+                  </span>
+                </div>
+                <span className="font-mono tabular-nums font-bold text-sm text-rose-800 shrink-0">
+                  -{formatINR(Math.round((summary.totalJFormLabor + summary.totalDryingLabor) * 100) / 100)}
                 </span>
               </div>
 
@@ -2067,6 +2210,267 @@ export const MphFarmerLedgerView: React.FC<MphFarmerLedgerViewProps> = ({
                 </span>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Final Settlement Entry & Immediate WhatsApp Panel (hidden in print / PDF / JPG) */}
+      <div className="print:hidden rounded-xl border-2 border-emerald-200 bg-gradient-to-br from-emerald-50/70 via-white to-slate-50 shadow-sm overflow-hidden">
+        <div className="px-4 py-3 bg-emerald-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-300 shrink-0" />
+            <div>
+              <h3 className="text-xs sm:text-sm font-bold">
+                {tr(
+                  'Final Settlement Entry (Paid / Received) & Send on WhatsApp',
+                  'ਅੰਤਿਮ ਹਿਸਾਬ ਲੈਣ-ਦੇਣ ਐਂਟਰੀ (ਪੈਸੇ ਦਿੱਤੇ / ਲਏ) ਅਤੇ ਵਟਸਐਪ ਭੇਜੋ'
+                )}
+              </h3>
+              <p className="text-[11px] text-emerald-100">
+                {tr(
+                  'After final calculation, record cash/bank payment or receipt here and immediately send complete Pura Hisab on WhatsApp.',
+                  'ਪੂਰਾ ਹਿਸਾਬ ਹੋਣ ਤੋਂ ਬਾਅਦ ਕਿਸਾਨ ਨੂੰ ਦਿੱਤੀ ਜਾਂ ਉਸ ਤੋਂ ਲਈ ਰਕਮ ਇੱਥੇ ਦਰਜ ਕਰੋ ਅਤੇ ਤੁਰੰਤ ਪੂਰਾ ਹਿਸਾਬ ਵਟਸਐਪ ਉੱਤੇ ਭੇਜੋ।'
+                )}
+              </p>
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            <span className="text-[10px] uppercase tracking-wide text-emerald-200 block">
+              {tr('Current Balance', 'ਮੌਜੂਦਾ ਬਕਾਇਆ')}
+            </span>
+            <span className="font-mono tabular-nums font-bold text-sm text-white">
+              {summary.combinedBalanceStatus === 'settled'
+                ? tr('₹0 (Settled)', '₹0 (ਬਰਾਬਰ)')
+                : `${summary.combinedFinalBalance < 0 ? '-' : ''}${formatINR(
+                    Math.abs(summary.combinedFinalBalance),
+                    false
+                  )} (${
+                    summary.combinedBalanceStatus === 'payable'
+                      ? tr('Payable', 'ਦੇਣੇ ਹਨ')
+                      : tr('Receivable', 'ਲੈਣੇ ਹਨ')
+                  })`}
+            </span>
+          </div>
+        </div>
+
+        <div className="p-4 space-y-3">
+          {summary.combinedBalanceStatus === 'settled' && (
+            <div className="px-3 py-2 rounded-lg bg-emerald-100/80 border border-emerald-300 text-emerald-950 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <span className="font-semibold">
+                {tr(
+                  'Account is already settled (₹0 balance). You can send the final settled statement directly on WhatsApp or record an additional adjustment entry below.',
+                  'ਕਿਸਾਨ ਦਾ ਹਿਸਾਬ ਪਹਿਲਾਂ ਹੀ ਬਰਾਬਰ (₹0 ਬਕਾਇਆ) ਹੈ। ਤੁਸੀਂ ਸਿੱਧਾ ਵਟਸਐਪ ਉੱਤੇ ਪੂਰਾ ਸਟੇਟਮੈਂਟ ਭੇਜ ਸਕਦੇ ਹੋ ਜਾਂ ਹੇਠਾਂ ਹੋਰ ਐਂਟਰੀ ਕਰ ਸਕਦੇ ਹੋ।'
+                )}
+              </span>
+              <button
+                type="button"
+                onClick={() => setWhatsappOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-emerald-700 text-white rounded-lg hover:bg-emerald-800 cursor-pointer whitespace-nowrap shrink-0"
+              >
+                <MessageCircle className="w-3.5 h-3.5" />
+                <span>{tr('Send Settled Hisab on WhatsApp', 'ਬਰਾਬਰ ਹਿਸਾਬ ਵਟਸਐਪ ਭੇਜੋ')}</span>
+              </button>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-end">
+            <div className="lg:col-span-2">
+              <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                {tr('Date', 'ਤਾਰੀਖ')}
+              </label>
+              <input
+                type="date"
+                value={settleDate}
+                onChange={(e) => setSettleDate(e.target.value)}
+                className="w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded-lg bg-white"
+              />
+            </div>
+
+            <div className="lg:col-span-4">
+              <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                {tr('Transaction Direction', 'ਲੈਣ-ਦੇਣ ਦੀ ਕਿਸਮ')}
+              </label>
+              <select
+                value={settleType}
+                onChange={(e) => {
+                  setSettleType(e.target.value as 'add' | 'deduct');
+                  setSettleError(null);
+                }}
+                className="w-full px-2.5 py-1.5 text-xs font-semibold border border-slate-300 rounded-lg bg-white"
+              >
+                <option value="deduct">
+                  {tr(
+                    '(-) Paid to Farmer (Settles Payable)',
+                    '(-) ਕਿਸਾਨ ਨੂੰ ਪੈਸੇ ਦਿੱਤੇ (ਦੇਣਦਾਰੀ ਖਤਮ)'
+                  )}
+                </option>
+                <option value="add">
+                  {tr(
+                    '(+) Received from Farmer (Settles Receivable)',
+                    '(+) ਕਿਸਾਨ ਤੋਂ ਪੈਸੇ ਲਏ (ਲੈਣਦਾਰੀ ਖਤਮ)'
+                  )}
+                </option>
+              </select>
+            </div>
+
+            <div className="lg:col-span-3">
+              <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                {tr('Payment Mode', 'ਭੁਗਤਾਨ ਮਾਧਿਅਮ')}
+              </label>
+              <div className="grid grid-cols-2 gap-1">
+                {SETTLE_MODES.map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setSettleMode(m)}
+                    className={`px-2 py-1.5 text-[11px] font-semibold rounded-lg border cursor-pointer transition-colors ${
+                      settleMode === m
+                        ? 'bg-slate-900 text-white border-slate-900'
+                        : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                    }`}
+                  >
+                    {lang === 'pa'
+                      ? m === 'Cash'
+                        ? 'ਨਕਦ'
+                        : m === 'Bank / RTGS'
+                        ? 'ਬੈਂਕ/RTGS'
+                        : m === 'UPI'
+                        ? 'UPI'
+                        : 'ਚੈੱਕ'
+                      : m}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="lg:col-span-3">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[11px] font-semibold text-slate-700">
+                  {tr('Settlement Amount (₹)', 'ਅਦਾਇਗੀ / ਵਸੂਲੀ ਰਕਮ (₹)')}
+                </label>
+                {summary.combinedFinalBalance !== 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSettleType(
+                        summary.combinedBalanceStatus === 'receivable' ? 'add' : 'deduct'
+                      );
+                      setSettleAmount(String(Math.abs(summary.combinedFinalBalance)));
+                      setSettleError(null);
+                    }}
+                    className="text-[10.5px] font-bold text-emerald-700 hover:underline cursor-pointer"
+                  >
+                    {tr('Fill Full Balance', 'ਪੂਰਾ ਬਕਾਇਆ ਭਰੋ')}
+                  </button>
+                )}
+              </div>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={settleAmount}
+                onChange={(e) => {
+                  setSettleAmount(e.target.value);
+                  setSettleError(null);
+                }}
+                placeholder="0"
+                className="w-full px-2.5 py-1.5 text-sm font-mono tabular-nums font-bold border border-slate-300 rounded-lg bg-white"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-end">
+            <div className="lg:col-span-7">
+              <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                {tr('Entry Note / Description', 'ਐਂਟਰੀ ਵੇਰਵਾ / ਨੋਟ')}
+              </label>
+              <input
+                type="text"
+                value={settleNote}
+                onChange={(e) => {
+                  setSettleNote(e.target.value);
+                  setSettleNoteTouched(true);
+                  setSettleError(null);
+                }}
+                placeholder={tr(
+                  'e.g. Final Settlement Paid (Cash)',
+                  'ਜਿਵੇਂ ਅੰਤਿਮ ਹਿਸਾਬ ਅਦਾਇਗੀ (ਨਕਦ)'
+                )}
+                className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg bg-white"
+              />
+            </div>
+
+            <div className="lg:col-span-5 rounded-lg border border-slate-200 bg-white px-3 py-2 flex items-center justify-between text-xs">
+              <div>
+                <span className="text-[10.5px] text-slate-500 block">
+                  {tr('Balance After This Entry', 'ਇਸ ਐਂਟਰੀ ਤੋਂ ਬਾਅਦ ਬਾਕੀ ਬਕਾਇਆ')}
+                </span>
+                <span
+                  className={`font-bold text-xs ${
+                    projectedBalanceAfterSettle === 0
+                      ? 'text-emerald-700'
+                      : projectedBalanceAfterSettle > 0
+                      ? 'text-amber-700'
+                      : 'text-rose-700'
+                  }`}
+                >
+                  {projectedBalanceAfterSettle === 0
+                    ? tr('Account Settled (₹0 Due)', 'ਹਿਸਾਬ ਪੂਰਾ ਬਰਾਬਰ (₹0 ਬਕਾਇਆ)')
+                    : projectedBalanceAfterSettle > 0
+                    ? tr('Remaining Payable to Farmer', 'ਕਿਸਾਨ ਨੂੰ ਅਜੇ ਦੇਣੇ ਬਾਕੀ')
+                    : tr('Remaining Receivable from Farmer', 'ਕਿਸਾਨ ਤੋਂ ਅਜੇ ਲੈਣੇ ਬਾਕੀ')}
+                </span>
+              </div>
+              <span
+                className={`font-mono tabular-nums font-bold text-sm ${
+                  projectedBalanceAfterSettle === 0
+                    ? 'text-emerald-700'
+                    : projectedBalanceAfterSettle > 0
+                    ? 'text-amber-800'
+                    : 'text-rose-700'
+                }`}
+              >
+                {projectedBalanceAfterSettle < 0 ? '-' : ''}
+                {formatINR(Math.abs(projectedBalanceAfterSettle), false)}
+              </span>
+            </div>
+          </div>
+
+          {settleError && (
+            <div className="px-3 py-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs font-medium">
+              {settleError}
+            </div>
+          )}
+
+          {settleSavedMsg && (
+            <div className="px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+              <span>{settleSavedMsg}</span>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => handleSaveSettlement(false)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold bg-white border border-slate-300 text-slate-800 rounded-lg hover:bg-slate-100 cursor-pointer"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+              <span>{tr('Save Entry Only', 'ਸਿਰਫ਼ ਐਂਟਰੀ ਸੇਵ ਕਰੋ')}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSaveSettlement(true)}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 shadow-sm cursor-pointer"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>
+                {tr(
+                  'Save Entry & Send Pura Hisab on WhatsApp',
+                  'ਐਂਟਰੀ ਸੇਵ ਕਰੋ ਅਤੇ ਵਟਸਐਪ ਉੱਤੇ ਪੂਰਾ ਹਿਸਾਬ ਭੇਜੋ'
+                )}
+              </span>
+            </button>
           </div>
         </div>
       </div>
