@@ -30,7 +30,7 @@ const HOST = cliHost || '0.0.0.0';
 
 async function startServer() {
   const app = express();
-  app.use(express.json({ limit: '10mb' }));
+  app.use(express.json({ limit: '25mb' }));
 
   const apiKey = process.env.GEMINI_API_KEY || '';
   const ai = new GoogleGenAI({
@@ -290,6 +290,192 @@ Always output valid JSON conforming strictly to the requested schema.`;
       console.error('Error in /api/parse-mandi:', err);
       return res.status(500).json({
         error: err.message || 'Failed to process Mandi transaction. Please try again.',
+      });
+    }
+  });
+
+  // API Route: Extract Punjab Anaaj Kharid / e-Mandikaran J-Form PDFs or Images into structured J-Form entries
+  app.post('/api/mph/parse-jform', async (req, res) => {
+    try {
+      const { files, defaultRate } = req.body || {};
+
+      if (!Array.isArray(files) || files.length === 0) {
+        return res.status(400).json({ error: 'Please upload at least one J-Form PDF or image file.' });
+      }
+
+      if (!apiKey) {
+        return res.status(500).json({
+          error:
+            'GEMINI_API_KEY is not configured on the server. Please configure your API key in Settings > Secrets.',
+        });
+      }
+
+      const allowedMimes = new Set([
+        'application/pdf',
+        'image/jpeg',
+        'image/jpg',
+        'image/png',
+        'image/webp',
+      ]);
+
+      const parts: Array<{ inlineData: { mimeType: string; data: string } } | { text: string }> = [];
+      for (const f of files) {
+        const mimeType = String(f?.mimeType || '').toLowerCase();
+        const dataBase64 = String(f?.dataBase64 || '').trim();
+        const fileName = String(f?.name || 'jform');
+        if (!allowedMimes.has(mimeType) || !dataBase64) {
+          return res.status(400).json({
+            error: `Unsupported or empty file "${fileName}". Supported formats: PDF, JPG, PNG, WEBP.`,
+          });
+        }
+        parts.push({
+          text: `Document File: "${fileName}"`,
+        });
+        parts.push({
+          inlineData: {
+            mimeType: mimeType === 'image/jpg' ? 'image/jpeg' : mimeType,
+            data: dataBase64,
+          },
+        });
+      }
+
+      const fallbackRate = Number(defaultRate) > 0 ? Number(defaultRate) : 2461;
+      parts.push({
+        text: `Extract ALL J-Forms (Form-J) from the uploaded Anaaj Kharid / Punjab Mandi Board documents above. Return a JSON object with an "entries" array.`,
+      });
+
+      const systemInstruction = `You are a specialist document parser for Punjab Mandi Board / Anaaj Kharid (anaajkharid.in) / e-Mandikaran J-Forms (Form-J) in India.
+Documents may be in English, Punjabi (Gurmukhi), or bilingual, and may contain 1 or multiple J-Forms across pages.
+
+Extraction rules for EVERY J-Form found:
+1. jFormNo: The official J-Form / Form-J / Serial / Book number (string, trim whitespace; empty string if missing).
+2. date: The auction / J-Form / issue date formatted strictly as YYYY-MM-DD (convert DD/MM/YYYY or DD-MM-YYYY accurately). If unclear, leave empty string.
+3. farmerName: The Farmer / Seller name printed on the J-Form (exclude prefixes like S/o, W/o, D/o, Sh., S., Smt. and keep the clean person name).
+4. fatherName: Father's or Husband's name if printed after S/o, W/o, D/o, ਪੁੱਤਰ, ਪਤਨੀ (empty string if not present).
+5. village: Farmer's village / address if printed (empty string if not present).
+6. bags: Integer number of bags / units / bori / gatte (0 if not explicitly printed).
+7. weightQtl: Total net produce weight in Quintals as a decimal number (if printed in KG such as 3750 KG, divide by 100 to return 37.5). Return 0 if missing.
+8. rate: Rate per quintal in INR (₹) as a number. If not printed, use 0.
+9. jFormAmount: The net / gross crop value / payable amount printed on the J-Form in INR (₹) as a number (do NOT subtract external advances — extract the J-Form produce total/net amount). If missing but weightQtl > 0 and rate > 0, compute weightQtl * rate rounded to 2 decimals.
+10. agency: Buyer / Purchasing agency name (e.g., Pungrain, Markfed, Punsup, PSWC, FCI, Punjab Agro, Private) if shown.
+11. crop: Crop / variety name (e.g., Paddy, Grade A, PR-126, Basmati) if shown.
+12. notes: Short single-line note combining agency & crop if available, e.g. "Pungrain · Paddy Grade A".
+
+If a PDF contains multiple J-Forms across pages or tables, extract EVERY SINGLE ONE as a separate item in "entries". Do not invent entries that are not in the document.`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-4-hydrogen',
+        contents: [{ role: 'user', parts }],
+        config: {
+          systemInstruction,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              entries: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    sourceFileName: { type: Type.STRING },
+                    jFormNo: { type: Type.STRING },
+                    date: { type: Type.STRING },
+                    farmerName: { type: Type.STRING },
+                    fatherName: { type: Type.STRING },
+                    village: { type: Type.STRING },
+                    bags: { type: Type.NUMBER },
+                    weightQtl: { type: Type.NUMBER },
+                    rate: { type: Type.NUMBER },
+                    jFormAmount: { type: Type.NUMBER },
+                    agency: { type: Type.STRING },
+                    crop: { type: Type.STRING },
+                    notes: { type: Type.STRING },
+                  },
+                  required: ['farmerName', 'bags', 'rate', 'jFormAmount'],
+                },
+              },
+            },
+            required: ['entries'],
+          },
+        },
+      });
+
+      const rawText = (response.text ?? '{"entries":[]}').trim();
+      const parsed = JSON.parse(rawText);
+      const rawEntries = Array.isArray(parsed?.entries) ? parsed.entries : [];
+
+      const todayIso = new Date().toISOString().split('T')[0];
+      const normalizedEntries = rawEntries
+        .filter((e: any) => e && (String(e.farmerName || '').trim() || Number(e.jFormAmount) > 0 || Number(e.bags) > 0))
+        .map((e: any) => {
+          const weightQtl = Math.max(0, Number(e.weightQtl) || 0);
+          let bags = Math.max(0, Math.round(Number(e.bags) || 0));
+          if (bags === 0 && weightQtl > 0) {
+            bags = Math.round(weightQtl / 0.375);
+          }
+          let rate = Math.max(0, Number(e.rate) || 0);
+          let amount = Math.max(0, Number(e.jFormAmount) || 0);
+          if (rate === 0 && amount > 0 && weightQtl > 0) {
+            rate = Math.round((amount / weightQtl) * 100) / 100;
+          } else if (rate === 0 && amount > 0 && bags > 0) {
+            rate = Math.round((amount / (bags * 0.375)) * 100) / 100;
+          } else if (rate === 0) {
+            rate = fallbackRate;
+          }
+          if (amount === 0 && weightQtl > 0 && rate > 0) {
+            amount = Math.round(weightQtl * rate * 100) / 100;
+          } else if (amount === 0 && bags > 0 && rate > 0) {
+            amount = Math.round(bags * 0.375 * rate * 100) / 100;
+          }
+
+          let cleanDate = String(e.date || '').trim();
+          const dmyMatch = cleanDate.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
+          if (dmyMatch) {
+            cleanDate = `${dmyMatch[3]}-${dmyMatch[2].padStart(2, '0')}-${dmyMatch[1].padStart(2, '0')}`;
+          } else if (!/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) {
+            cleanDate = todayIso;
+          }
+
+          const agency = String(e.agency || '').trim();
+          const crop = String(e.crop || '').trim();
+          const noteParts = [agency, crop].filter(Boolean);
+          const notes = String(e.notes || '').trim() || noteParts.join(' · ') || 'Anaaj Kharid Import';
+
+          return {
+            sourceFileName: String(e.sourceFileName || files[0]?.name || 'J-Form'),
+            jFormNo: String(e.jFormNo || '').trim(),
+            date: cleanDate,
+            farmerName: String(e.farmerName || '').trim(),
+            fatherName: String(e.fatherName || '').trim(),
+            village: String(e.village || '').trim(),
+            bags,
+            weightQtl: Math.round(weightQtl * 1000) / 1000,
+            rate: Math.round(rate * 100) / 100,
+            jFormAmount: Math.round(amount * 100) / 100,
+            agency,
+            crop,
+            notes,
+          };
+        });
+
+      return res.json({ entries: normalizedEntries });
+    } catch (err: any) {
+      console.error('Error in /api/mph/parse-jform:', err);
+      const status = Number(err?.status) || 500;
+      const msg = String(err?.message || '');
+      if (status === 403 || status === 400 || msg.includes('API_KEY_INVALID') || msg.includes('PERMISSION_DENIED')) {
+        return res.status(400).json({
+          error:
+            'Gemini API key error while reading J-Form PDF/Image. Please check your key in Settings > Secrets, or upload Excel/CSV format directly.',
+        });
+      }
+      if (status === 429 || msg.includes('RESOURCE_EXHAUSTED')) {
+        return res.status(429).json({
+          error: 'AI quota limit reached temporarily. Please try again shortly or upload Excel/CSV format.',
+        });
+      }
+      return res.status(500).json({
+        error: err?.message || 'Failed to read J-Form document. Please verify the file and try again.',
       });
     }
   });

@@ -416,6 +416,30 @@ const MandiPaddyHisabInner: React.FC<MandiPaddyHisabAppProps> = ({ user }) => {
     showNotice('success', isEdit ? tr('J-Form updated.', 'ਜੇ-ਫਾਰਮ ਅੱਪਡੇਟ ਹੋ ਗਿਆ।') : tr('J-Form saved.', 'ਜੇ-ਫਾਰਮ ਸੇਵ ਹੋ ਗਿਆ।'));
   };
 
+  const handleBatchSaveJForms = (newJForms: MphJForm[]) => {
+    if (!Array.isArray(newJForms) || newJForms.length === 0) return;
+    setJForms((prev) => [...newJForms, ...prev]);
+    if (user) {
+      Promise.all(newJForms.map((jf) => saveMphJFormToCloud(user.uid, jf))).catch((err) => {
+        console.error(err);
+        showNotice(
+          'error',
+          tr(
+            'Error saving some imported J-Forms to Firestore.',
+            'ਕੁਝ ਅੱਪਲੋਡ ਕੀਤੇ ਜੇ-ਫਾਰਮ ਕਲਾਊਡ ਵਿੱਚ ਸੇਵ ਕਰਨ ਵੇਲੇ ਗਲਤੀ ਆਈ।'
+          )
+        );
+      });
+    }
+    showNotice(
+      'success',
+      tr(
+        `${newJForms.length} J-Form(s) imported successfully from Anaaj Kharid!`,
+        `ਅਨਾਜ ਖਰੀਦ ਤੋਂ ${newJForms.length} ਜੇ-ਫਾਰਮ ਸਫਲਤਾਪੂਰਵਕ ਅੱਪਲੋਡ ਹੋ ਗਏ!`
+      )
+    );
+  };
+
   const handleDeleteJForm = (jForm: MphJForm) => {
     setConfirmState({
       isOpen: true,
@@ -739,6 +763,8 @@ const MandiPaddyHisabInner: React.FC<MandiPaddyHisabAppProps> = ({ user }) => {
             jForms={jForms}
             settings={settings}
             onSaveJForm={handleSaveJForm}
+            onBatchSaveJForms={handleBatchSaveJForms}
+            onSaveFarmer={handleSaveFarmer}
             onDeleteJForm={handleDeleteJForm}
             onGoToFarmers={() => setActiveTab('farmers')}
             requestConfirm={(opts) =>
